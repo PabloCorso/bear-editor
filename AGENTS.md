@@ -36,3 +36,17 @@ useEffect(function handleEscapeKeyListener() {
   };
 }, []);
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in this repo's GitHub Issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The repo uses the default five triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repo is configured as single-context: one root `CONTEXT.md` and one root `docs/adr/`. See `docs/agents/domain.md`.
