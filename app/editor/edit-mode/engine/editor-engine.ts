@@ -40,12 +40,13 @@ import {
   buildEditorWorldScene,
   getEditorHoverableItems,
 } from "~/editor/edit-mode/scene/editor-scene-builder";
-import { renderEditorWorldScene } from "~/editor/edit-mode/scene/editor-world-renderer";
 import type { EditorWorldDrawItem } from "~/editor/edit-mode/scene/editor-scene";
+import { renderCanvasWorldScene } from "~/editor/render/canvas-world-renderer";
 import {
   getPictureWorldDimensions,
   PICTURE_SCALE,
 } from "~/editor/render/picture-metrics";
+import { getViewportWorldRectFromOffset } from "~/editor/render/world-geometry";
 
 type EditorEngineOptions = {
   initialDocument?: EditorDocumentInput;
@@ -892,10 +893,20 @@ export class EditorEngine {
     this.ctx.save();
     this.applyCameraTransform(state);
 
-    const scene = buildEditorWorldScene(state);
-    scene.viewport.width = this.canvas.width;
-    scene.viewport.height = this.canvas.height;
-    renderEditorWorldScene({
+    const viewportRect = getViewportWorldRectFromOffset({
+      width: this.canvas.width,
+      height: this.canvas.height,
+      offsetX: state.viewPortOffset.x,
+      offsetY: state.viewPortOffset.y,
+      zoom: state.zoom,
+    });
+    const scene = buildEditorWorldScene({
+      state,
+      viewportRect,
+      resolvePictureDimensions: (picture) =>
+        getPictureWorldDimensions(picture, this.lgrAssets),
+    });
+    renderCanvasWorldScene({
       ctx: this.ctx,
       scene,
       lgrAssets: this.lgrAssets,

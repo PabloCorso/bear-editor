@@ -1,96 +1,31 @@
-import type { LevelVisibilitySettings } from "~/editor/level-visibility";
+import type { Picture } from "~/editor/elma-types";
 import type {
-  Apple,
-  Clip,
-  Picture,
-  Polygon,
-  Position,
-} from "~/editor/elma-types";
+  WorldRenderObjectItem,
+  WorldRenderPictureItem,
+  WorldRenderScene,
+  WorldRenderStartItem,
+} from "~/editor/render/world-scene";
 
-export type EditorWorldViewport = {
-  width: number;
-  height: number;
-  offsetX: number;
-  offsetY: number;
-  zoom: number;
+export type EditorPictureSceneItem = WorldRenderPictureItem;
+export type EditorAppleSceneItem = WorldRenderObjectItem & {
+  objectKind: "apple";
 };
-
-export type EditorWorldVisibility = Pick<
-  LevelVisibilitySettings,
-  | "useGroundSkyTextures"
-  | "showObjectAnimations"
-  | "showObjects"
-  | "showPictures"
-  | "showTextures"
-  | "showPolygons"
-  | "showPolygonBounds"
-  | "showObjectBounds"
->;
-
-export type EditorPolygonSceneItem = {
-  polygon: Polygon;
-  grassEdgeIndices: number[];
+export type EditorKillerSceneItem = WorldRenderObjectItem & {
+  objectKind: "killer";
 };
-
-export type EditorPictureSceneItem = Picture & {
-  type: "picture";
-  draft?: boolean;
-  opacity?: number;
-  showBounds?: boolean;
+export type EditorFlowerSceneItem = WorldRenderObjectItem & {
+  objectKind: "flower";
 };
-
-export type EditorKillerSceneItem = {
-  type: "killer";
-  position: Position;
-  distance: number;
-  clip: Clip;
-  selected: boolean;
-  draft?: boolean;
-  opacity?: number;
-};
-
-export type EditorFlowerSceneItem = {
-  type: "flower";
-  position: Position;
-  distance: number;
-  clip: Clip;
-  selected: boolean;
-  draft?: boolean;
-  opacity?: number;
-};
-
-export type EditorStartSceneItem = {
-  type: "start";
-  position: Position;
-  distance: number;
-  clip: Clip;
-  selected: boolean;
-  opacity?: number;
-};
-
-export type EditorAppleSceneItem = Apple & {
-  type: "apple";
-  distance: number;
-  clip: Clip;
-  selected: boolean;
-  draft?: boolean;
-  opacity?: number;
-};
-
+export type EditorStartSceneItem = WorldRenderStartItem;
+type EditorObjectSceneItem =
+  | EditorAppleSceneItem
+  | EditorKillerSceneItem
+  | EditorFlowerSceneItem;
 export type EditorWorldDrawItem =
   | EditorPictureSceneItem
-  | EditorKillerSceneItem
-  | EditorFlowerSceneItem
-  | EditorStartSceneItem
-  | EditorAppleSceneItem;
-
-export type EditorWorldScene = {
-  ground: string;
-  sky: string;
-  animateSprites: boolean;
-  visibility: EditorWorldVisibility;
-  viewport: EditorWorldViewport;
-  polygons: EditorPolygonSceneItem[];
+  | EditorObjectSceneItem
+  | EditorStartSceneItem;
+export type EditorWorldScene = Omit<WorldRenderScene, "drawItems"> & {
   drawItems: EditorWorldDrawItem[];
 };
 
@@ -98,7 +33,7 @@ export type EditorHoverableWorldItem =
   | {
       kind: "object";
       type: "apple" | "killer" | "flower" | "start";
-      position: Position;
+      position: { x: number; y: number };
     }
   | {
       kind: "picture";

@@ -86,6 +86,14 @@ export function buildViewportPathFromOffset(viewport: {
   return path;
 }
 
+export function buildViewportPathFromRect(rect: WorldRect): Path2D {
+  const path = new Path2D();
+
+  path.rect(rect.minX, rect.minY, rect.maxX - rect.minX, rect.maxY - rect.minY);
+
+  return path;
+}
+
 export function buildGroundPath(viewportPath: Path2D, skyPath: Path2D) {
   const path = new Path2D();
   path.addPath(viewportPath);
@@ -108,6 +116,24 @@ export function getViewportWorldRectFromCenter(viewport: {
     maxX: viewport.centerX + halfWidth + WORLD_CULL_MARGIN,
     minY: viewport.centerY - halfHeight - WORLD_CULL_MARGIN,
     maxY: viewport.centerY + halfHeight + WORLD_CULL_MARGIN,
+  };
+}
+
+export function getViewportWorldRectFromOffset(viewport: {
+  width: number;
+  height: number;
+  offsetX: number;
+  offsetY: number;
+  zoom: number;
+}): WorldRect {
+  const minX = -viewport.offsetX / viewport.zoom;
+  const minY = -viewport.offsetY / viewport.zoom;
+
+  return {
+    minX,
+    minY,
+    maxX: minX + viewport.width / viewport.zoom,
+    maxY: minY + viewport.height / viewport.zoom,
   };
 }
 

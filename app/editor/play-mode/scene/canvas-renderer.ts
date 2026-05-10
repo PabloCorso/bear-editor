@@ -1,7 +1,7 @@
 import { LgrAssets } from "~/components/lgr-assets";
 import { buildPlayModeScene } from "~/editor/play-mode/scene/play-mode-scene-builder";
 import type { PlayModeRenderVisibility } from "~/editor/play-mode/scene/play-mode-scene";
-import { renderPlayModeScene } from "~/editor/play-mode/scene/play-mode-world-renderer";
+import { renderCanvasWorldScene } from "~/editor/render/canvas-world-renderer";
 import { getPictureWorldDimensions } from "~/editor/render/picture-metrics";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
 
@@ -68,7 +68,7 @@ export class CanvasRenderer {
       resolvePictureDimensions: (picture) =>
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
-    renderPlayModeScene(ctx, scene, this.lgrAssets);
+    renderCanvasWorldScene({ ctx, scene, lgrAssets: this.lgrAssets });
 
     ctx.restore();
   }

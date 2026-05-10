@@ -1,18 +1,19 @@
-import { Clip } from "~/editor/elma-types";
+import { Clip, Gravity } from "~/editor/elma-types";
 import { FRAME_INDEX_TO_TIME } from "~/editor/play-mode/engine/core/constants";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
 import type { LevelData, Polygon } from "~/editor/play-mode/engine/level";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
 import {
-  getGrassEdgeIndices,
   getViewportWorldRectFromCenter,
-  rectContainsPointWithMargin,
-  rectsIntersect,
-  WORLD_CULL_MARGIN,
   type WorldRect,
 } from "~/editor/render/world-geometry";
+import {
+  getCachedPolygonDerivedData,
+  isPolygonVisible,
+  isPictureVisible,
+  isPointVisible,
+} from "~/editor/render/world-derived-data-cache";
 import type {
-  PlayModePolygonSceneItem,
   PlayModeRenderVisibility,
   PlayModeScene,
   PlayModeSceneDrawItem,
@@ -22,8 +23,6 @@ import type {
 type LevelRenderCache = {
   polygons: Array<{
     polygon: Polygon;
-    bounds: WorldRect;
-    grassEdgeIndices: number[];
   }>;
 };
 
@@ -50,16 +49,27 @@ export function buildPlayModeScene({
   const worldRect = getViewportWorldRectFromCenter(viewport);
   const cache = getLevelRenderCache(state.level);
   const polygons = cache.polygons
-    .filter((entry) => rectsIntersect(entry.bounds, worldRect))
-    .map<PlayModePolygonSceneItem>(({ polygon, grassEdgeIndices }) => ({
-      polygon,
+    .filter((entry) => isPolygonVisible(entry.polygon, worldRect))
+    .map(({ polygon }) => {
+      const { grassEdgeIndices } = getCachedPolygonDerivedData(polygon);
+      return {
+      vertices: polygon.vertices,
+      isGrass: Boolean(polygon.isGrass),
       grassEdgeIndices,
-    }));
+      };
+    });
 
   return {
     clearColor: "#1a1a2e",
+    ground: state.level.foregroundName,
+    sky: state.level.backgroundName,
+    animateSprites: true,
+    groundClipMode: "always",
     level: state.level,
-    viewport,
+    viewport: {
+      rect: worldRect,
+      zoom: viewport.zoom,
+    },
     visibility,
     polygons,
     drawItems: getDrawItemQueue(
@@ -97,11 +107,11 @@ function getDrawItemQueue(
           )
           .map((sprite) => ({
             type: "picture" as const,
-            source: sprite,
-            pictureName: sprite.pictureName,
-            maskName: sprite.maskName,
-            textureName: sprite.textureName,
-            clipping: sprite.clipping,
+            cacheKey: sprite,
+            name: sprite.pictureName || undefined,
+            mask: sprite.maskName || undefined,
+            texture: sprite.textureName || undefined,
+            clip: sprite.clipping,
             distance: sprite.distance,
             position: {
               x: sprite.r.x,
@@ -114,18 +124,11 @@ function getDrawItemQueue(
     ? state.level.objects
         .filter((obj) => obj.active)
         .filter((obj) => obj.type !== "start")
-        .filter((obj) =>
-          rectContainsPointWithMargin(
-            worldRect,
-            obj.r.x,
-            -obj.r.y,
-            WORLD_CULL_MARGIN,
-          ),
-        )
+        .filter((obj) => isPointVisible({ x: obj.r.x, y: -obj.r.y }, worldRect))
         .map((obj) => ({
           type: "object" as const,
-          objectType: obj.type as "food" | "killer" | "exit",
-          property: obj.property,
+          objectKind: obj.type as "food" | "killer" | "exit",
+          gravity: gravityFromProperty(obj.property),
           animation: obj.animation,
           clip: Clip.Unclipped,
           distance: DEFAULT_OBJECT_RENDER_DISTANCE,
@@ -195,37 +198,30 @@ function buildBikeSceneItem(state: GameState): PlayModeSceneDrawItem {
   };
 }
 
+function gravityFromProperty(property: LevelData["objects"][number]["property"]) {
+  switch (property) {
+    case "gravity_up":
+      return Gravity.Up;
+    case "gravity_down":
+      return Gravity.Down;
+    case "gravity_left":
+      return Gravity.Left;
+    case "gravity_right":
+      return Gravity.Right;
+    default:
+      return undefined;
+  }
+}
+
 function getLevelRenderCache(level: LevelData): LevelRenderCache {
   const cached = levelRenderCache.get(level);
   if (cached) return cached;
 
   const cache: LevelRenderCache = {
-    polygons: level.polygons.map((polygon) => ({
-      polygon,
-      bounds: getPolygonBounds(polygon),
-      grassEdgeIndices: polygon.isGrass
-        ? getGrassEdgeIndices(polygon.vertices)
-        : [],
-    })),
+    polygons: level.polygons.map((polygon) => ({ polygon })),
   };
   levelRenderCache.set(level, cache);
   return cache;
-}
-
-function getPolygonBounds(polygon: Polygon): WorldRect {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  for (const vertex of polygon.vertices) {
-    if (vertex.x < minX) minX = vertex.x;
-    if (vertex.y < minY) minY = vertex.y;
-    if (vertex.x > maxX) maxX = vertex.x;
-    if (vertex.y > maxY) maxY = vertex.y;
-  }
-
-  return { minX, minY, maxX, maxY };
 }
 
 function isSpriteVisible(
@@ -237,20 +233,19 @@ function isSpriteVisible(
     mask?: string;
   }) => { width: number; height: number } | null,
 ) {
-  const dimensions = resolvePictureDimensions?.({
-    name: sprite.pictureName,
-    texture: sprite.textureName,
-    mask: sprite.maskName,
-  });
-  if (!dimensions) return true;
-
-  return rectsIntersect(
+  return isPictureVisible(
     {
-      minX: sprite.r.x,
-      minY: sprite.r.y,
-      maxX: sprite.r.x + dimensions.width,
-      maxY: sprite.r.y + dimensions.height,
+      position: { x: sprite.r.x, y: sprite.r.y },
+      name: sprite.pictureName,
+      texture: sprite.textureName,
+      mask: sprite.maskName,
     },
     worldRect,
+    ({ name, texture, mask }) =>
+      resolvePictureDimensions?.({
+        name,
+        texture,
+        mask,
+      }) ?? null,
   );
 }
