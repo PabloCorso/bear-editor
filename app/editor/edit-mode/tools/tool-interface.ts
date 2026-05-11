@@ -1,14 +1,14 @@
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorStore } from "~/editor/editor-store";
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
-import type { DefaultToolMeta } from "./default-tools";
+import type { ToolMeta } from "./default-tools";
 import type { LgrAssets } from "~/components/lgr-assets";
 
 export type ToolState<T = unknown> = Record<string, T>;
 export type ToolCursor = string;
 
 export abstract class Tool<T extends ToolState = ToolState> {
-  abstract readonly meta: DefaultToolMeta;
+  abstract readonly meta: ToolMeta;
 
   constructor(protected store: EditorStore) {}
 

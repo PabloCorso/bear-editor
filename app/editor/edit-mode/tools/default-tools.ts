@@ -1,23 +1,13 @@
-export type DefaultToolId =
-  | "select"
-  | "hand"
-  | "vertex"
-  | "apple"
-  | "killer"
-  | "flower"
-  | "picture"
-  | "texture";
-
 type DefaultToolVariant = { name: string; shortcut: string };
 
-export type DefaultToolMeta = {
-  id: DefaultToolId;
+export type ToolMeta = {
+  id: string;
   name: string;
   shortcut: string;
   variants?: Record<string, DefaultToolVariant>;
 };
 
-export const defaultTools: Record<DefaultToolId, DefaultToolMeta> = {
+export const defaultTools = {
   select: { id: "select", name: "Select tool", shortcut: "S" },
   hand: { id: "hand", name: "Hand tool", shortcut: "H" },
   vertex: {
@@ -31,4 +21,18 @@ export const defaultTools: Record<DefaultToolId, DefaultToolMeta> = {
   flower: { id: "flower", name: "Flower", shortcut: "F" },
   picture: { id: "picture", name: "Picture", shortcut: "P" },
   texture: { id: "texture", name: "Texture", shortcut: "T" },
-} as const;
+} as const satisfies Record<string, ToolMeta>;
+
+export type DefaultToolId = keyof typeof defaultTools;
+export type DefaultToolMeta = (typeof defaultTools)[DefaultToolId];
+
+export const defaultToolOrder: string[] = [
+  defaultTools.select.id,
+  defaultTools.hand.id,
+  defaultTools.vertex.id,
+  defaultTools.apple.id,
+  defaultTools.killer.id,
+  defaultTools.flower.id,
+  defaultTools.picture.id,
+  defaultTools.texture.id,
+];

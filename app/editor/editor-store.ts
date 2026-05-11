@@ -10,7 +10,6 @@ import type { Widget } from "./edit-mode/widgets/widget-interface";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import { FileSession } from "~/editor/helpers/file-session";
 import { LevelFolder } from "~/editor/helpers/level-folder";
-import type { DefaultToolId } from "./edit-mode/tools/default-tools";
 import fastDeepEqual from "fast-deep-equal";
 import throttle from "just-throttle";
 import { defaultLevelVisibility } from "./level-visibility";
@@ -23,7 +22,7 @@ import type { SelectToolState } from "./edit-mode/tools/select-tool";
 import type { VertexEdgeClickBehavior } from "./edit-mode/default-level-preset";
 
 type CreateEditorStoreOptions = {
-  initialToolId?: DefaultToolId | string;
+  initialToolId?: string;
   defaultLevelTitle?: string;
   historyUpdateThrottle?: number;
 };

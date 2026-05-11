@@ -1,7 +1,11 @@
 import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
-import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
+import {
+  defaultToolOrder,
+  defaultTools,
+  type ToolMeta,
+} from "~/editor/edit-mode/tools/default-tools";
 import {
   Toolbar,
   ToolbarSeparator,
@@ -14,6 +18,7 @@ import { TextureToolControl } from "./texture-tool-control";
 import { VertexToolControl } from "./vertex-tool-control";
 import { cn } from "~/utils/misc";
 import { SelectToolControl } from "./select-tool-control";
+import { useEditorRegisteredTools } from "~/editor/use-editor-store";
 
 type ControlToolbarProps = ToolbarProps & {
   isOpenAIEnabled?: boolean;
@@ -24,6 +29,19 @@ export function ControlToolbar({
   isOpenAIEnabled,
   ...props
 }: ControlToolbarProps) {
+  const toolMetas = useEditorRegisteredTools();
+  const orderedTools = sortToolMetas(toolMetas);
+  const navigationToolIds = new Set<string>([
+    defaultTools.select.id,
+    defaultTools.hand.id,
+  ]);
+  const navigationTools = orderedTools.filter((tool) =>
+    navigationToolIds.has(tool.id),
+  );
+  const drawingTools = orderedTools.filter(
+    (tool) => !navigationTools.some((navigationTool) => navigationTool.id === tool.id),
+  );
+
   return (
     <div
       className={cn("absolute inset-y-0 left-4 grid", className)}
@@ -37,20 +55,62 @@ export function ControlToolbar({
         className="row-start-2 flex h-fit max-h-full flex-col gap-2 self-center overflow-auto"
         {...props}
       >
-        <SelectToolControl tooltipSide="right" />
-        <HandToolControl tooltipSide="right" />
+        {navigationTools.map((tool) => (
+          <RegisteredToolControl
+            key={tool.id}
+            meta={tool}
+            tooltipSide="right"
+          />
+        ))}
 
-        <ToolbarSeparator />
+        {drawingTools.length > 0 && <ToolbarSeparator />}
 
-        <VertexToolControl tooltipSide="right" />
-        <AppleToolControl tooltipSide="right" />
-        <KillerToolControl tooltipSide="right" />
-        <FlowerToolControl tooltipSide="right" />
-        <PictureToolControl tooltipSide="right" />
-        <TextureToolControl tooltipSide="right" />
+        {drawingTools.map((tool) => (
+          <RegisteredToolControl
+            key={tool.id}
+            meta={tool}
+            tooltipSide="right"
+          />
+        ))}
         {isOpenAIEnabled && <AIChatToolControl tooltipSide="right" />}
       </Toolbar>
     </div>
+  );
+}
+
+function RegisteredToolControl({
+  meta,
+  ...props
+}: ToolControlButtonProps & { meta: ToolMeta }) {
+  if (meta.id === defaultTools.select.id) {
+    return <SelectToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.hand.id) {
+    return <HandToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.vertex.id) {
+    return <VertexToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.apple.id) {
+    return <AppleToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.killer.id) {
+    return <KillerToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.flower.id) {
+    return <FlowerToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.picture.id) {
+    return <PictureToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.texture.id) {
+    return <TextureToolControl {...props} />;
+  }
+
+  return (
+    <ToolControlButton id={meta.id} name={meta.name} shortcut={meta.shortcut} {...props}>
+      <GenericToolGlyph label={meta.name} />
+    </ToolControlButton>
   );
 }
 
@@ -94,4 +154,36 @@ function AIChatToolControl(props: ToolControlButtonProps) {
       <SparkleIcon weight="fill" />
     </ToolControlButton>
   );
+}
+
+function GenericToolGlyph({ label }: { label: string }) {
+  const letters = label
+    .split(/\s+/)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <span className="inline-flex h-4 w-4 items-center justify-center text-[10px] font-semibold">
+      {letters || "?"}
+    </span>
+  );
+}
+
+function sortToolMetas(toolMetas: ToolMeta[]) {
+  const orderMap = new Map(defaultToolOrder.map((id, index) => [id, index]));
+
+  return [...toolMetas].sort((left, right) => {
+    const leftIndex = orderMap.get(left.id);
+    const rightIndex = orderMap.get(right.id);
+
+    if (leftIndex != null && rightIndex != null) {
+      return leftIndex - rightIndex;
+    }
+    if (leftIndex != null) return -1;
+    if (rightIndex != null) return 1;
+
+    return left.name.localeCompare(right.name);
+  });
 }

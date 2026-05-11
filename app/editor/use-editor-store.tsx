@@ -3,6 +3,7 @@ import { useStore as useZustand } from "zustand";
 import { createEditorStore, type EditorStore } from "./editor-store";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type { EditorDocumentSession, EditorState } from "./editor-state";
+import type { ToolMeta } from "./edit-mode/tools/default-tools";
 
 const EditorContext = createContext<EditorStore | null>(null);
 
@@ -108,6 +109,12 @@ export function useEditorToolState<T extends ToolState>(
   toolId: string,
 ): T | undefined {
   return useEditor((state) => state.actions.getToolState<T>(toolId));
+}
+
+export function useEditorRegisteredTools(): ToolMeta[] {
+  return useEditor((state) =>
+    Array.from(state.toolsMap.values()).map((tool) => tool.meta),
+  );
 }
 
 export function useEditorWidget<T>(widgetId: string): T | undefined {
