@@ -1,29 +1,37 @@
 import { LgrAssets } from "~/components/lgr-assets";
 import { buildPlayModeScene } from "~/editor/play-mode/scene/play-mode-scene-builder";
 import type { PlayModeRenderVisibility } from "~/editor/play-mode/scene/play-mode-scene";
-import { renderCanvasWorldScene } from "~/editor/render/canvas-world-renderer";
 import { getPictureWorldDimensions } from "~/editor/render/picture-metrics";
+import {
+  createWorldSceneRenderer,
+  type WorldSceneRendererBackend,
+  type WorldSceneRenderer,
+} from "~/editor/render/world-scene-renderer";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
 
 export class CanvasRenderer {
   private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
+  private worldRenderer: WorldSceneRenderer;
   private lgrAssets: LgrAssets | null;
   private pixelsPerMeter = 48;
 
-  constructor(canvas: HTMLCanvasElement, lgrAssets: LgrAssets | null = null) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    lgrAssets: LgrAssets | null = null,
+    backend: WorldSceneRendererBackend = "canvas",
+  ) {
     this.canvas = canvas;
     this.lgrAssets = lgrAssets;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Failed to get 2D context");
-    this.ctx = ctx;
+    this.worldRenderer = createWorldSceneRenderer({ canvas, lgrAssets, backend });
   }
 
   resize(): void {
     const dpr = window.devicePixelRatio || 1;
-    this.canvas.width = this.canvas.clientWidth * dpr;
-    this.canvas.height = this.canvas.clientHeight * dpr;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.worldRenderer.resize({
+      width: this.canvas.clientWidth,
+      height: this.canvas.clientHeight,
+      devicePixelRatio: dpr,
+    });
   }
 
   render(
@@ -32,7 +40,12 @@ export class CanvasRenderer {
       visibility?: PlayModeRenderVisibility;
     },
   ): void {
-    const { ctx, canvas } = this;
+    const ctx = this.worldRenderer.getContext();
+    if (!ctx) {
+      throw new Error("World renderer did not provide a 2D context");
+    }
+
+    const { canvas } = this;
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     const cam = state.camera;
@@ -68,7 +81,7 @@ export class CanvasRenderer {
       resolvePictureDimensions: (picture) =>
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
-    renderCanvasWorldScene({ ctx, scene, lgrAssets: this.lgrAssets });
+    this.worldRenderer.render(scene);
 
     ctx.restore();
   }

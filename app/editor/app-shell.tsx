@@ -15,6 +15,7 @@ import {
   useEditorView,
   useInitialLevel,
 } from "~/editor/edit-mode/editor-view";
+import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 
 const LazyPlayModeOverlay = lazy(async () => {
   const module = await import("~/editor/play-mode/play-mode-overlay");
@@ -24,16 +25,19 @@ const LazyPlayModeOverlay = lazy(async () => {
 type EditorShellProps = {
   initialLevelName?: string;
   isOpenAIEnabled?: boolean;
+  rendererBackend?: WorldSceneRendererBackend;
 };
 
 export function EditorShell({
   initialLevelName,
   isOpenAIEnabled,
+  rendererBackend = "canvas",
 }: EditorShellProps) {
   const initialDocument = useInitialLevel(initialLevelName);
   const { canvasRef, engineRef } = useEditorView({
     initialDocument,
     isOpenAIEnabled,
+    rendererBackend,
   });
   const isPlayMode = useEditorIsPlayMode();
 
@@ -43,7 +47,7 @@ export function EditorShell({
         <EditorView ref={canvasRef} />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
-            <LazyPlayModeOverlay />
+            <LazyPlayModeOverlay rendererBackend={rendererBackend} />
           </Suspense>
         ) : null}
       </div>

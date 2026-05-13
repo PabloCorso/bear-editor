@@ -17,6 +17,7 @@ import { cn } from "~/utils/misc";
 import type { EditorLevel } from "~/editor/elma-types";
 import type { EditorDocumentInput } from "~/editor/editor-state";
 import { getDefaultLevel } from "~/editor/helpers/level-parser";
+import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import {
   useDefaultLevelPreset,
   useVertexEdgeClickBehavior,
@@ -36,11 +37,13 @@ export function EditorView({ className, ...props }: EditorViewProps) {
 type UseEditorViewOptions = {
   initialDocument?: InitialDocument;
   isOpenAIEnabled?: boolean;
+  rendererBackend?: WorldSceneRendererBackend;
 };
 
 export function useEditorView({
   initialDocument,
   isOpenAIEnabled,
+  rendererBackend = "canvas",
 }: UseEditorViewOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<EditorEngine | null>(null);
@@ -81,21 +84,11 @@ export function useEditorView({
           return;
         }
 
-        const context = canvas.getContext("2d");
-        if (!context) return;
-
-        // Preserve existing bitmap to avoid flicker when canvas is resized.
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const tempContext = tempCanvas.getContext("2d");
-        tempContext?.drawImage(canvas, 0, 0);
-
-        canvas.width = width;
-        canvas.height = height;
-
-        if (tempContext) {
-          context.drawImage(tempCanvas, 0, 0);
+        if (engineRef.current) {
+          engineRef.current.resize(width, height);
+        } else {
+          canvas.width = width;
+          canvas.height = height;
         }
 
         lastSizeRef.current = { width, height };
@@ -137,6 +130,7 @@ export function useEditorView({
         widgets,
         lgrAssets: editorLgrAssets ?? undefined,
         initialDocument: initialDocument?.document,
+        rendererBackend,
       });
 
       // Add resize observer to handle parent size changes (batched to avoid flicker)
@@ -152,6 +146,7 @@ export function useEditorView({
       initialDocument?.status,
       isOpenAIEnabled,
       editorLgrAssets,
+      rendererBackend,
     ],
   );
 

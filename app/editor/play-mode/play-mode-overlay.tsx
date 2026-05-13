@@ -49,6 +49,7 @@ import {
   InputManager,
 } from "~/editor/play-mode/engine/input-manager";
 import { createPlayModeRenderer } from "~/editor/play-mode/scene/renderer";
+import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import { ToolButton } from "~/components/tool-button";
 
 const PLAY_MODE_WHEEL_ZOOM_STEP = 420;
@@ -114,7 +115,11 @@ function getActiveMobileControlState(
   };
 }
 
-export function PlayModeOverlay() {
+export function PlayModeOverlay({
+  rendererBackend = "canvas",
+}: {
+  rendererBackend?: WorldSceneRendererBackend;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeMobilePointersRef = useRef<Map<number, PlayModeMobileControlId>>(
@@ -383,7 +388,11 @@ export function PlayModeOverlay() {
         store.getState().playModeSeedKeys,
       );
       inputRef.current = input;
-      const renderer = createPlayModeRenderer({ canvas, lgrAssets: lgr });
+      const renderer = createPlayModeRenderer({
+        canvas,
+        lgrAssets: lgr,
+        backend: rendererBackend,
+      });
       const keyBindings = keyBindingsRef.current;
 
       let gameState: GameState = createGame(levelData, input, keyBindings);

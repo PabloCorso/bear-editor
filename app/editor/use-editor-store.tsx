@@ -112,9 +112,25 @@ export function useEditorToolState<T extends ToolState>(
 }
 
 export function useEditorRegisteredTools(): ToolMeta[] {
-  return useEditor((state) =>
-    Array.from(state.toolsMap.values()).map((tool) => tool.meta),
-  );
+  const store = useEditorStore();
+  const previousMetasRef = useRef<ToolMeta[] | null>(null);
+
+  return useZustand(store, (state) => {
+    const nextMetas = Array.from(state.toolsMap.values()).map(
+      (tool) => tool.meta,
+    );
+    const previousMetas = previousMetasRef.current;
+    if (
+      previousMetas &&
+      previousMetas.length === nextMetas.length &&
+      previousMetas.every((meta, index) => meta === nextMetas[index])
+    ) {
+      return previousMetas;
+    }
+
+    previousMetasRef.current = nextMetas;
+    return nextMetas;
+  });
 }
 
 export function useEditorWidget<T>(widgetId: string): T | undefined {

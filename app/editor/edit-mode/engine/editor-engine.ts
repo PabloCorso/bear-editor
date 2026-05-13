@@ -41,11 +41,15 @@ import {
   getEditorHoverableItems,
 } from "~/editor/edit-mode/scene/editor-scene-builder";
 import type { EditorWorldDrawItem } from "~/editor/edit-mode/scene/editor-scene";
-import { renderCanvasWorldScene } from "~/editor/render/canvas-world-renderer";
 import {
   getPictureWorldDimensions,
   PICTURE_SCALE,
 } from "~/editor/render/picture-metrics";
+import {
+  createWorldSceneRenderer,
+  type WorldSceneRendererBackend,
+  type WorldSceneRenderer,
+} from "~/editor/render/world-scene-renderer";
 import { getViewportWorldRectFromOffset } from "~/editor/render/world-geometry";
 
 type EditorEngineOptions = {
@@ -64,6 +68,7 @@ type EditorEngineOptions = {
   pinchPower?: number;
   store?: EditorStore;
   lgrAssets?: LgrAssets;
+  rendererBackend?: WorldSceneRendererBackend;
 };
 
 const KEYBOARD_PAN_STEP = 200;
@@ -73,6 +78,7 @@ const WHEEL_PAN_MULTIPLIER = 0.5;
 export class EditorEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private worldRenderer: WorldSceneRenderer;
   private animationId: number | null = null;
   private debugMode = false;
   private store: EditorStore;
@@ -120,13 +126,20 @@ export class EditorEngine {
       pinchPower = 1,
       store,
       lgrAssets,
+      rendererBackend = "canvas",
     }: EditorEngineOptions = {},
   ) {
-    const ctx = canvas.getContext("2d");
+    const worldRenderer = createWorldSceneRenderer({
+      canvas,
+      lgrAssets: lgrAssets ?? null,
+      backend: rendererBackend,
+    });
+    const ctx = worldRenderer.getContext();
     if (!ctx) throw new Error("Canvas context missing");
 
     this.canvas = canvas;
     this.ctx = ctx;
+    this.worldRenderer = worldRenderer;
 
     this.minZoom = minZoom;
     this.maxZoom = maxZoom;
@@ -814,8 +827,7 @@ export class EditorEngine {
   private handleResize = () => {
     const rect = this.canvas.parentElement?.getBoundingClientRect();
     if (rect) {
-      this.canvas.width = rect.width;
-      this.canvas.height = rect.height;
+      this.resize(Math.floor(rect.width), Math.floor(rect.height));
     }
   };
 
@@ -906,11 +918,7 @@ export class EditorEngine {
       resolvePictureDimensions: (picture) =>
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
-    renderCanvasWorldScene({
-      ctx: this.ctx,
-      scene,
-      lgrAssets: this.lgrAssets,
-    });
+    this.worldRenderer.render(scene);
 
     // Let active tool render on world-space canvas
     const activeTool = state.actions.getActiveTool();
@@ -1140,6 +1148,11 @@ export class EditorEngine {
     document.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("blur", this.handleWindowBlur);
     window.removeEventListener("resize", this.handleResize);
+    this.worldRenderer.destroy();
+  }
+
+  public resize(width: number, height: number) {
+    this.worldRenderer.resize({ width, height });
   }
 
   public toggleDebugMode() {
