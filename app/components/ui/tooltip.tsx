@@ -1,4 +1,4 @@
-import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
 import * as React from "react";
 import { cn } from "~/utils/misc";
 
@@ -7,17 +7,25 @@ export const Tooltip = TooltipPrimitive.Root;
 
 type TooltipTriggerProps = Omit<
   React.ComponentPropsWithRef<typeof TooltipPrimitive.Trigger>,
-  "asChild"
->;
+  "children" | "render"
+> & { children: React.ReactElement };
 
 export function TooltipTrigger(props: TooltipTriggerProps) {
-  return <TooltipPrimitive.Trigger asChild {...props} />;
+  const { children, ...triggerProps } = props;
+  return <TooltipPrimitive.Trigger render={children} {...triggerProps} />;
 }
 
 export type TooltipContentProps = Omit<
-  React.ComponentProps<typeof TooltipPrimitive.Content>,
-  "asChild"
->;
+  React.ComponentProps<typeof TooltipPrimitive.Positioner>,
+  "children" | "className"
+> &
+  Omit<
+    React.ComponentProps<typeof TooltipPrimitive.Popup>,
+    "children" | "className"
+  > & {
+    children?: React.ReactNode;
+    className?: string;
+  };
 
 export function TooltipContent({
   children,
@@ -26,15 +34,17 @@ export function TooltipContent({
   ...props
 }: TooltipContentProps) {
   return (
-    <TooltipPrimitive.Content
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 animate-in overflow-hidden rounded-md border border-default bg-screen px-3 py-1.5 text-sm shadow-md fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-        className,
-      )}
-      {...props}
-    >
-      {children}
-    </TooltipPrimitive.Content>
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Positioner sideOffset={sideOffset} {...props}>
+        <TooltipPrimitive.Popup
+          className={cn(
+            "z-50 overflow-hidden rounded-md border border-default bg-screen px-3 py-1.5 text-sm shadow-md",
+            className,
+          )}
+        >
+          {children}
+        </TooltipPrimitive.Popup>
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
   );
 }

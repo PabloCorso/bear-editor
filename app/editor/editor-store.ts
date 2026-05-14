@@ -559,6 +559,8 @@ export function createEditorStore({
             set((state) => ({
               playSettings: {
                 ...state.playSettings,
+                runEndBehavior:
+                  settings.runEndBehavior ?? state.playSettings.runEndBehavior,
                 keyBindings: {
                   ...state.playSettings.keyBindings,
                   ...(settings.keyBindings ?? {}),

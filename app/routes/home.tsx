@@ -2,9 +2,9 @@ import type { Route } from "./+types/home";
 import { EditorProvider } from "../editor/use-editor-store";
 import { DefaultLevelPresetProvider } from "../editor/edit-mode/default-level-preset";
 import { EditorDocumentGuardProvider } from "~/editor/session/document-guard";
-import { TooltipProvider } from "@radix-ui/react-tooltip";
 import { LgrAssetsProvider } from "~/components/use-lgr-assets";
 import { EditorShell } from "~/editor/app-shell";
+import { TooltipProvider } from "~/components/ui/tooltip";
 
 export function meta() {
   return [

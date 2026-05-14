@@ -1,5 +1,5 @@
 import { XIcon } from "@phosphor-icons/react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import * as React from "react";
 import { IconButton, type IconButtonProps } from "./button";
 import { cn } from "~/utils/misc";
@@ -10,37 +10,34 @@ export const Dialog = DialogPrimitive.Root;
 
 export type DialogTriggerProps = Omit<
   React.ComponentProps<typeof DialogPrimitive.Trigger>,
-  "asChild"
->;
+  "children" | "render"
+> & { children: React.ReactElement };
 
 export function DialogTrigger(props: DialogTriggerProps) {
-  return <DialogPrimitive.Trigger asChild {...props} />;
+  const { children, ...triggerProps } = props;
+  return <DialogPrimitive.Trigger render={children} {...triggerProps} />;
 }
 
 export const DialogPortal = DialogPrimitive.Portal;
 
 export type DialogCloseProps = Omit<
   React.ComponentProps<typeof DialogPrimitive.Close>,
-  "asChild"
->;
+  "children" | "render"
+> & { children: React.ReactElement };
 
 export function DialogClose(props: DialogCloseProps) {
-  return <DialogPrimitive.Close asChild {...props} />;
+  const { children, ...closeProps } = props;
+  return <DialogPrimitive.Close render={children} {...closeProps} />;
 }
 
 export function DialogOverlay({
   className,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+}: React.ComponentProps<typeof DialogPrimitive.Backdrop>) {
   return (
-    /**
-     * Replaced DialogOverlay with simple <div /> element.
-     * This component implements scroll removal and breaks the scroll positioning.
-     * Possible fix waiting for https://github.com/radix-ui/primitives/pull/2250.
-     */
-    <div
+    <DialogPrimitive.Backdrop
       className={cn(
-        "fixed inset-0 z-50 bg-screen/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        "fixed inset-0 z-50 bg-screen/40 data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:animate-in data-[open]:fade-in-0",
         className,
       )}
       {...props}
@@ -48,23 +45,25 @@ export function DialogOverlay({
   );
 }
 
+type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Popup>;
+
 export function DialogContent({
   className,
   children,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: DialogContentProps) {
   return (
     <DialogPortal>
       <DialogOverlay />
-      <DialogPrimitive.Content
+      <DialogPrimitive.Popup
         className={cn(
-          "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] overflow-x-hidden overflow-y-auto rounded-lg border border-default bg-screen data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] overflow-x-hidden overflow-y-auto rounded-lg border border-default bg-screen data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95 data-[open]:animate-in data-[open]:fade-in-0 data-[open]:zoom-in-95 sm:max-w-lg",
           className,
         )}
         {...props}
       >
         {children}
-      </DialogPrimitive.Content>
+      </DialogPrimitive.Popup>
     </DialogPortal>
   );
 }
@@ -72,11 +71,13 @@ export function DialogContent({
 export function DialogXClose(props: IconButtonProps) {
   const ariaLabel = props["aria-label"] ?? "Close";
   return (
-    <DialogPrimitive.Close asChild>
-      <IconButton {...props} aria-label={ariaLabel}>
-        <XIcon aria-hidden="true" />
-      </IconButton>
-    </DialogPrimitive.Close>
+    <DialogPrimitive.Close
+      render={
+        <IconButton {...props} aria-label={ariaLabel}>
+          <XIcon aria-hidden="true" />
+        </IconButton>
+      }
+    />
   );
 }
 
@@ -136,11 +137,6 @@ export function DialogFooter({
   );
 }
 
-/**
- * An optional accessible description to be announced when the dialog is opened.
- * https://www.radix-ui.com/primitives/docs/components/dialog#description
- * For screen readers only use `sr-only` class name
- */
 export function DialogDescription({
   className,
   ...props

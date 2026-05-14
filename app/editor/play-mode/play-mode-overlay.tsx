@@ -33,6 +33,7 @@ import {
   DEFAULT_PLAY_MODE_ZOOM,
   PLAY_MODE_MAX_ZOOM,
   PLAY_MODE_MIN_ZOOM,
+  type PlayRunEndBehavior,
 } from "~/editor/play-mode/play-settings";
 import { elmaLevelFromEditorState } from "~/editor/helpers/level-parser";
 import { convertLevelToGameData } from "~/editor/play-mode/level-converter";
@@ -136,6 +137,9 @@ export function PlayModeOverlay({
   const gameStateRef = useRef<GameState | null>(null);
   const inputRef = useRef<InputManager | null>(null);
   const keyBindingsRef = useRef(getPlayKeyBindings(playSettings));
+  const runEndBehaviorRef = useRef<PlayRunEndBehavior>(
+    playSettings.runEndBehavior,
+  );
   const restartRequestedRef = useRef(false);
   const playTimeTextRef = useRef<HTMLDivElement>(null);
   const lastPlayTimeRef = useRef("00:00,00");
@@ -359,6 +363,7 @@ export function PlayModeOverlay({
     function syncPlaySettings() {
       const nextKeyBindings = getPlayKeyBindings(playSettings);
       keyBindingsRef.current = nextKeyBindings;
+      runEndBehaviorRef.current = playSettings.runEndBehavior;
       if (gameStateRef.current) {
         gameStateRef.current.keys = nextKeyBindings;
       }
@@ -451,6 +456,20 @@ export function PlayModeOverlay({
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
       };
 
+      const handleRunEnd = () => {
+        switch (runEndBehaviorRef.current) {
+          case "restart":
+            resetGame();
+            return false;
+          case "exit":
+            stopPlayMode();
+            return true;
+          case "pause":
+          default:
+            return false;
+        }
+      };
+
       let animationFrame = 0;
       const loop = (timestamp: number) => {
         if (restartRequestedRef.current || input.wasJustPressed("Enter")) {
@@ -458,6 +477,12 @@ export function PlayModeOverlay({
         }
 
         gameFrame(gameState, timestamp);
+        if (
+          (gameState.result === "dead" || gameState.result === "won") &&
+          handleRunEnd()
+        ) {
+          return;
+        }
         syncStoredZoom(gameState.camera.zoom);
         setActiveMobileControls((currentState) => {
           const nextState = getActiveMobileControlState(

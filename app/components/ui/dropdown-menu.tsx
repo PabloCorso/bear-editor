@@ -1,5 +1,5 @@
 import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
-import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
+import { Menu as DropdownMenuPrimitive } from "@base-ui/react/menu";
 import { Icon } from "./icon";
 import { cn } from "~/utils/misc";
 
@@ -10,13 +10,9 @@ export function DropdownMenuTrigger({
   ...props
 }: Omit<
   React.ComponentProps<typeof DropdownMenuPrimitive.Trigger>,
-  "asChild"
-> & { children: React.ReactNode }) {
-  return (
-    <DropdownMenuPrimitive.Trigger asChild {...props}>
-      {children}
-    </DropdownMenuPrimitive.Trigger>
-  );
+  "children" | "render"
+> & { children: React.ReactElement }) {
+  return <DropdownMenuPrimitive.Trigger render={children} {...props} />;
 }
 
 export const DropdownMenuTriggerIcon = CaretDownIcon;
@@ -32,7 +28,7 @@ export function DropdownMenuItem({
   iconAfter,
   shortcut,
   ...props
-}: Omit<React.ComponentProps<typeof DropdownMenuPrimitive.Item>, "asChild"> & {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Item> & {
   iconBefore?: React.ReactNode;
   iconAfter?: React.ReactNode;
   shortcut?: React.ReactNode;
@@ -56,7 +52,7 @@ const contentClassName = cn(
   "z-50 min-w-[8rem] overflow-hidden rounded-md border border-default bg-screen p-1 shadow-md",
 );
 const contentAnimationClassName = cn(
-  "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+  "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[closed]:animate-out data-[closed]:fade-out-0 data-[closed]:zoom-out-95 data-[open]:animate-in data-[open]:fade-in-0 data-[open]:zoom-in-95",
 );
 
 export function DropdownMenuContent({
@@ -64,20 +60,35 @@ export function DropdownMenuContent({
   align = "start",
   sideOffset = 4,
   collisionPadding = 8,
+  children,
+  finalFocus,
   ...props
 }: Omit<
-  React.ComponentProps<typeof DropdownMenuPrimitive.Content>,
-  "asChild"
->) {
+  React.ComponentProps<typeof DropdownMenuPrimitive.Positioner>,
+  "children" | "className"
+> &
+  Omit<
+    React.ComponentProps<typeof DropdownMenuPrimitive.Popup>,
+    "children" | "className"
+  > & {
+    children?: React.ReactNode;
+    className?: string;
+  }) {
   return (
     <DropdownMenuPrimitive.Portal>
-      <DropdownMenuPrimitive.Content
+      <DropdownMenuPrimitive.Positioner
         align={align}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
-        className={cn(contentClassName, contentAnimationClassName, className)}
         {...props}
-      />
+      >
+        <DropdownMenuPrimitive.Popup
+          finalFocus={finalFocus}
+          className={cn(contentClassName, contentAnimationClassName, className)}
+        >
+          {children}
+        </DropdownMenuPrimitive.Popup>
+      </DropdownMenuPrimitive.Positioner>
     </DropdownMenuPrimitive.Portal>
   );
 }
@@ -87,9 +98,9 @@ export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 export function DropdownMenuLabel({
   className,
   ...props
-}: Omit<React.ComponentProps<typeof DropdownMenuPrimitive.Label>, "asChild">) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.GroupLabel>) {
   return (
-    <DropdownMenuPrimitive.Label
+    <DropdownMenuPrimitive.GroupLabel
       className={cn("px-2 py-0.5 text-sm font-semibold", className)}
       {...props}
     />
@@ -99,10 +110,7 @@ export function DropdownMenuLabel({
 export function DropdownMenuSeparator({
   className,
   ...props
-}: Omit<
-  React.ComponentProps<typeof DropdownMenuPrimitive.Separator>,
-  "asChild"
->) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
   return (
     <DropdownMenuPrimitive.Separator
       className={cn("-mx-1 my-1 h-px bg-[var(--border-separator)]", className)}

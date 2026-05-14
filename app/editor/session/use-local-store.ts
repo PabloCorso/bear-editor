@@ -4,6 +4,10 @@ import { defaultLevelVisibility } from "~/editor/level-visibility";
 import { defaultPlaySettings } from "~/editor/play-mode/play-settings";
 import { useEditorStore } from "~/editor/use-editor-store";
 
+type LegacyLocalStoragePlaySettings = {
+  deathBehavior?: "stop" | "reset";
+} & Partial<EditorState["playSettings"]>;
+
 type LocalStorageLevel = Pick<
   EditorState,
   | "levelName"
@@ -21,8 +25,9 @@ type LocalStorageLevel = Pick<
   | "viewPortOffset"
   | "zoom"
   | "levelVisibility"
-  | "playSettings"
->;
+> & {
+  playSettings?: LegacyLocalStoragePlaySettings;
+};
 
 export function useLocalStorageSync(key = "elma-web-store") {
   const isInitializedRef = useRef(false);
@@ -75,6 +80,13 @@ export function useLocalStorageSync(key = "elma-web-store") {
           },
           playSettings: {
             ...defaultPlaySettings,
+            runEndBehavior:
+              savedData.playSettings?.runEndBehavior ??
+              (savedData.playSettings?.deathBehavior === "reset"
+                ? "restart"
+                : savedData.playSettings?.deathBehavior === "stop"
+                  ? "pause"
+                  : defaultPlaySettings.runEndBehavior),
             keyBindings: {
               ...defaultPlaySettings.keyBindings,
               ...(savedData.playSettings?.keyBindings ?? {}),

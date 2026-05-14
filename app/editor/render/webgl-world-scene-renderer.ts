@@ -1137,38 +1137,9 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
     scene: WorldRenderScene,
     opacity = 1,
   ) {
-    this.drawLine(
-      { x, y },
-      { x: x + width, y },
-      lineWidth,
-      color,
-      scene,
-      opacity,
-    );
-    this.drawLine(
-      { x: x + width, y },
-      { x: x + width, y: y + height },
-      lineWidth,
-      color,
-      scene,
-      opacity,
-    );
-    this.drawLine(
-      { x: x + width, y: y + height },
-      { x, y: y + height },
-      lineWidth,
-      color,
-      scene,
-      opacity,
-    );
-    this.drawLine(
-      { x, y: y + height },
-      { x, y },
-      lineWidth,
-      color,
-      scene,
-      opacity,
-    );
+    const vertices: number[] = [];
+    appendRectOutlineVertices(vertices, x, y, width, height, lineWidth);
+    this.drawVertices(vertices, colorToRgba(color, opacity), null, scene);
   }
 
   private drawQuad(
@@ -1604,34 +1575,13 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
       opacity: number;
     },
   ) {
-    this.appendLineBatch(batches, {
-      from: { x, y },
-      to: { x: x + width, y },
-      width: lineWidth,
+    const vertices = getOverlayBatchVertices(
+      batches,
       color,
       opacity,
-    });
-    this.appendLineBatch(batches, {
-      from: { x: x + width, y },
-      to: { x: x + width, y: y + height },
-      width: lineWidth,
-      color,
-      opacity,
-    });
-    this.appendLineBatch(batches, {
-      from: { x: x + width, y: y + height },
-      to: { x, y: y + height },
-      width: lineWidth,
-      color,
-      opacity,
-    });
-    this.appendLineBatch(batches, {
-      from: { x, y: y + height },
-      to: { x, y },
-      width: lineWidth,
-      color,
-      opacity,
-    });
+      lineWidth.toFixed(6),
+    );
+    appendRectOutlineVertices(vertices, x, y, width, height, lineWidth);
   }
 
   private appendPolylineBatch(
@@ -2128,6 +2078,71 @@ function appendLineVertices(
   );
 }
 
+function appendRectOutlineVertices(
+  vertices: number[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  lineWidth: number,
+) {
+  if (lineWidth <= 0) return;
+
+  const halfLineWidth = lineWidth / 2;
+  const innerMinX = Math.min(x + halfLineWidth, x + width / 2);
+  const innerMaxX = Math.max(x + width - halfLineWidth, x + width / 2);
+  const innerMinY = Math.min(y + halfLineWidth, y + height / 2);
+  const innerMaxY = Math.max(y + height - halfLineWidth, y + height / 2);
+
+  const outerTopLeft = { x: x - halfLineWidth, y: y - halfLineWidth };
+  const outerTopRight = {
+    x: x + width + halfLineWidth,
+    y: y - halfLineWidth,
+  };
+  const outerBottomRight = {
+    x: x + width + halfLineWidth,
+    y: y + height + halfLineWidth,
+  };
+  const outerBottomLeft = {
+    x: x - halfLineWidth,
+    y: y + height + halfLineWidth,
+  };
+
+  const innerTopLeft = { x: innerMinX, y: innerMinY };
+  const innerTopRight = { x: innerMaxX, y: innerMinY };
+  const innerBottomRight = { x: innerMaxX, y: innerMaxY };
+  const innerBottomLeft = { x: innerMinX, y: innerMaxY };
+
+  appendRingQuad(
+    vertices,
+    outerTopLeft,
+    outerTopRight,
+    innerTopRight,
+    innerTopLeft,
+  );
+  appendRingQuad(
+    vertices,
+    outerTopRight,
+    outerBottomRight,
+    innerBottomRight,
+    innerTopRight,
+  );
+  appendRingQuad(
+    vertices,
+    outerBottomRight,
+    outerBottomLeft,
+    innerBottomLeft,
+    innerBottomRight,
+  );
+  appendRingQuad(
+    vertices,
+    outerBottomLeft,
+    outerTopLeft,
+    innerTopLeft,
+    innerBottomLeft,
+  );
+}
+
 function appendCircleVertices(
   vertices: number[],
   center: WorldPoint,
@@ -2208,6 +2223,41 @@ function appendCircleOutlineVertices(
       0,
     );
   }
+}
+
+function appendRingQuad(
+  vertices: number[],
+  outerA: WorldPoint,
+  outerB: WorldPoint,
+  innerB: WorldPoint,
+  innerA: WorldPoint,
+) {
+  vertices.push(
+    outerA.x,
+    outerA.y,
+    0,
+    0,
+    innerA.x,
+    innerA.y,
+    0,
+    0,
+    outerB.x,
+    outerB.y,
+    0,
+    0,
+    outerB.x,
+    outerB.y,
+    0,
+    0,
+    innerA.x,
+    innerA.y,
+    0,
+    0,
+    innerB.x,
+    innerB.y,
+    0,
+    0,
+  );
 }
 
 function elmaPixelsToWorldUnits(pixels: number) {

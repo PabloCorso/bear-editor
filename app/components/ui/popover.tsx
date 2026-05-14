@@ -1,4 +1,4 @@
-import * as PopoverPrimitive from "@radix-ui/react-popover";
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import * as React from "react";
 import { cn } from "~/utils/misc";
 
@@ -10,39 +10,50 @@ export function Popover({ ...props }: PopoverProps) {
 
 export type PopoverTriggerProps = Omit<
   React.ComponentProps<typeof PopoverPrimitive.Trigger>,
-  "asChild"
->;
+  "children" | "render"
+> & { children: React.ReactElement };
 
 export function PopoverTrigger({ ...props }: PopoverTriggerProps) {
-  return <PopoverPrimitive.Trigger asChild {...props} />;
+  const { children, ...triggerProps } = props;
+  return <PopoverPrimitive.Trigger render={children} {...triggerProps} />;
 }
 
 export type PopoverContentProps = Omit<
-  React.ComponentProps<typeof PopoverPrimitive.Content>,
-  "asChild"
->;
+  React.ComponentProps<typeof PopoverPrimitive.Positioner>,
+  "children" | "className"
+> &
+  Omit<
+    React.ComponentProps<typeof PopoverPrimitive.Popup>,
+    "children" | "className"
+  > & {
+    children?: React.ReactNode;
+    className?: string;
+  };
 
 export function PopoverContent({
   className,
   align = "center",
   sideOffset = 8,
+  children,
   ...props
 }: PopoverContentProps) {
   return (
     <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Content
+      <PopoverPrimitive.Positioner
         align={align}
         sideOffset={sideOffset}
-        className={cn("z-40", className)}
         {...props}
-      />
+      >
+        <PopoverPrimitive.Popup className={cn("z-40", className)}>
+          {children}
+        </PopoverPrimitive.Popup>
+      </PopoverPrimitive.Positioner>
     </PopoverPrimitive.Portal>
   );
 }
 
-export type PopoverArrowProps = Omit<
-  React.ComponentProps<typeof PopoverPrimitive.Arrow>,
-  "asChild"
+export type PopoverArrowProps = React.ComponentProps<
+  typeof PopoverPrimitive.Arrow
 >;
 
 export function PopoverArrow({ className, ...props }: PopoverArrowProps) {
@@ -57,11 +68,8 @@ export function PopoverArrow({ className, ...props }: PopoverArrowProps) {
   );
 }
 
-export type PopoverAnchorProps = Omit<
-  React.ComponentProps<typeof PopoverPrimitive.Anchor>,
-  "asChild"
->;
+export type PopoverAnchorProps = { children: React.ReactElement };
 
-export function PopoverAnchor({ ...props }: PopoverAnchorProps) {
-  return <PopoverPrimitive.Anchor asChild {...props} />;
+export function PopoverAnchor({ children }: PopoverAnchorProps) {
+  return children;
 }

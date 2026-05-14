@@ -36,10 +36,14 @@ import { cn, useModifier } from "~/utils/misc";
 import { useForceUpdate } from "@mantine/hooks";
 import {
   defaultPlaySettings,
+  type PlayRunEndBehavior,
   type PlayKeyBindings,
 } from "~/editor/play-mode/play-settings";
-import { IconButton } from "../../components/ui/button";
-import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "../../components/ui/button";
+import {
+  ArrowCounterClockwiseIcon,
+  CaretDownIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import datGif from "~/assets/dat.gif";
 
 const LEVEL_PRESETS: Array<{
@@ -49,6 +53,24 @@ const LEVEL_PRESETS: Array<{
   { id: "default", label: "Default" },
   { id: "smibu", label: "Smibu Level Editor" },
   { id: "internal", label: "Internal Editor" },
+];
+
+const playRunEndBehaviors: Array<{
+  id: PlayRunEndBehavior;
+  label: string;
+}> = [
+  {
+    id: "pause",
+    label: "Pause",
+  },
+  {
+    id: "restart",
+    label: "Restart",
+  },
+  {
+    id: "exit",
+    label: "Exit",
+  },
 ];
 
 export function SettingsDialog(props: DialogProps) {
@@ -367,49 +389,76 @@ export function PlaySettingsPanel() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-medium">Controls</p>
-        <IconButton
-          type="button"
-          size="sm"
-          aria-label="Reset play defaults"
-          title="Reset play defaults"
-          onClick={() => setPlaySettings(defaultPlaySettings)}
-        >
-          <ArrowCounterClockwiseIcon />
-        </IconButton>
-      </div>
       <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
-        <PlayKeyField
-          label="Throttle"
-          value={playSettings.keyBindings.throttle}
-          onChange={(value) => setPlayKeyBinding("throttle", value)}
-        />
-        <PlayKeyField
-          label="Brake"
-          value={playSettings.keyBindings.brake}
-          onChange={(value) => setPlayKeyBinding("brake", value)}
-        />
-        <PlayKeyField
-          label="Rotate left"
-          value={playSettings.keyBindings.voltLeft}
-          onChange={(value) => setPlayKeyBinding("voltLeft", value)}
-        />
-        <PlayKeyField
-          label="Rotate right"
-          value={playSettings.keyBindings.voltRight}
-          onChange={(value) => setPlayKeyBinding("voltRight", value)}
-        />
-        <PlayKeyField
-          label="Turn"
-          value={playSettings.keyBindings.turn}
-          onChange={(value) => setPlayKeyBinding("turn", value)}
-        />
-        <PlayKeyField
-          label="Alo volt"
-          value={playSettings.keyBindings.aloVolt}
-          onChange={(value) => setPlayKeyBinding("aloVolt", value)}
-        />
+        <label className="flex items-center justify-between">
+          <span className="min-w-24 text-sm">When run ends</span>
+          <span className="relative">
+            <select
+              value={playSettings.runEndBehavior}
+              onChange={(event) =>
+                setPlaySettings({
+                  runEndBehavior: event.currentTarget
+                    .value as PlayRunEndBehavior,
+                })
+              }
+              className="w-32 appearance-none rounded-md border border-separator bg-transparent py-2 pr-8 pl-3 text-sm"
+            >
+              {playRunEndBehaviors.map((behavior) => (
+                <option key={behavior.id} value={behavior.id}>
+                  {behavior.label}
+                </option>
+              ))}
+            </select>
+            <CaretDownIcon
+              aria-hidden
+              className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-primary/70"
+            />
+          </span>
+        </label>
+        <Button
+          type="button"
+          onClick={() => setPlaySettings(defaultPlaySettings)}
+          className="ml-auto"
+          size="sm"
+          iconBefore={<ArrowCounterClockwiseIcon />}
+        >
+          Reset settings
+        </Button>
+      </div>
+      <div className="flex flex-col gap-2 pt-2">
+        <p className="font-medium">Controls</p>
+        <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+          <PlayKeyField
+            label="Throttle"
+            value={playSettings.keyBindings.throttle}
+            onChange={(value) => setPlayKeyBinding("throttle", value)}
+          />
+          <PlayKeyField
+            label="Brake"
+            value={playSettings.keyBindings.brake}
+            onChange={(value) => setPlayKeyBinding("brake", value)}
+          />
+          <PlayKeyField
+            label="Rotate left"
+            value={playSettings.keyBindings.voltLeft}
+            onChange={(value) => setPlayKeyBinding("voltLeft", value)}
+          />
+          <PlayKeyField
+            label="Rotate right"
+            value={playSettings.keyBindings.voltRight}
+            onChange={(value) => setPlayKeyBinding("voltRight", value)}
+          />
+          <PlayKeyField
+            label="Turn"
+            value={playSettings.keyBindings.turn}
+            onChange={(value) => setPlayKeyBinding("turn", value)}
+          />
+          <PlayKeyField
+            label="Alo volt"
+            value={playSettings.keyBindings.aloVolt}
+            onChange={(value) => setPlayKeyBinding("aloVolt", value)}
+          />
+        </div>
       </div>
     </div>
   );

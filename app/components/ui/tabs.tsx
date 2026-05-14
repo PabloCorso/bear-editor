@@ -1,4 +1,4 @@
-import * as TabsPrimitive from "@radix-ui/react-tabs";
+import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
 import * as React from "react";
 import { cn } from "~/utils/misc";
 
@@ -22,13 +22,13 @@ export function TabsList({
 export function TabsTrigger({
   className,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+}: React.ComponentProps<typeof TabsPrimitive.Tab>) {
   return (
-    <TabsPrimitive.Trigger
+    <TabsPrimitive.Tab
       className={cn(
         "inline-flex min-w-0 cursor-pointer items-center justify-center gap-2 rounded-md px-2 py-1 text-sm font-bold transition-colors select-none focus-visible:focus-ring sm:px-3 sm:text-lg",
         "hover:bg-screen/80",
-        "data-[state=active]:text-on-color data-[state=active]:bg-screen data-[state=active]:shadow-sm",
+        "data-[active]:text-on-color data-[active]:bg-screen data-[active]:shadow-sm",
         "disabled:pointer-events-none disabled:opacity-40",
         className,
       )}
@@ -40,9 +40,9 @@ export function TabsTrigger({
 export function TabsContent({
   className,
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.Content>) {
+}: React.ComponentProps<typeof TabsPrimitive.Panel>) {
   return (
-    <TabsPrimitive.Content
+    <TabsPrimitive.Panel
       className={cn("focus-visible:focus-ring", className)}
       {...props}
     />

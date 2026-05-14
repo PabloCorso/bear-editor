@@ -48,6 +48,7 @@ export function useLgrSprite(name: string) {
       width: lgrAssets.lgr?.getSprite(name)?.width,
       height: lgrAssets.lgr?.getSprite(name)?.height,
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [name, lgrAssets.lgr, lgrAssets.isLoaded],
   );
 }
@@ -62,6 +63,7 @@ export function usePictureSprites() {
       width: sprite?.width,
       height: sprite?.height,
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lgrAssets.lgr, lgrAssets.isLoaded]);
 }
 
@@ -81,6 +83,7 @@ export function useTextureSprites() {
         height: sprite?.height,
       };
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lgrAssets.lgr, lgrAssets.isLoaded]);
 }
 
@@ -101,5 +104,6 @@ export function useTextureMaskSprites() {
         height: sprite?.height,
       })),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lgrAssets.lgr, lgrAssets.isLoaded]);
 }

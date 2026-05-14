@@ -11,7 +11,7 @@ import {
 } from "~/components/ui/popover";
 import { Toolbar, type ToolbarProps } from "~/components/ui/toolbar";
 import { cn } from "~/utils/misc";
-import { Portal } from "@radix-ui/react-portal";
+import { createPortal } from "react-dom";
 
 export function FloatingToolbar({ modal = false, ...props }: PopoverProps) {
   return <Popover modal={modal} {...props} />;
@@ -60,23 +60,26 @@ export function FloatingViewportToolbar({
   children,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
-  return (
-    <Portal>
-      <div
-        className={cn(
-          "pointer-events-none fixed inset-y-0 left-20 z-40 grid",
-          className,
-        )}
-        style={{
-          gridTemplateRows:
-            "minmax(var(--toolbar-space), 1fr) auto minmax(1rem, 1fr)",
-        }}
-        {...props}
-      >
-        <div className="pointer-events-auto row-start-2 max-h-full self-center overflow-auto">
-          {children}
-        </div>
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className={cn(
+        "pointer-events-none fixed inset-y-0 left-20 z-40 grid",
+        className,
+      )}
+      style={{
+        gridTemplateRows:
+          "minmax(var(--toolbar-space), 1fr) auto minmax(1rem, 1fr)",
+      }}
+      {...props}
+    >
+      <div className="pointer-events-auto row-start-2 max-h-full self-center overflow-auto">
+        {children}
       </div>
-    </Portal>
+    </div>,
+    document.body,
   );
 }
