@@ -1,11 +1,17 @@
-import { ELMA_PIXEL_SCALE } from "~/editor/constants";
+import { ELMA_PIXEL_SCALE, QGRASS_TOP_EXTRA_PX } from "~/editor/constants";
 
 const MIN_ZOOM_EPSILON = 0.0001;
 const GRASS_TINY_CANVAS_UNIT_PX = 1;
-const GRASS_VERTICAL_EDGE_THRESHOLD = 0.05;
 const GRASS_COLLINEAR_DOT_THRESHOLD = 0.98;
 const GRASS_JOIN_OVERLAP = ELMA_PIXEL_SCALE;
 export const WORLD_CULL_MARGIN = 2;
+
+export type GrassFillQuad = readonly [
+  { x: number; y: number },
+  { x: number; y: number },
+  { x: number; y: number },
+  { x: number; y: number },
+];
 
 export type WorldRect = {
   minX: number;
@@ -101,21 +107,24 @@ export function buildGroundPath(viewportPath: Path2D, skyPath: Path2D) {
   return path;
 }
 
-export function getViewportWorldRectFromCenter(viewport: {
-  width: number;
-  height: number;
-  centerX: number;
-  centerY: number;
-  zoom: number;
-}): WorldRect {
+export function getViewportWorldRectFromCenter(
+  viewport: {
+    width: number;
+    height: number;
+    centerX: number;
+    centerY: number;
+    zoom: number;
+  },
+  margin = WORLD_CULL_MARGIN,
+): WorldRect {
   const halfWidth = viewport.width / (2 * viewport.zoom);
   const halfHeight = viewport.height / (2 * viewport.zoom);
 
   return {
-    minX: viewport.centerX - halfWidth - WORLD_CULL_MARGIN,
-    maxX: viewport.centerX + halfWidth + WORLD_CULL_MARGIN,
-    minY: viewport.centerY - halfHeight - WORLD_CULL_MARGIN,
-    maxY: viewport.centerY + halfHeight + WORLD_CULL_MARGIN,
+    minX: viewport.centerX - halfWidth - margin,
+    maxX: viewport.centerX + halfWidth + margin,
+    minY: viewport.centerY - halfHeight - margin,
+    maxY: viewport.centerY + halfHeight + margin,
   };
 }
 
@@ -158,30 +167,23 @@ export function getGrassEdgeIndices(vertices: Array<{ x: number; y: number }>) {
   );
 }
 
-export function fillGrassEdges({
-  ctx,
+export function getGrassFillQuads({
   vertices,
-  groundPath,
   zoom,
   depth,
-  fillStyle,
 }: {
-  ctx: CanvasRenderingContext2D;
   vertices: Array<{ x: number; y: number }>;
-  groundPath: Path2D;
   zoom: number;
   depth: number;
-  fillStyle: string | CanvasGradient | CanvasPattern;
-}) {
+}): GrassFillQuad[] {
   const tinyCanvasUnit =
     GRASS_TINY_CANVAS_UNIT_PX / Math.max(zoom, MIN_ZOOM_EPSILON);
+  const topExtra = QGRASS_TOP_EXTRA_PX * ELMA_PIXEL_SCALE;
+  const fillDepth = depth + topExtra;
   const grassEdgeIndices = getGrassEdgeIndices(vertices);
   const grassEdgesSet = new Set(grassEdgeIndices);
   const vertexCount = vertices.length;
-
-  ctx.save();
-  ctx.clip(groundPath, "evenodd");
-  ctx.fillStyle = fillStyle;
+  const quads: GrassFillQuad[] = [];
 
   for (const index of grassEdgeIndices) {
     const from = vertices[index]!;
@@ -243,22 +245,21 @@ export function fillGrassEdges({
     toX += edgeDir.x * toExtend;
     toY += edgeDir.y * toExtend;
 
-    if (Math.abs(edgeDir.x) <= GRASS_VERTICAL_EDGE_THRESHOLD) {
-      const fix = edgeDir.y < 0 ? tinyCanvasUnit : -tinyCanvasUnit;
-      fromX += fix;
-      toX += fix;
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(fromX, fromY);
-    ctx.lineTo(toX, toY);
-    ctx.lineTo(toX, toY - depth);
-    ctx.lineTo(fromX, fromY - depth);
-    ctx.closePath();
-    ctx.fill();
+    quads.push([
+      { x: fromX, y: fromY },
+      { x: toX, y: toY },
+      {
+        x: toX,
+        y: toY - fillDepth,
+      },
+      {
+        x: fromX,
+        y: fromY - fillDepth,
+      },
+    ]);
   }
 
-  ctx.restore();
+  return quads;
 }
 
 export function rectContainsPointWithMargin(

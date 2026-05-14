@@ -23,14 +23,16 @@ import {
   useVertexEdgeClickBehavior,
 } from "~/editor/edit-mode/default-level-preset";
 
-type EditorViewProps = React.ComponentPropsWithRef<"canvas">;
+type EditorViewProps = React.ComponentPropsWithRef<"canvas"> & {};
 
 export function EditorView({ className, ...props }: EditorViewProps) {
   return (
-    <canvas
-      className={cn("h-full w-full touch-none select-none", className)}
-      {...props}
-    />
+    <div className={cn("relative h-full w-full", className)}>
+      <canvas
+        className="absolute inset-0 h-full w-full touch-none select-none"
+        {...props}
+      />
+    </div>
   );
 }
 
@@ -43,7 +45,7 @@ type UseEditorViewOptions = {
 export function useEditorView({
   initialDocument,
   isOpenAIEnabled,
-  rendererBackend = "canvas",
+  rendererBackend = "webgl",
 }: UseEditorViewOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<EditorEngine | null>(null);

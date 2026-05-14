@@ -13,12 +13,22 @@ type CachedPolygonDerivedData = {
 };
 
 const polygonDerivedDataCache = new WeakMap<
-  { vertices: Array<{ x: number; y: number }>; grass?: boolean; isGrass?: boolean },
+  {
+    vertices: Array<{ x: number; y: number }>;
+    grass?: boolean;
+    isGrass?: boolean;
+  },
   CachedPolygonDerivedData
 >();
 
 export function getCachedPolygonDerivedData(
-  polygon: Polygon | { vertices: Array<{ x: number; y: number }>; grass?: boolean; isGrass?: boolean },
+  polygon:
+    | Polygon
+    | {
+        vertices: Array<{ x: number; y: number }>;
+        grass?: boolean;
+        isGrass?: boolean;
+      },
 ): CachedPolygonDerivedData {
   const cached = polygonDerivedDataCache.get(polygon);
   if (cached) return cached;
@@ -33,7 +43,9 @@ export function getCachedPolygonDerivedData(
   return derived;
 }
 
-export function getPolygonBounds(vertices: Array<{ x: number; y: number }>): WorldRect {
+export function getPolygonBounds(
+  vertices: Array<{ x: number; y: number }>,
+): WorldRect {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -50,10 +62,19 @@ export function getPolygonBounds(vertices: Array<{ x: number; y: number }>): Wor
 }
 
 export function isPolygonVisible(
-  polygon: Polygon | { vertices: Array<{ x: number; y: number }>; grass?: boolean; isGrass?: boolean },
+  polygon:
+    | Polygon
+    | {
+        vertices: Array<{ x: number; y: number }>;
+        grass?: boolean;
+        isGrass?: boolean;
+      },
   viewportRect: WorldRect,
 ) {
-  return rectsIntersect(getCachedPolygonDerivedData(polygon).bounds, viewportRect);
+  return rectsIntersect(
+    getCachedPolygonDerivedData(polygon).bounds,
+    viewportRect,
+  );
 }
 
 export function isPointVisible(position: Position, viewportRect: WorldRect) {
@@ -98,7 +119,13 @@ export function isPictureVisible(
 }
 
 function isGrassPolygon(
-  polygon: Polygon | { vertices: Array<{ x: number; y: number }>; grass?: boolean; isGrass?: boolean },
+  polygon:
+    | Polygon
+    | {
+        vertices: Array<{ x: number; y: number }>;
+        grass?: boolean;
+        isGrass?: boolean;
+      },
 ) {
   return polygon.grass || ("isGrass" in polygon && Boolean(polygon.isGrass));
 }

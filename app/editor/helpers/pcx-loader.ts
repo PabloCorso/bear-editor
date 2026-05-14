@@ -6,6 +6,8 @@ type DecodedPcx = {
   pixels: Uint8ClampedArray;
 };
 
+export type DecodedSprite = DecodedPcx;
+
 const PCX_HEADER_SIZE = 128;
 const VGA_PALETTE_SIZE = 769; // 0x0C marker + 256 * 3 bytes
 
@@ -187,6 +189,32 @@ function pcxToImageBitmap(decodedPcx: DecodedPcx) {
   return createImageBitmap(imageData);
 }
 
+export function decodeLgrSpritePixels(
+  picture: PictureData,
+  declaration?: PictureDeclarationLike,
+) {
+  const normalizedName = picture.name.trim().toLowerCase();
+  const bytes = new Uint8Array(
+    picture.data.buffer,
+    picture.data.byteOffset,
+    picture.data.byteLength,
+  );
+  const isGrassTexture = normalizedName === "qgrass";
+  const isGrassSprite =
+    normalizedName.startsWith("qup_") || normalizedName.startsWith("qdown_");
+  const isTexture = isGrassTexture || declaration?.pictureType === 101;
+  const transparencyMode = isTexture
+    ? undefined
+    : ((isGrassSprite
+        ? 12
+        : (declaration?.transparency ?? 12)) as TransparencyMode);
+
+  return decodePcxWithOptions(bytes, {
+    forceOpaque: isTexture,
+    transparencyMode,
+  });
+}
+
 export async function decodeLgrSprite(picture: PictureData) {
   const bytes = new Uint8Array(
     picture.data.buffer,
@@ -206,24 +234,5 @@ export async function decodeLgrSpriteWithDeclaration(
   picture: PictureData,
   declaration?: PictureDeclarationLike,
 ) {
-  const normalizedName = picture.name.trim().toLowerCase();
-  const bytes = new Uint8Array(
-    picture.data.buffer,
-    picture.data.byteOffset,
-    picture.data.byteLength,
-  );
-  const isGrassTexture = normalizedName === "qgrass";
-  const isGrassSprite =
-    normalizedName.startsWith("qup_") || normalizedName.startsWith("qdown_");
-  const isTexture = isGrassTexture || declaration?.pictureType === 101;
-  const transparencyMode = isTexture
-    ? undefined
-    : ((isGrassSprite
-        ? 12
-        : (declaration?.transparency ?? 12)) as TransparencyMode);
-  const decodedPcx = decodePcxWithOptions(bytes, {
-    forceOpaque: isTexture,
-    transparencyMode,
-  });
-  return pcxToImageBitmap(decodedPcx);
+  return pcxToImageBitmap(decodeLgrSpritePixels(picture, declaration));
 }

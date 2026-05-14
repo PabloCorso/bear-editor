@@ -4,6 +4,8 @@ import {
   isWithinThreshold,
   getClosestPointOnLineSegment,
 } from "./coordinate-helpers";
+import { getCachedPolygonDerivedData } from "../render/world-derived-data-cache";
+import { rectsIntersect, type WorldRect } from "../render/world-geometry";
 
 export type SelectedVertex = {
   polygon: Polygon;
@@ -15,7 +17,8 @@ export function findVertexNearPosition(
   polygons: Polygon[],
   threshold: number = selectionThresholds.vertex,
 ): { polygon: Polygon; vertex: Position } | null {
-  for (const polygon of polygons) {
+  const candidatePolygons = getCandidatePolygons(polygons, pos, threshold);
+  for (const polygon of candidatePolygons) {
     for (const vertex of polygon.vertices) {
       if (isWithinThreshold(pos, vertex, threshold)) {
         return { polygon, vertex };
@@ -99,7 +102,8 @@ export function findPolygonEdgeNearPosition(
   shouldConsiderEdge: (polygon: Polygon, edgeIndex: number) => boolean = () =>
     true,
 ): Polygon | null {
-  for (const polygon of polygons) {
+  const candidatePolygons = getCandidatePolygons(polygons, pos, threshold);
+  for (const polygon of candidatePolygons) {
     if (polygon.vertices.length < 3) continue;
 
     // Check each edge of the polygon
@@ -164,10 +168,16 @@ export function findPolygonVertexForEditing(
   threshold: number = selectionThresholds.vertex,
   zoom: number,
 ): { polygon: Polygon; vertexIndex: number; vertex: Position } | null {
-  for (const polygon of polygons) {
+  const adjustedThreshold = threshold / zoom;
+  const candidatePolygons = getCandidatePolygons(
+    polygons,
+    pos,
+    adjustedThreshold,
+  );
+  for (const polygon of candidatePolygons) {
     for (let i = 0; i < polygon.vertices.length; i++) {
       const vertex = polygon.vertices[i];
-      if (isWithinThreshold(pos, vertex, threshold / zoom)) {
+      if (isWithinThreshold(pos, vertex, adjustedThreshold)) {
         return { polygon, vertexIndex: i, vertex };
       }
     }
@@ -187,7 +197,12 @@ export function findPolygonLineForEditing(
 } | null {
   const adjustedThreshold = threshold / zoom;
 
-  for (const polygon of polygons) {
+  const candidatePolygons = getCandidatePolygons(
+    polygons,
+    pos,
+    adjustedThreshold,
+  );
+  for (const polygon of candidatePolygons) {
     if (polygon.vertices.length < 3) continue;
 
     // Check each edge of the polygon
@@ -222,4 +237,24 @@ export function findPolygonLineForEditing(
   }
 
   return null;
+}
+
+function getCandidatePolygons(
+  polygons: Polygon[],
+  pos: Position,
+  threshold: number,
+) {
+  const searchRect = getSearchRect(pos, threshold);
+  return polygons.filter((polygon) =>
+    rectsIntersect(getCachedPolygonDerivedData(polygon).bounds, searchRect),
+  );
+}
+
+function getSearchRect(pos: Position, threshold: number): WorldRect {
+  return {
+    minX: pos.x - threshold,
+    minY: pos.y - threshold,
+    maxX: pos.x + threshold,
+    maxY: pos.y + threshold,
+  };
 }

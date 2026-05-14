@@ -2,7 +2,6 @@ import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorState } from "~/editor/editor-state";
 import type { PartialEditorState } from "~/editor/editor-store";
-import { worldToScreen } from "~/editor/helpers/coordinate-helpers";
 import {
   findPolygonEdgeNearPosition,
   findPolygonLineForEditing,
@@ -19,6 +18,12 @@ import {
 import type { EditorStore } from "~/editor/editor-store";
 import { defaultTools } from "./default-tools";
 import type { Polygon, Position } from "~/editor/elma-types";
+import {
+  isPointVisible,
+  isPolygonVisible,
+} from "~/editor/render/world-derived-data-cache";
+import type { WorldRect } from "~/editor/render/world-geometry";
+import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import { checkModifierKey } from "~/utils/misc";
 import fastDeepEqual from "fast-deep-equal";
 
@@ -271,101 +276,75 @@ export class VertexTool extends Tool<VertexToolState> {
     );
   }
 
-  onRender(ctx: CanvasRenderingContext2D): void {
+  getWorldOverlays({
+    viewportRect,
+  }: {
+    viewportRect: WorldRect;
+  }): WorldRenderOverlayItem[] {
     const { state, toolState } = this.getState();
-    if (!toolState || toolState.drawingPolygon.vertices.length === 0) return;
+    if (!toolState || toolState.drawingPolygon.vertices.length === 0) return [];
 
+    const overlays: WorldRenderOverlayItem[] = [];
     const isGrass = toolState.drawingPolygon.grass;
-    ctx.strokeStyle = isGrass ? colors.grass : uiColors.vertexDraftLine;
-    ctx.lineWidth = uiStrokeWidths.boundsSelectedScreen / state.zoom;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    const strokeColor = isGrass ? colors.grass : uiColors.vertexDraftLine;
+    const selectedLineWidth = uiStrokeWidths.boundsSelectedScreen / state.zoom;
+    const handleSize = uiSelectionHandle.halfWidthPx / state.zoom;
+    const handleStrokeWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
 
-    ctx.beginPath();
-    ctx.moveTo(
-      toolState.drawingPolygon.vertices[0].x,
-      toolState.drawingPolygon.vertices[0].y,
-    );
-
-    for (let i = 1; i < toolState.drawingPolygon.vertices.length; i++) {
-      ctx.lineTo(
-        toolState.drawingPolygon.vertices[i].x,
-        toolState.drawingPolygon.vertices[i].y,
-      );
+    if (isPolygonVisible(toolState.drawingPolygon, viewportRect)) {
+      overlays.push({
+        type: "polyline",
+        points: toolState.drawingPolygon.vertices,
+        color: strokeColor,
+        width: selectedLineWidth,
+      });
     }
 
-    ctx.stroke();
+    overlays.push(
+      ...toolState.drawingPolygon.vertices
+        .filter((vertex) => isPointVisible(vertex, viewportRect))
+        .map((vertex) =>
+          createDraftHandleOverlay(vertex, handleSize, handleStrokeWidth),
+        ),
+    );
 
-    // Draw vertex handles (square, matching selection handle styling)
-    toolState.drawingPolygon.vertices.forEach((vertex) => {
-      const size = uiSelectionHandle.halfWidthPx / state.zoom;
-      const side = size * 2;
-      ctx.fillStyle = uiColors.vertexDraftPointFill;
-      ctx.fillRect(vertex.x - size, vertex.y - size, side, side);
-      ctx.strokeStyle = uiColors.vertexDraftPointStroke;
-      ctx.lineWidth = uiStrokeWidths.boundsIdleScreen / state.zoom;
-      ctx.strokeRect(vertex.x - size, vertex.y - size, side, side);
-    });
-  }
-
-  onRenderOverlay(ctx: CanvasRenderingContext2D): void {
-    const { state, toolState } = this.getState();
-    if (!toolState || toolState.drawingPolygon.vertices.length === 0) return;
-
-    const isEditingExistingPolygon = !!toolState.editingPolygon;
-    const startPoint = toolState.drawingPolygon.vertices[0];
+    const isEditingExistingPolygon = Boolean(toolState.editingPolygon);
+    const startPoint = toolState.drawingPolygon.vertices[0]!;
     const lastPoint =
       toolState.drawingPolygon.vertices[
         toolState.drawingPolygon.vertices.length - 1
-      ];
+      ]!;
 
-    // Convert world coordinates to screen coordinates
-    const startScreen = worldToScreen(
-      startPoint,
-      state.viewPortOffset,
-      state.zoom,
-    );
-    const lastScreen = worldToScreen(
-      lastPoint,
-      state.viewPortOffset,
-      state.zoom,
-    );
-    const mouseScreen = worldToScreen(
-      state.mousePosition,
-      state.viewPortOffset,
-      state.zoom,
-    );
-
-    // For polygon edits, the solid preview should grow from the pivot/start
-    // vertex and the dashed preview should point toward the opposite endpoint
-    // of the open edge. New polygon drawing keeps the original behavior.
-    const isGrass = toolState.drawingPolygon.grass;
-    ctx.strokeStyle = isGrass ? colors.grass : uiColors.vertexDraftLine;
-    ctx.lineWidth = uiStrokeWidths.boundsSelectedScreen;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(
-      isEditingExistingPolygon ? startScreen.x : lastScreen.x,
-      isEditingExistingPolygon ? startScreen.y : lastScreen.y,
-    );
-    ctx.lineTo(mouseScreen.x, mouseScreen.y);
-    ctx.stroke();
-
-    // Draw potential closing line from first point to mouse cursor when we have 3+ vertices (dashed)
-    if (toolState.drawingPolygon.vertices.length >= 3) {
-      ctx.strokeStyle = uiColors.vertexDraftClosingLine;
-      ctx.lineWidth = uiStrokeWidths.boundsSelectedScreen;
-      ctx.setLineDash([8, 6]);
-      ctx.beginPath();
-      ctx.moveTo(
-        isEditingExistingPolygon ? lastScreen.x : startScreen.x,
-        isEditingExistingPolygon ? lastScreen.y : startScreen.y,
-      );
-      ctx.lineTo(mouseScreen.x, mouseScreen.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
+    if (
+      isPointVisible(
+        isEditingExistingPolygon ? startPoint : lastPoint,
+        viewportRect,
+      ) ||
+      isPointVisible(state.mousePosition, viewportRect)
+    ) {
+      overlays.push({
+        type: "line",
+        from: isEditingExistingPolygon ? startPoint : lastPoint,
+        to: state.mousePosition,
+        color: strokeColor,
+        width: selectedLineWidth,
+      });
     }
+
+    if (toolState.drawingPolygon.vertices.length >= 3) {
+      overlays.push(
+        ...createDashedLineOverlays({
+          from: isEditingExistingPolygon ? lastPoint : startPoint,
+          to: state.mousePosition,
+          color: uiColors.vertexDraftClosingLine,
+          width: selectedLineWidth,
+          dashLength: 8 / state.zoom,
+          gapLength: 6 / state.zoom,
+        }),
+      );
+    }
+
+    return overlays;
   }
 
   private addPolygon(polygon: Polygon): void {
@@ -540,4 +519,74 @@ export class VertexTool extends Tool<VertexToolState> {
 
     temporalState._handleSet?.(historyStart, undefined, historyEnd);
   }
+}
+
+function createDraftHandleOverlay(
+  position: Position,
+  size: number,
+  lineWidth: number,
+): WorldRenderOverlayItem {
+  const side = size * 2;
+  return {
+    type: "rect",
+    position: {
+      x: position.x - size,
+      y: position.y - size,
+    },
+    width: side,
+    height: side,
+    cornerRadius:
+      (uiSelectionHandle.cornerRadiusPx / uiSelectionHandle.halfWidthPx) * size,
+    fillColor: uiColors.vertexDraftPointFill,
+    strokeColor: uiColors.vertexDraftPointStroke,
+    lineWidth,
+    layer: "top",
+  };
+}
+
+function createDashedLineOverlays({
+  from,
+  to,
+  color,
+  width,
+  dashLength,
+  gapLength,
+}: {
+  from: Position;
+  to: Position;
+  color: string;
+  width: number;
+  dashLength: number;
+  gapLength: number;
+}): WorldRenderOverlayItem[] {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) return [];
+
+  const ux = dx / length;
+  const uy = dy / length;
+  const overlays: WorldRenderOverlayItem[] = [];
+  let offset = 0;
+
+  while (offset < length) {
+    const segmentStart = offset;
+    const segmentEnd = Math.min(length, offset + dashLength);
+    overlays.push({
+      type: "line",
+      from: {
+        x: from.x + ux * segmentStart,
+        y: from.y + uy * segmentStart,
+      },
+      to: {
+        x: from.x + ux * segmentEnd,
+        y: from.y + uy * segmentEnd,
+      },
+      color,
+      width,
+    });
+    offset += dashLength + gapLength;
+  }
+
+  return overlays;
 }

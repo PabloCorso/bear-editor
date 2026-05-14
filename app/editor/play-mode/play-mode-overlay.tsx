@@ -116,7 +116,7 @@ function getActiveMobileControlState(
 }
 
 export function PlayModeOverlay({
-  rendererBackend = "canvas",
+  rendererBackend = "webgl",
 }: {
   rendererBackend?: WorldSceneRendererBackend;
 }) {
@@ -137,8 +137,9 @@ export function PlayModeOverlay({
   const inputRef = useRef<InputManager | null>(null);
   const keyBindingsRef = useRef(getPlayKeyBindings(playSettings));
   const restartRequestedRef = useRef(false);
+  const playTimeTextRef = useRef<HTMLDivElement>(null);
+  const lastPlayTimeRef = useRef("00:00,00");
   const { setPlayModeZoom, stopPlayMode } = useEditorActions();
-  const [playTime, setPlayTime] = useState("00:00,00");
   const [playSettingsOpen, setPlaySettingsOpen] = useState(false);
   const [mobileControlsOpen, setMobileControlsOpen] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -404,6 +405,7 @@ export function PlayModeOverlay({
         PLAY_MODE_MAX_ZOOM,
       );
       syncStoredZoom(gameState.camera.zoom);
+      updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
 
       const resize = () => {
         renderer.resize();
@@ -446,7 +448,7 @@ export function PlayModeOverlay({
         );
         restartRequestedRef.current = false;
         syncStoredZoom(gameState.camera.zoom);
-        setPlayTime(formatTime(getTimeCentiseconds(gameState)));
+        updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
       };
 
       let animationFrame = 0;
@@ -469,7 +471,7 @@ export function PlayModeOverlay({
           }
           return currentState;
         });
-        setPlayTime(formatTime(getTimeCentiseconds(gameState)));
+        updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
         renderer.render(gameState, {
           visibility: store.getState().levelVisibility,
         });
@@ -500,6 +502,7 @@ export function PlayModeOverlay({
     [
       lgr,
       releaseMobileControls,
+      rendererBackend,
       setPlayModeZoom,
       store,
       stopPlayMode,
@@ -513,8 +516,11 @@ export function PlayModeOverlay({
       className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[1px] select-none"
     >
       <div className="pointer-events-none absolute top-4 right-4 z-10 flex items-center gap-4">
-        <div className="text-right font-mono text-2xl font-bold text-primary tabular-nums">
-          {playTime}
+        <div
+          ref={playTimeTextRef}
+          className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
+        >
+          {lastPlayTimeRef.current}
         </div>
         <Toolbar className="pointer-events-auto gap-2">
           <ToolButton
@@ -586,6 +592,15 @@ export function PlayModeOverlay({
       />
     </div>
   );
+
+  function updatePlayTimeText(nextPlayTime: string) {
+    if (lastPlayTimeRef.current === nextPlayTime) return;
+    lastPlayTimeRef.current = nextPlayTime;
+    const element = playTimeTextRef.current;
+    if (element) {
+      element.textContent = nextPlayTime;
+    }
+  }
 }
 
 function PlayModeToolbarGroup({ className, ...props }: ToolbarProps) {

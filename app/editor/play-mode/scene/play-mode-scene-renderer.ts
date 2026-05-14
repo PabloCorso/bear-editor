@@ -9,27 +9,38 @@ import {
 } from "~/editor/render/world-scene-renderer";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
 
-export class CanvasRenderer {
+export class PlayModeSceneRenderer {
   private canvas: HTMLCanvasElement;
   private worldRenderer: WorldSceneRenderer;
   private lgrAssets: LgrAssets | null;
   private pixelsPerMeter = 48;
+  private viewportWidth = 0;
+  private viewportHeight = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
     lgrAssets: LgrAssets | null = null,
-    backend: WorldSceneRendererBackend = "canvas",
+    backend: WorldSceneRendererBackend = "webgl",
   ) {
     this.canvas = canvas;
     this.lgrAssets = lgrAssets;
-    this.worldRenderer = createWorldSceneRenderer({ canvas, lgrAssets, backend });
+    this.worldRenderer = createWorldSceneRenderer({
+      canvas,
+      lgrAssets,
+      backend,
+    });
   }
 
   resize(): void {
+    const rect = this.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
+    const pixelWidth = Math.max(1, Math.round(rect.width * dpr));
+    const pixelHeight = Math.max(1, Math.round(rect.height * dpr));
+    this.viewportWidth = pixelWidth / dpr;
+    this.viewportHeight = pixelHeight / dpr;
     this.worldRenderer.resize({
-      width: this.canvas.clientWidth,
-      height: this.canvas.clientHeight,
+      width: this.viewportWidth,
+      height: this.viewportHeight,
       devicePixelRatio: dpr,
     });
   }
@@ -40,25 +51,11 @@ export class CanvasRenderer {
       visibility?: PlayModeRenderVisibility;
     },
   ): void {
-    const ctx = this.worldRenderer.getContext();
-    if (!ctx) {
-      throw new Error("World renderer did not provide a 2D context");
-    }
-
-    const { canvas } = this;
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
+    const width = this.viewportWidth;
+    const height = this.viewportHeight;
+    if (width <= 0 || height <= 0) return;
     const cam = state.camera;
     const ppm = this.pixelsPerMeter * cam.zoom;
-
-    // Clear
-    ctx.fillStyle = "#1a1a2e";
-    ctx.fillRect(0, 0, width, height);
-
-    ctx.save();
-    ctx.translate(width / 2, height / 2);
-    ctx.scale(ppm, ppm);
-    ctx.translate(-cam.x, cam.y);
 
     const scene = buildPlayModeScene({
       state,
@@ -71,6 +68,7 @@ export class CanvasRenderer {
       },
       visibility: options?.visibility ?? {
         useGroundSkyTextures: false,
+        zoomTextures: true,
         showObjectAnimations: true,
         showObjects: true,
         showPictures: true,
@@ -82,7 +80,5 @@ export class CanvasRenderer {
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
     this.worldRenderer.render(scene);
-
-    ctx.restore();
   }
 }

@@ -1,4 +1,4 @@
-import type { BikeCoords } from "~/editor/draw-kuski";
+import type { BikeCoords } from "~/editor/kuski-geometry";
 import type { Gravity } from "~/editor/elma-types";
 import type { WorldRect } from "~/editor/render/world-geometry";
 
@@ -9,6 +9,7 @@ export type WorldPoint = {
 
 export type WorldRenderVisibility = {
   useGroundSkyTextures: boolean;
+  zoomTextures: boolean;
   showObjectAnimations: boolean;
   showObjects: boolean;
   showPictures: boolean;
@@ -18,6 +19,9 @@ export type WorldRenderVisibility = {
 };
 
 export type WorldRenderViewport = {
+  width: number;
+  height: number;
+  center: WorldPoint;
   rect: WorldRect;
   zoom: number;
 };
@@ -83,6 +87,56 @@ export type WorldRenderBikeItem = {
   };
 };
 
+export type WorldRenderLineOverlay = {
+  type: "line";
+  from: WorldPoint;
+  to: WorldPoint;
+  color: string;
+  width: number;
+  opacity?: number;
+  layer?: "default" | "top";
+};
+
+export type WorldRenderPolylineOverlay = {
+  type: "polyline";
+  points: WorldPoint[];
+  closed?: boolean;
+  color: string;
+  width: number;
+  opacity?: number;
+  layer?: "default" | "top";
+};
+
+export type WorldRenderRectOverlay = {
+  type: "rect";
+  position: WorldPoint;
+  width: number;
+  height: number;
+  cornerRadius?: number;
+  fillColor?: string;
+  strokeColor?: string;
+  lineWidth?: number;
+  opacity?: number;
+  layer?: "default" | "top";
+};
+
+export type WorldRenderCircleOverlay = {
+  type: "circle";
+  center: WorldPoint;
+  radius: number;
+  fillColor?: string;
+  strokeColor?: string;
+  lineWidth?: number;
+  opacity?: number;
+  layer?: "default" | "top";
+};
+
+export type WorldRenderOverlayItem =
+  | WorldRenderLineOverlay
+  | WorldRenderPolylineOverlay
+  | WorldRenderRectOverlay
+  | WorldRenderCircleOverlay;
+
 export type WorldRenderDrawItem =
   | WorldRenderPictureItem
   | WorldRenderObjectItem
@@ -99,4 +153,5 @@ export type WorldRenderScene = {
   visibility: WorldRenderVisibility;
   polygons: WorldRenderPolygonItem[];
   drawItems: WorldRenderDrawItem[];
+  overlays?: WorldRenderOverlayItem[];
 };

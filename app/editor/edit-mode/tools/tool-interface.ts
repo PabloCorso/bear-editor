@@ -1,8 +1,9 @@
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorStore } from "~/editor/editor-store";
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
+import type { WorldRect } from "~/editor/render/world-geometry";
+import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import type { ToolMeta } from "./default-tools";
-import type { LgrAssets } from "~/components/lgr-assets";
 
 export type ToolState<T = unknown> = Record<string, T>;
 export type ToolCursor = string;
@@ -33,10 +34,11 @@ export abstract class Tool<T extends ToolState = ToolState> {
   onKeyDown?(event: KeyboardEvent, context: EventContext): boolean;
   onRightClick?(event: MouseEvent, context: EventContext): boolean;
   getCursor?(context: EventContext): ToolCursor | undefined;
+  isInteracting?(): boolean;
 
-  // Rendering
-  onRender?(ctx: CanvasRenderingContext2D, lgrAssets: LgrAssets): void;
-  onRenderOverlay?(ctx: CanvasRenderingContext2D, lgrAssets: LgrAssets): void;
+  getWorldOverlays?(options: {
+    viewportRect: WorldRect;
+  }): WorldRenderOverlayItem[];
 
   // Draft elements for previewing while using the tool
   getDrafts?(): {

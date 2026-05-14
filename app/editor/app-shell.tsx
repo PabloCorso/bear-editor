@@ -31,7 +31,7 @@ type EditorShellProps = {
 export function EditorShell({
   initialLevelName,
   isOpenAIEnabled,
-  rendererBackend = "canvas",
+  rendererBackend = "webgl",
 }: EditorShellProps) {
   const initialDocument = useInitialLevel(initialLevelName);
   const { canvasRef, engineRef } = useEditorView({

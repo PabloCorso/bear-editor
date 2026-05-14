@@ -1,5 +1,6 @@
 export type LevelVisibilitySettings = {
   useGroundSkyTextures: boolean;
+  zoomTextures: boolean;
   showObjectAnimations: boolean;
   showPolygonHandles: boolean;
   showObjectBounds: boolean;
@@ -14,6 +15,7 @@ export type LevelVisibilitySettings = {
 
 export const defaultLevelVisibility: LevelVisibilitySettings = {
   useGroundSkyTextures: false,
+  zoomTextures: true,
   showObjectAnimations: true,
   showPolygonHandles: false,
   showObjectBounds: false,

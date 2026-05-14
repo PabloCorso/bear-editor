@@ -13,6 +13,7 @@ import {
 import {
   colors,
   OBJECT_DIAMETER,
+  selectionRenderLimits,
   selectionThresholds,
   uiColors,
   uiSelectionHandle,
@@ -21,13 +22,19 @@ import {
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorStore, PartialEditorState } from "~/editor/editor-store";
 import { defaultTools } from "./default-tools";
-import { worldToScreen } from "~/editor/helpers/coordinate-helpers";
+import type { WorldRect } from "~/editor/render/world-geometry";
+import {
+  isPointVisible,
+  isPolygonVisible,
+} from "~/editor/render/world-derived-data-cache";
+import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import { checkModifierKey } from "~/utils/misc";
 import fastDeepEqual from "fast-deep-equal";
 import {
   getKuskiSelectionCircles,
   isPointInKuskiSelectionBounds,
-} from "~/editor/draw-kuski";
+} from "~/editor/kuski-geometry";
+import { getObjectBoundsRadius } from "~/editor/render/object-assets";
 
 const DUPLICATE_OFFSET_STEP = 1;
 
@@ -402,68 +409,71 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   }
 
-  onRenderOverlay(ctx: CanvasRenderingContext2D): void {
+  getWorldOverlays({
+    viewportRect,
+  }: {
+    viewportRect: WorldRect;
+  }): WorldRenderOverlayItem[] {
     this.pruneHiddenSelection();
     const { state, toolState } = this.getState();
-    if (!toolState) return;
+    if (!toolState) return [];
 
-    if (!this.isMarqueeSelecting && state.mouseOnCanvas) {
+    const overlays: WorldRenderOverlayItem[] = [];
+    const handleSize = uiSelectionHandle.halfWidthPx / state.zoom;
+    const idleLineWidth = uiStrokeWidths.boundsIdleScreen / state.zoom;
+    const selectedLineWidth = uiStrokeWidths.boundsSelectedScreen / state.zoom;
+    const handleStrokeWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
+
+    if (!this.isDragging && !this.isMarqueeSelecting && state.mouseOnCanvas) {
       const { hoveredObject, hoveredPictureBounds } = toolState;
       const isHoveredPictureSelected =
         hoveredPictureBounds &&
         toolState.selectedPictures.includes(hoveredPictureBounds.position);
       if (hoveredPictureBounds && !isHoveredPictureSelected) {
-        const topLeft = worldToScreen(
-          hoveredPictureBounds.position,
-          state.viewPortOffset,
-          state.zoom,
-        );
-        ctx.strokeStyle = uiColors.selectionHandleFill;
-        ctx.lineWidth = uiStrokeWidths.boundsIdleScreen;
-        ctx.strokeRect(
-          topLeft.x,
-          topLeft.y,
-          hoveredPictureBounds.width * state.zoom,
-          hoveredPictureBounds.height * state.zoom,
-        );
+        if (
+          rectIntersectsViewport(
+            {
+              minX: hoveredPictureBounds.position.x,
+              minY: hoveredPictureBounds.position.y,
+              maxX:
+                hoveredPictureBounds.position.x + hoveredPictureBounds.width,
+              maxY:
+                hoveredPictureBounds.position.y + hoveredPictureBounds.height,
+            },
+            viewportRect,
+          )
+        ) {
+          overlays.push({
+            type: "rect",
+            position: hoveredPictureBounds.position,
+            width: hoveredPictureBounds.width,
+            height: hoveredPictureBounds.height,
+            strokeColor: uiColors.selectionHandleFill,
+            lineWidth: idleLineWidth,
+          });
+        }
       }
 
       if (hoveredObject && !toolState.selectedObjects.includes(hoveredObject)) {
-        ctx.strokeStyle = uiColors.selectionHandleFill;
-        ctx.lineWidth = uiStrokeWidths.boundsIdleScreen;
         if (hoveredObject === state.start) {
           const circles = getKuskiSelectionCircles({ start: state.start });
-          circles.forEach((circle) => {
-            const center = worldToScreen(
-              { x: circle.x, y: circle.y },
-              state.viewPortOffset,
-              state.zoom,
-            );
-            ctx.beginPath();
-            ctx.arc(
-              center.x,
-              center.y,
-              circle.radius * state.zoom,
-              0,
-              Math.PI * 2,
-            );
-            ctx.stroke();
+          overlays.push(
+            ...circles.map((circle) => ({
+              type: "circle" as const,
+              center: { x: circle.x, y: circle.y },
+              radius: circle.radius,
+              strokeColor: uiColors.selectionHandleFill,
+              lineWidth: idleLineWidth,
+            })),
+          );
+        } else if (isPointVisible(hoveredObject, viewportRect)) {
+          overlays.push({
+            type: "circle",
+            center: hoveredObject,
+            radius: OBJECT_DIAMETER / 2,
+            strokeColor: uiColors.selectionHandleFill,
+            lineWidth: idleLineWidth,
           });
-        } else {
-          const center = worldToScreen(
-            hoveredObject,
-            state.viewPortOffset,
-            state.zoom,
-          );
-          ctx.beginPath();
-          ctx.arc(
-            center.x,
-            center.y,
-            (OBJECT_DIAMETER / 2) * state.zoom,
-            0,
-            Math.PI * 2,
-          );
-          ctx.stroke();
         }
       }
 
@@ -474,12 +484,15 @@ export class SelectTool extends Tool<SelectToolState> {
           selectionThresholds.vertex / state.zoom,
         );
         if (hoveredVertex) {
-          const hoveredVertexScreenPos = worldToScreen(
-            hoveredVertex.vertex,
-            state.viewPortOffset,
-            state.zoom,
-          );
-          drawSelectHandle(ctx, hoveredVertexScreenPos);
+          if (isPointVisible(hoveredVertex.vertex, viewportRect)) {
+            overlays.push(
+              createSelectionHandleOverlay(
+                hoveredVertex.vertex,
+                handleSize,
+                handleStrokeWidth,
+              ),
+            );
+          }
         }
 
         const hoveredPolygon = findPolygonEdgeNearPosition(
@@ -495,26 +508,17 @@ export class SelectTool extends Tool<SelectToolState> {
           const isHoveredPolygonSelected =
             polygonSelectionCount === hoveredPolygon.vertices.length &&
             polygonSelectionCount > 0;
-          if (!isHoveredPolygonSelected) {
-            const first = worldToScreen(
-              hoveredPolygon.vertices[0],
-              state.viewPortOffset,
-              state.zoom,
-            );
-            ctx.beginPath();
-            ctx.moveTo(first.x, first.y);
-            for (let i = 1; i < hoveredPolygon.vertices.length; i++) {
-              const point = worldToScreen(
-                hoveredPolygon.vertices[i],
-                state.viewPortOffset,
-                state.zoom,
-              );
-              ctx.lineTo(point.x, point.y);
-            }
-            ctx.closePath();
-            ctx.strokeStyle = uiColors.selectionHandleFill;
-            ctx.lineWidth = uiStrokeWidths.boundsIdleScreen;
-            ctx.stroke();
+          if (
+            !isHoveredPolygonSelected &&
+            isPolygonVisible(hoveredPolygon, viewportRect)
+          ) {
+            overlays.push({
+              type: "polyline",
+              points: hoveredPolygon.vertices,
+              closed: true,
+              color: uiColors.selectionHandleFill,
+              width: idleLineWidth,
+            });
           }
         }
       }
@@ -523,53 +527,125 @@ export class SelectTool extends Tool<SelectToolState> {
     const selectedPolygons = Array.from(
       new Set(toolState.selectedVertices.map(({ polygon }) => polygon)),
     );
-    selectedPolygons.forEach((polygon) => {
-      if (polygon.vertices.length < 2) return;
+    overlays.push(
+      ...selectedPolygons
+        .filter(
+          (polygon) =>
+            polygon.vertices.length >= 2 &&
+            isPolygonVisible(polygon, viewportRect),
+        )
+        .map((polygon) => ({
+          type: "polyline" as const,
+          points: polygon.vertices,
+          closed: true,
+          color: polygon.grass ? colors.grass : uiColors.marqueeStroke,
+          width: selectedLineWidth,
+        })),
+    );
 
-      const first = worldToScreen(
-        polygon.vertices[0],
-        state.viewPortOffset,
-        state.zoom,
-      );
+    overlays.push(
+      ...toolState.selectedObjects.flatMap((position) => {
+        if (position === state.start) {
+          return getKuskiSelectionCircles({ start: state.start })
+            .filter((circle) =>
+              rectIntersectsViewport(
+                {
+                  minX: circle.x - circle.radius,
+                  minY: circle.y - circle.radius,
+                  maxX: circle.x + circle.radius,
+                  maxY: circle.y + circle.radius,
+                },
+                viewportRect,
+              ),
+            )
+            .map((circle) => ({
+              type: "circle" as const,
+              center: { x: circle.x, y: circle.y },
+              radius: circle.radius,
+              strokeColor: uiColors.marqueeStroke,
+              lineWidth: selectedLineWidth,
+            }));
+        }
 
-      ctx.beginPath();
-      ctx.moveTo(first.x, first.y);
-      for (let i = 1; i < polygon.vertices.length; i++) {
-        const point = worldToScreen(
-          polygon.vertices[i],
-          state.viewPortOffset,
-          state.zoom,
-        );
-        ctx.lineTo(point.x, point.y);
-      }
-      ctx.closePath();
-      ctx.strokeStyle = polygon.grass ? colors.grass : uiColors.marqueeStroke;
-      ctx.lineWidth = uiStrokeWidths.boundsSelectedScreen;
-      ctx.stroke();
-    });
+        if (!isPointVisible(position, viewportRect)) return [];
+        return [
+          {
+            type: "circle" as const,
+            center: position,
+            radius: getObjectBoundsRadius(),
+            strokeColor: uiColors.marqueeStroke,
+            lineWidth: selectedLineWidth,
+          },
+        ];
+      }),
+    );
 
-    // Draw selection handles in screen coordinates
-    const { selectedVertices, selectedObjects, selectedPictures } = toolState;
+    const selectedHandlePositions = toolState.selectedVertices
+      .map(({ vertex }) => vertex)
+      .filter((position) => isPointVisible(position, viewportRect));
+    const selectedObjectHandlePositions = toolState.selectedObjects.filter(
+      (position) => isPointVisible(position, viewportRect),
+    );
+    const selectedPictureHandlePositions = toolState.selectedPictures.filter(
+      (position) => isPointVisible(position, viewportRect),
+    );
     const allSelected = [
-      ...selectedVertices.map(({ vertex }) => vertex),
-      ...selectedObjects,
-      ...selectedPictures,
+      ...selectedHandlePositions,
+      ...selectedObjectHandlePositions,
+      ...selectedPictureHandlePositions,
     ];
-    allSelected.forEach((pos: Position) => {
-      const position = worldToScreen(pos, state.viewPortOffset, state.zoom);
-      drawSelectHandle(ctx, position);
-    });
-
-    // Draw marquee selection in screen coordinates
-    if (this.isMarqueeSelecting) {
-      drawSelectMarquee({
-        ctx,
-        start: this.marqueeStartPos,
-        end: this.marqueeEndPos,
-        zoom: state.zoom,
-        viewPortOffset: state.viewPortOffset,
-      });
+    if (
+      allSelected.length <= selectionRenderLimits.maxIndividualHandles &&
+      allSelected.length > 0
+    ) {
+      overlays.push(
+        ...allSelected.map((position) =>
+          createSelectionHandleOverlay(position, handleSize, handleStrokeWidth),
+        ),
+      );
+    } else {
+      const selectionBounds = getSelectionBoundsForPositions(allSelected);
+      if (selectionBounds) {
+        overlays.push({
+          type: "rect",
+          position: {
+            x: selectionBounds.minX,
+            y: selectionBounds.minY,
+          },
+          width: selectionBounds.maxX - selectionBounds.minX,
+          height: selectionBounds.maxY - selectionBounds.minY,
+          strokeColor: uiColors.marqueeStroke,
+          lineWidth: selectedLineWidth,
+        });
+      }
     }
+
+    if (this.isMarqueeSelecting) {
+      const bounds = getSelectionBounds(
+        this.marqueeStartPos,
+        this.marqueeEndPos,
+      );
+      overlays.push(
+        {
+          type: "rect",
+          position: { x: bounds.minX, y: bounds.minY },
+          width: bounds.maxX - bounds.minX,
+          height: bounds.maxY - bounds.minY,
+          fillColor: uiColors.marqueeStroke,
+          opacity: 0.16,
+        },
+        {
+          type: "rect",
+          position: { x: bounds.minX, y: bounds.minY },
+          width: bounds.maxX - bounds.minX,
+          height: bounds.maxY - bounds.minY,
+          strokeColor: uiColors.marqueeStroke,
+          lineWidth: uiSelectionHandle.strokeWidthPx / state.zoom,
+        },
+      );
+    }
+
+    return overlays;
   }
 
   private findObjectNearPosition(position: Position): Position | null {
@@ -1629,48 +1705,53 @@ function translatePosition(position: Position, offset: Position): Position {
   };
 }
 
-function drawSelectMarquee({
-  ctx,
-  start,
-  end,
-  zoom,
-  viewPortOffset,
-}: {
-  ctx: CanvasRenderingContext2D;
-  start: Position;
-  end: Position;
-  zoom: number;
-  viewPortOffset: Position;
-}) {
-  const bounds = getSelectionBounds(start, end);
-  const width = bounds.maxX - bounds.minX;
-  const height = bounds.maxY - bounds.minY;
-  const screenWidth = width * zoom;
-  const screenHeight = height * zoom;
-  const { x: screenMinX, y: screenMinY } = worldToScreen(
-    { x: bounds.minX, y: bounds.minY },
-    viewPortOffset,
-    zoom,
-  );
-
-  ctx.fillStyle = uiColors.marqueeFill;
-  ctx.fillRect(screenMinX, screenMinY, screenWidth, screenHeight);
-
-  ctx.strokeStyle = uiColors.marqueeStroke;
-  ctx.lineWidth = uiSelectionHandle.strokeWidthPx;
-  ctx.strokeRect(screenMinX, screenMinY, screenWidth, screenHeight);
-  ctx.setLineDash([]);
+function createSelectionHandleOverlay(
+  position: Position,
+  size: number,
+  lineWidth: number,
+): WorldRenderOverlayItem {
+  const side = size * 2;
+  return {
+    type: "rect",
+    position: {
+      x: position.x - size,
+      y: position.y - size,
+    },
+    width: side,
+    height: side,
+    cornerRadius:
+      (uiSelectionHandle.cornerRadiusPx / uiSelectionHandle.halfWidthPx) * size,
+    fillColor: uiColors.selectionHandleFill,
+    strokeColor: uiColors.selectionHandleStroke,
+    lineWidth,
+    layer: "top",
+  };
 }
 
-function drawSelectHandle(
-  ctx: CanvasRenderingContext2D,
-  position: Position,
-  size = uiSelectionHandle.halfWidthPx,
-): void {
-  const side = size * 2;
-  ctx.fillStyle = uiColors.selectionHandleFill;
-  ctx.fillRect(position.x - size, position.y - size, side, side);
-  ctx.strokeStyle = uiColors.selectionHandleStroke;
-  ctx.lineWidth = uiSelectionHandle.strokeWidthPx;
-  ctx.strokeRect(position.x - size, position.y - size, side, side);
+function rectIntersectsViewport(rect: WorldRect, viewportRect: WorldRect) {
+  return !(
+    rect.maxX < viewportRect.minX ||
+    rect.minX > viewportRect.maxX ||
+    rect.maxY < viewportRect.minY ||
+    rect.minY > viewportRect.maxY
+  );
+}
+
+function getSelectionBoundsForPositions(positions: Position[]) {
+  if (positions.length === 0) return null;
+
+  let minX = positions[0]!.x;
+  let maxX = positions[0]!.x;
+  let minY = positions[0]!.y;
+  let maxY = positions[0]!.y;
+
+  for (let index = 1; index < positions.length; index += 1) {
+    const position = positions[index]!;
+    if (position.x < minX) minX = position.x;
+    if (position.x > maxX) maxX = position.x;
+    if (position.y < minY) minY = position.y;
+    if (position.y > maxY) maxY = position.y;
+  }
+
+  return { minX, maxX, minY, maxY };
 }

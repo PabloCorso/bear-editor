@@ -17,6 +17,11 @@ export const selectionThresholds = {
 export const uiSelectionHandle = {
   halfWidthPx: 3,
   strokeWidthPx: 0.75,
+  cornerRadiusPx: 1.5,
+} as const;
+
+export const selectionRenderLimits = {
+  maxIndividualHandles: 400,
 } as const;
 
 export const colors = {

@@ -9,25 +9,18 @@ import {
   updateZoom,
   fitToView,
 } from "~/editor/helpers/camera-helpers";
-import {
-  debugColors,
-  OBJECT_DIAMETER,
-  uiColors,
-  uiSelectionHandle,
-  uiStrokeWidths,
-} from "~/editor/constants";
+import { OBJECT_DIAMETER, uiSelectionHandle } from "~/editor/constants";
 import type { Tool } from "~/editor/edit-mode/tools/tool-interface";
 import type { Widget } from "~/editor/edit-mode/widgets/widget-interface";
 import { createEditorStore, type EditorStore } from "~/editor/editor-store";
 import type { DefaultLevelPreset } from "~/editor/helpers/level-parser";
-import { isPointInKuskiSelectionBounds } from "~/editor/draw-kuski";
+import { isPointInKuskiSelectionBounds } from "~/editor/kuski-geometry";
 import { LgrAssets } from "~/components/lgr-assets";
-import { drawPictureBounds } from "~/editor/draw-picture";
 import {
   screenToWorld,
   worldToScreen,
 } from "~/editor/helpers/coordinate-helpers";
-import { Clip, type Picture, type Position } from "~/editor/elma-types";
+import { type Picture, type Position } from "~/editor/elma-types";
 import { getDefaultLevel } from "~/editor/helpers/level-parser";
 import { checkModifierKey } from "~/utils/misc";
 import {
@@ -36,20 +29,18 @@ import {
 } from "~/editor/edit-mode/tools/select-tool";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import type { EditorDocumentInput } from "~/editor/editor-state";
-import {
-  buildEditorWorldScene,
-  getEditorHoverableItems,
-} from "~/editor/edit-mode/scene/editor-scene-builder";
-import type { EditorWorldDrawItem } from "~/editor/edit-mode/scene/editor-scene";
-import {
-  getPictureWorldDimensions,
-  PICTURE_SCALE,
-} from "~/editor/render/picture-metrics";
+import { buildEditorWorldScene } from "~/editor/edit-mode/scene/editor-scene-builder";
+import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
+import { getPictureWorldDimensions } from "~/editor/render/picture-metrics";
 import {
   createWorldSceneRenderer,
   type WorldSceneRendererBackend,
   type WorldSceneRenderer,
 } from "~/editor/render/world-scene-renderer";
+import {
+  isPictureVisible,
+  isPointVisible,
+} from "~/editor/render/world-derived-data-cache";
 import { getViewportWorldRectFromOffset } from "~/editor/render/world-geometry";
 
 type EditorEngineOptions = {
@@ -77,9 +68,9 @@ const WHEEL_PAN_MULTIPLIER = 0.5;
 
 export class EditorEngine {
   private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
   private worldRenderer: WorldSceneRenderer;
   private animationId: number | null = null;
+  private needsRender = true;
   private debugMode = false;
   private store: EditorStore;
   private lgrAssets: LgrAssets;
@@ -126,7 +117,7 @@ export class EditorEngine {
       pinchPower = 1,
       store,
       lgrAssets,
-      rendererBackend = "canvas",
+      rendererBackend = "webgl",
     }: EditorEngineOptions = {},
   ) {
     const worldRenderer = createWorldSceneRenderer({
@@ -134,11 +125,8 @@ export class EditorEngine {
       lgrAssets: lgrAssets ?? null,
       backend: rendererBackend,
     });
-    const ctx = worldRenderer.getContext();
-    if (!ctx) throw new Error("Canvas context missing");
 
     this.canvas = canvas;
-    this.ctx = ctx;
     this.worldRenderer = worldRenderer;
 
     this.minZoom = minZoom;
@@ -151,7 +139,9 @@ export class EditorEngine {
 
     this.lgrAssets = lgrAssets || new LgrAssets();
     if (!this.lgrAssets.isReady()) {
-      void this.lgrAssets.load();
+      void this.lgrAssets.load().then(() => {
+        this.requestRender();
+      });
     }
 
     this.store = store || createEditorStore();
@@ -864,11 +854,39 @@ export class EditorEngine {
   }
 
   private startRenderLoop() {
-    const loop = () => {
-      this.render();
-      this.animationId = requestAnimationFrame(loop);
-    };
-    loop();
+    this.requestRender();
+  }
+
+  private requestRender() {
+    this.needsRender = true;
+    if (this.animationId !== null) return;
+
+    this.animationId = requestAnimationFrame(() => {
+      this.animationId = null;
+      this.flushRender();
+    });
+  }
+
+  private flushRender() {
+    const shouldAnimate = this.shouldAnimate();
+    if (!this.needsRender && !shouldAnimate) {
+      return;
+    }
+
+    this.needsRender = false;
+    this.render();
+
+    if (this.needsRender || this.shouldAnimate()) {
+      this.requestRender();
+    }
+  }
+
+  private shouldAnimate() {
+    const state = this.store.getState();
+    if (this.debugMode) return true;
+    if (!state.animateSprites) return false;
+    if (!state.levelVisibility.showObjectAnimations) return false;
+    return state.levelVisibility.showObjects;
   }
 
   private setupStoreListeners() {
@@ -889,22 +907,19 @@ export class EditorEngine {
       if (currentTool !== lastCurrentTool) {
         lastCurrentTool = currentTool;
         this.updateCanvasCursor();
+        if (currentTool !== "select") {
+          this.clearSelectHoverState(state);
+        } else if (state.mouseOnCanvas) {
+          this.updateSelectHoverState(state, state.mousePosition);
+        }
       }
+
+      this.requestRender();
     });
   }
 
   private render() {
     const state = this.store.getState();
-    if (state.mouseOnCanvas) {
-      this.updateSelectHoverState(state, state.mousePosition);
-    } else {
-      this.clearSelectHoverState(state);
-    }
-    this.clearCanvas();
-
-    this.ctx.save();
-    this.applyCameraTransform(state);
-
     const viewportRect = getViewportWorldRectFromOffset({
       width: this.canvas.width,
       height: this.canvas.height,
@@ -914,33 +929,24 @@ export class EditorEngine {
     });
     const scene = buildEditorWorldScene({
       state,
+      viewportSize: {
+        width: this.canvas.width,
+        height: this.canvas.height,
+      },
       viewportRect,
       resolvePictureDimensions: (picture) =>
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
-    this.worldRenderer.render(scene);
-
-    // Let active tool render on world-space canvas
     const activeTool = state.actions.getActiveTool();
-    if (activeTool?.onRender) {
-      activeTool.onRender(this.ctx, this.lgrAssets);
-    }
-
-    this.drawPictureBoundsOverlay(state);
-
-    this.ctx.restore();
-
-    this.drawPolygonHandlesOverlay(state);
-
-    // Screen-space overlay (tools, UI)
-    if (activeTool?.onRenderOverlay) {
-      activeTool.onRenderOverlay(this.ctx, this.lgrAssets);
-    }
-
-    if (this.debugMode) {
-      this.drawDebugDistance(state, scene.drawItems);
-      this.drawDebugInfoPanel(state);
-    }
+    const overlays = [
+      ...this.getEditorOverlays(state, viewportRect),
+      ...(activeTool?.getWorldOverlays?.({ viewportRect }) ?? []),
+    ];
+    scene.overlays = [
+      ...overlays.filter((overlay) => overlay.layer !== "top"),
+      ...overlays.filter((overlay) => overlay.layer === "top"),
+    ];
+    this.worldRenderer.render(scene);
   }
 
   private updateSelectHoverState(state: EditorState, worldPos: Position) {
@@ -981,56 +987,79 @@ export class EditorEngine {
     state: EditorState,
     worldPos: Position,
   ): Pick<SelectToolState, "hoveredObject" | "hoveredPictureBounds"> {
-    const items = getEditorHoverableItems(state);
+    const viewportRect = getViewportWorldRectFromOffset({
+      width: this.canvas.width,
+      height: this.canvas.height,
+      offsetX: state.viewPortOffset.x,
+      offsetY: state.viewPortOffset.y,
+      zoom: state.zoom,
+    });
 
     // Objects take precedence over pictures/textures when overlapping.
-    for (let index = items.length - 1; index >= 0; index--) {
-      const item = items[index];
-      if (!this.isObjectSelectable(state)) break;
-      if (item?.kind !== "object") {
-        continue;
+    if (this.isObjectSelectable(state)) {
+      if (
+        isPointVisible(state.start, viewportRect) &&
+        isPointInKuskiSelectionBounds({
+          point: worldPos,
+          start: state.start,
+        })
+      ) {
+        return {
+          hoveredObject: state.start,
+          hoveredPictureBounds: undefined,
+        };
       }
-      const isHovered =
-        item.type === "start"
-          ? isPointInKuskiSelectionBounds({
-              point: worldPos,
-              start: item.position,
-            })
-          : Math.hypot(
-              worldPos.x - item.position.x,
-              worldPos.y - item.position.y,
-            ) <=
+
+      const objectGroups = [
+        state.flowers,
+        state.apples.map((apple) => apple.position),
+        state.killers,
+      ];
+      for (const objects of objectGroups) {
+        for (let index = objects.length - 1; index >= 0; index--) {
+          const object = objects[index]!;
+          if (!isPointVisible(object, viewportRect)) continue;
+          const isHovered =
+            Math.hypot(worldPos.x - object.x, worldPos.y - object.y) <=
             OBJECT_DIAMETER / 2;
-      if (!isHovered) continue;
-      return {
-        hoveredObject: item.position,
-        hoveredPictureBounds: undefined,
-      };
+          if (!isHovered) continue;
+          return {
+            hoveredObject: object,
+            hoveredPictureBounds: undefined,
+          };
+        }
+      }
     }
 
-    for (let index = items.length - 1; index >= 0; index--) {
-      const item = items[index];
-      if (item?.kind !== "picture") continue;
-      if (!this.isPictureSelectable(state, item.picture)) continue;
-      const pictureDimensions = this.getPictureWorldDimensions(item.picture);
+    for (let index = state.pictures.length - 1; index >= 0; index--) {
+      const picture = state.pictures[index]!;
+      if (!this.isPictureSelectable(state, picture)) continue;
+      if (
+        !isPictureVisible(picture, viewportRect, (candidate) =>
+          getPictureWorldDimensions(candidate, this.lgrAssets),
+        )
+      ) {
+        continue;
+      }
+      const pictureDimensions = this.getPictureWorldDimensions(picture);
       if (!pictureDimensions) continue;
 
       const { width, height } = pictureDimensions;
-      if (
-        worldPos.x >= item.picture.position.x &&
-        worldPos.x <= item.picture.position.x + width &&
-        worldPos.y >= item.picture.position.y &&
-        worldPos.y <= item.picture.position.y + height
-      ) {
-        return {
-          hoveredObject: undefined,
-          hoveredPictureBounds: {
-            position: item.picture.position,
-            width,
-            height,
-          },
-        };
-      }
+      const isHovered =
+        worldPos.x >= picture.position.x &&
+        worldPos.x <= picture.position.x + width &&
+        worldPos.y >= picture.position.y &&
+        worldPos.y <= picture.position.y + height;
+      if (!isHovered) continue;
+
+      return {
+        hoveredObject: undefined,
+        hoveredPictureBounds: {
+          position: picture.position,
+          width,
+          height,
+        },
+      };
     }
 
     return {
@@ -1063,71 +1092,89 @@ export class EditorEngine {
     return getPictureWorldDimensions(picture, this.lgrAssets);
   }
 
-  private clearCanvas() {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-  }
-
-  private applyCameraTransform(state: EditorState) {
-    this.ctx.translate(state.viewPortOffset.x, state.viewPortOffset.y);
-    this.ctx.scale(state.zoom, state.zoom);
-  }
-
-  private drawPictureBoundsOverlay(state: EditorState) {
+  private getEditorOverlays(
+    state: EditorState,
+    viewportRect: ReturnType<typeof getViewportWorldRectFromOffset>,
+  ): WorldRenderOverlayItem[] {
+    const overlays: WorldRenderOverlayItem[] = [];
     const selectState = state.actions.getToolState<SelectToolState>("select");
 
-    state.pictures.forEach((picture) => {
-      const hasTexture = Boolean(picture.texture && picture.mask);
-      const shouldShowBounds = hasTexture
-        ? state.levelVisibility.showTextureBounds
-        : state.levelVisibility.showPictureBounds;
-      const isSelectedPicture = (selectState?.selectedPictures ?? []).some(
-        (selected) =>
-          selected.x === picture.position.x &&
-          selected.y === picture.position.y,
+    for (const position of selectState?.selectedPictures ?? []) {
+      const picture = state.pictures.find(
+        (entry) =>
+          entry.position.x === position.x && entry.position.y === position.y,
       );
-      if (!shouldShowBounds && !isSelectedPicture) return;
+      if (!picture) continue;
 
       const dimensions = this.getPictureWorldDimensions(picture);
-      if (!dimensions) return;
+      if (!dimensions) continue;
+      const rect = {
+        minX: picture.position.x,
+        minY: picture.position.y,
+        maxX: picture.position.x + dimensions.width,
+        maxY: picture.position.y + dimensions.height,
+      };
+      if (
+        rect.maxX < viewportRect.minX ||
+        rect.minX > viewportRect.maxX ||
+        rect.maxY < viewportRect.minY ||
+        rect.minY > viewportRect.maxY
+      ) {
+        continue;
+      }
 
-      const boundsLineWidth = isSelectedPicture
-        ? uiStrokeWidths.boundsSelectedScreen / state.zoom
-        : uiStrokeWidths.boundsIdleScreen / state.zoom;
-
-      drawPictureBounds({
-        ctx: this.ctx,
+      overlays.push({
+        type: "rect",
         position: picture.position,
-        width: dimensions.width / PICTURE_SCALE,
-        height: dimensions.height / PICTURE_SCALE,
-        boundsLineWidth,
+        width: dimensions.width,
+        height: dimensions.height,
+        strokeColor: "#5ec8ff",
+        lineWidth: 2 / state.zoom,
       });
-    });
-  }
+    }
 
-  private drawPolygonHandlesOverlay(state: EditorState) {
-    if (!state.levelVisibility.showPolygonHandles) return;
-    if (state.polygons.length === 0) return;
+    if (
+      !state.levelVisibility.showPolygonHandles ||
+      state.polygons.length === 0
+    ) {
+      return overlays;
+    }
 
-    const size = uiSelectionHandle.halfWidthPx;
+    const size = uiSelectionHandle.halfWidthPx / state.zoom;
     const side = size * 2;
-    this.ctx.save();
-    this.ctx.fillStyle = uiColors.selectionHandleFill;
-    this.ctx.strokeStyle = uiColors.selectionHandleStroke;
-    this.ctx.lineWidth = uiSelectionHandle.strokeWidthPx;
+    const lineWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
 
-    state.polygons.forEach((polygon) => {
-      polygon.vertices.forEach((vertex) => {
-        const position = worldToScreen(
-          vertex,
-          state.viewPortOffset,
-          state.zoom,
-        );
-        this.ctx.fillRect(position.x - size, position.y - size, side, side);
-        this.ctx.strokeRect(position.x - size, position.y - size, side, side);
-      });
-    });
+    overlays.push(
+      ...state.polygons.flatMap((polygon) =>
+        polygon.vertices
+          .filter(
+            (vertex) =>
+              vertex.x >= viewportRect.minX &&
+              vertex.x <= viewportRect.maxX &&
+              vertex.y >= viewportRect.minY &&
+              vertex.y <= viewportRect.maxY,
+          )
+          .map((vertex) => ({
+            type: "rect" as const,
+            position: {
+              x: vertex.x - size,
+              y: vertex.y - size,
+            },
+            width: side,
+            height: side,
+            cornerRadius:
+              (uiSelectionHandle.cornerRadiusPx /
+                uiSelectionHandle.halfWidthPx) *
+              size,
+            fillColor: "#ffffff",
+            strokeColor: "#1b3b5c",
+            lineWidth,
+            layer: "top" as const,
+          })),
+      ),
+    );
 
-    this.ctx.restore();
+    return overlays;
   }
 
   public destroy() {
@@ -1152,73 +1199,13 @@ export class EditorEngine {
   }
 
   public resize(width: number, height: number) {
+    this.canvas.width = width;
+    this.canvas.height = height;
     this.worldRenderer.resize({ width, height });
+    this.requestRender();
   }
 
   public toggleDebugMode() {
     this.debugMode = !this.debugMode;
-    console.debug("Debug mode:", this.debugMode ? "ON" : "OFF");
-  }
-
-  private drawDebugDistance(state: EditorState, queue: EditorWorldDrawItem[]) {
-    queue.forEach(({ clip, distance, position }) => {
-      const screenPos = worldToScreen(
-        position,
-        state.viewPortOffset,
-        state.zoom,
-      );
-
-      this.ctx.fillStyle = debugColors.distanceLabel;
-      this.ctx.font = `12px monospace`;
-      this.ctx.textAlign = "left";
-      this.ctx.textBaseline = "bottom";
-      const label = `${distance} ${Clip[clip].charAt(0)}`;
-      this.ctx.fillText(label, screenPos.x, screenPos.y);
-    });
-  }
-
-  private drawDebugInfoPanel(state: EditorState) {
-    this.ctx.font = "14px 'Courier New', monospace";
-    this.ctx.textAlign = "left";
-    this.ctx.textBaseline = "top";
-
-    // Calculate screen mouse position (inverse of what getEventContext does)
-    const screenMouse = worldToScreen(
-      state.mousePosition,
-      state.viewPortOffset,
-      state.zoom,
-    );
-
-    const lines = [
-      "Debug Mode: ON",
-      "Press 'D' to exit debug mode",
-      `Mouse (World): (${state.mousePosition.x.toFixed(1)}, ${state.mousePosition.y.toFixed(1)})`,
-      `Mouse (Screen): (${screenMouse.x.toFixed(1)}, ${screenMouse.y.toFixed(1)})`,
-      `Camera: (${state.viewPortOffset.x.toFixed(1)}, ${state.viewPortOffset.y.toFixed(1)})`,
-      `Zoom: ${state.zoom.toFixed(2)}`,
-    ];
-
-    const padding = 10;
-    const lineHeight = 20;
-    const maxTextWidth = Math.max(
-      ...lines.map((line) => this.ctx.measureText(line).width),
-    );
-
-    const panelWidth = maxTextWidth + padding * 2;
-    const panelHeight = lines.length * lineHeight + padding * 2;
-    const panelX = this.canvas.width - panelWidth - 10;
-    const panelY = 10;
-
-    this.ctx.fillStyle = debugColors.panelFill;
-    this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-
-    this.ctx.fillStyle = debugColors.panelText;
-    lines.forEach((line, index) => {
-      this.ctx.fillText(
-        line,
-        panelX + padding,
-        panelY + padding + index * lineHeight,
-      );
-    });
   }
 }

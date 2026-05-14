@@ -15,6 +15,10 @@ export function LgrAssetsProvider({ children }: { children: React.ReactNode }) {
       lgrLoader.load().then(() => {
         setIsLoaded(true);
       });
+
+      return function cleanupLgrLoader() {
+        lgrLoader.destroy();
+      };
     },
     [lgrLoader],
   );
@@ -38,126 +42,64 @@ export function useLgrAssets() {
 
 export function useLgrSprite(name: string) {
   const lgrAssets = useLgrAssets();
-  const sprite = lgrAssets.lgr?.getSprite(name) || null;
   return useMemo(
     () => ({
-      src: bitmapToDataUrl(sprite),
-      width: sprite?.width,
-      height: sprite?.height,
+      src: lgrAssets.lgr?.getSpritePreview(name),
+      width: lgrAssets.lgr?.getSprite(name)?.width,
+      height: lgrAssets.lgr?.getSprite(name)?.height,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sprite, lgrAssets.isLoaded],
+    [name, lgrAssets.lgr, lgrAssets.isLoaded],
   );
 }
 
 export function usePictureSprites() {
   const lgrAssets = useLgrAssets();
-  const pictureSprites = lgrAssets.lgr?.getPictureSprites() || [];
-  return useMemo(
-    () =>
-      pictureSprites.map(({ picture, sprite }) => ({
-        picture,
-        src: bitmapToDataUrl(sprite),
-        width: sprite?.width,
-        height: sprite?.height,
-      })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lgrAssets.isLoaded],
-  );
+  return useMemo(() => {
+    const pictureSprites = lgrAssets.lgr?.getPictureSprites() ?? [];
+    return pictureSprites.map(({ picture, sprite, src }) => ({
+      picture,
+      src,
+      width: sprite?.width,
+      height: sprite?.height,
+    }));
+  }, [lgrAssets.lgr, lgrAssets.isLoaded]);
 }
 
 export function useTextureSprites() {
   const lgrAssets = useLgrAssets();
-  const textureSprites = lgrAssets.lgr?.getTextureSprites() || [];
-  return useMemo(
-    () =>
-      textureSprites.map(({ texture, sprite }) => {
-        const maskSprite = lgrAssets.lgr?.getSprite(texture.mask) || null;
-        return {
-          texture,
-          src: bitmapToDataUrl(sprite),
-          maskedSrc: bitmapMaskToDataUrl(sprite, maskSprite),
-          width: sprite?.width,
-          height: sprite?.height,
-        };
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lgrAssets.isLoaded],
-  );
+  return useMemo(() => {
+    const textureSprites = lgrAssets.lgr?.getTextureSprites() ?? [];
+    return textureSprites.map(({ texture, sprite }) => {
+      return {
+        texture,
+        src: lgrAssets.lgr?.getSpritePreview(texture.texture),
+        maskedSrc: lgrAssets.lgr?.getMaskedTexturePreview(
+          texture.texture,
+          texture.mask,
+        ),
+        width: sprite?.width,
+        height: sprite?.height,
+      };
+    });
+  }, [lgrAssets.lgr, lgrAssets.isLoaded]);
 }
 
 export function useTextureMaskSprites() {
   const lgrAssets = useLgrAssets();
-  const textureSprites = lgrAssets.lgr?.getTextureSprites() || [];
-  return useMemo(
-    () =>
-      standardSprites.textureMasks.flatMap((mask) =>
-        textureSprites.map(({ texture, sprite }) => {
-          const maskSprite = lgrAssets.lgr?.getSprite(mask) || null;
-          return {
-            texture,
-            mask,
-            src: bitmapToDataUrl(sprite),
-            maskedSrc: bitmapMaskToDataUrl(sprite, maskSprite),
-            width: sprite?.width,
-            height: sprite?.height,
-          };
-        }),
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lgrAssets.isLoaded],
-  );
-}
-
-export function bitmapToDataUrl(bmp: ImageBitmap | null) {
-  if (typeof document === "undefined" || !bmp) return undefined;
-  const canvas = document.createElement("canvas");
-  canvas.width = bmp.width;
-  canvas.height = bmp.height;
-  const ctx = canvas.getContext("2d");
-  if (ctx) ctx.imageSmoothingEnabled = false;
-  ctx?.drawImage(bmp, 0, 0);
-  return canvas.toDataURL();
-}
-
-export function bitmapMaskToDataUrl(
-  textureBmp: ImageBitmap | null,
-  maskBmp: ImageBitmap | null,
-) {
-  if (typeof document === "undefined" || !textureBmp || !maskBmp)
-    return undefined;
-  const canvas = document.createElement("canvas");
-  canvas.width = maskBmp.width;
-  canvas.height = maskBmp.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return undefined;
-  ctx.imageSmoothingEnabled = false;
-
-  const pattern = ctx.createPattern(textureBmp, "repeat");
-  if (!pattern) return undefined;
-  ctx.fillStyle = pattern;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = "destination-in";
-  const binaryMaskCanvas = createBinaryMaskCanvas(maskBmp);
-  ctx.drawImage(binaryMaskCanvas, 0, 0);
-  return canvas.toDataURL();
-}
-
-function createBinaryMaskCanvas(maskBmp: ImageBitmap) {
-  const canvas = document.createElement("canvas");
-  canvas.width = maskBmp.width;
-  canvas.height = maskBmp.height;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return canvas;
-
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(maskBmp, 0, 0);
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    data[i + 3] = data[i + 3] > 0 ? 255 : 0;
-  }
-  ctx.putImageData(imageData, 0, 0);
-  return canvas;
+  return useMemo(() => {
+    const textureSprites = lgrAssets.lgr?.getTextureSprites() ?? [];
+    return standardSprites.textureMasks.flatMap((mask) =>
+      textureSprites.map(({ texture, sprite }) => ({
+        texture,
+        mask,
+        src: lgrAssets.lgr?.getSpritePreview(texture.texture),
+        maskedSrc: lgrAssets.lgr?.getMaskedTexturePreview(
+          texture.texture,
+          mask,
+        ),
+        width: sprite?.width,
+        height: sprite?.height,
+      })),
+    );
+  }, [lgrAssets.lgr, lgrAssets.isLoaded]);
 }

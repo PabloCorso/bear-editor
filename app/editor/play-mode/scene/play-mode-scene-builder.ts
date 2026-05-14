@@ -9,24 +9,38 @@ import {
 } from "~/editor/render/world-geometry";
 import {
   getCachedPolygonDerivedData,
-  isPolygonVisible,
-  isPictureVisible,
   isPointVisible,
 } from "~/editor/render/world-derived-data-cache";
 import type {
   PlayModeRenderVisibility,
   PlayModeScene,
   PlayModeSceneDrawItem,
+  PlayModeSceneObjectItem,
+  PlayModeScenePictureItem,
   PlayModeViewport,
 } from "./play-mode-scene";
 
 type LevelRenderCache = {
   polygons: Array<{
-    polygon: Polygon;
+    bounds: WorldRect;
+    item: {
+      vertices: Polygon["vertices"];
+      isGrass: boolean;
+      grassEdgeIndices: number[];
+    };
   }>;
+  staticDrawItems: Array<
+    | PlayModeScenePictureItem
+    | {
+        type: "object";
+        source: LevelData["objects"][number];
+        item: PlayModeSceneObjectItem;
+      }
+  >;
 };
 
 const levelRenderCache = new WeakMap<LevelData, LevelRenderCache>();
+const pictureBoundsCache = new WeakMap<object, WorldRect>();
 const VOLT_ARM_ANIMATION_FRAMES = 28;
 const VOLT_ARM_ANIMATION_DURATION =
   VOLT_ARM_ANIMATION_FRAMES * FRAME_INDEX_TO_TIME;
@@ -46,18 +60,12 @@ export function buildPlayModeScene({
     mask?: string;
   }) => { width: number; height: number } | null;
 }): PlayModeScene {
+  const viewportRect = getViewportWorldRectFromCenter(viewport, 0);
   const worldRect = getViewportWorldRectFromCenter(viewport);
   const cache = getLevelRenderCache(state.level);
   const polygons = cache.polygons
-    .filter((entry) => isPolygonVisible(entry.polygon, worldRect))
-    .map(({ polygon }) => {
-      const { grassEdgeIndices } = getCachedPolygonDerivedData(polygon);
-      return {
-      vertices: polygon.vertices,
-      isGrass: Boolean(polygon.isGrass),
-      grassEdgeIndices,
-      };
-    });
+    .filter((entry) => rectIntersects(entry.bounds, worldRect))
+    .map((entry) => entry.item);
 
   return {
     clearColor: "#1a1a2e",
@@ -67,13 +75,20 @@ export function buildPlayModeScene({
     groundClipMode: "always",
     level: state.level,
     viewport: {
-      rect: worldRect,
+      width: viewport.width,
+      height: viewport.height,
+      center: {
+        x: viewport.centerX,
+        y: viewport.centerY,
+      },
+      rect: viewportRect,
       zoom: viewport.zoom,
     },
     visibility,
     polygons,
     drawItems: getDrawItemQueue(
       state,
+      cache,
       visibility,
       worldRect,
       resolvePictureDimensions,
@@ -83,6 +98,7 @@ export function buildPlayModeScene({
 
 function getDrawItemQueue(
   state: GameState,
+  cache: LevelRenderCache,
   visibility: Pick<
     PlayModeRenderVisibility,
     "showObjects" | "showPictures" | "showTextures" | "showObjectAnimations"
@@ -94,54 +110,39 @@ function getDrawItemQueue(
     mask?: string;
   }) => { width: number; height: number } | null,
 ): PlayModeSceneDrawItem[] {
-  const pictures =
-    visibility.showPictures || visibility.showTextures
-      ? state.level.sprites
-          .filter((sprite) =>
-            sprite.textureName && sprite.maskName
-              ? visibility.showTextures
-              : visibility.showPictures,
-          )
-          .filter((sprite) =>
-            isSpriteVisible(sprite, worldRect, resolvePictureDimensions),
-          )
-          .map((sprite) => ({
-            type: "picture" as const,
-            cacheKey: sprite,
-            name: sprite.pictureName || undefined,
-            mask: sprite.maskName || undefined,
-            texture: sprite.textureName || undefined,
-            clip: sprite.clipping,
-            distance: sprite.distance,
-            position: {
-              x: sprite.r.x,
-              y: sprite.r.y,
-            },
-          }))
-      : [];
+  const drawItems: PlayModeSceneDrawItem[] = [];
+  const bikeItem = buildBikeSceneItem(state);
+  let bikeInserted = false;
 
-  const objects = visibility.showObjects
-    ? state.level.objects
-        .filter((obj) => obj.active)
-        .filter((obj) => obj.type !== "start")
-        .filter((obj) => isPointVisible({ x: obj.r.x, y: -obj.r.y }, worldRect))
-        .map((obj) => ({
-          type: "object" as const,
-          objectKind: obj.type as "food" | "killer" | "exit",
-          gravity: gravityFromProperty(obj.property),
-          animation: obj.animation,
-          clip: Clip.Unclipped,
-          distance: DEFAULT_OBJECT_RENDER_DISTANCE,
-          position: {
-            x: obj.r.x,
-            y: -obj.r.y,
-          },
-        }))
-    : [];
+  for (const item of cache.staticDrawItems) {
+    if (getStaticDrawItemDistance(item) < bikeItem.distance && !bikeInserted) {
+      drawItems.push(bikeItem);
+      bikeInserted = true;
+    }
 
-  return [...pictures, ...objects, buildBikeSceneItem(state)].sort(
-    (a, b) => b.distance - a.distance,
-  );
+    if (item.type === "picture") {
+      const shouldShowPicture =
+        item.texture && item.mask
+          ? visibility.showTextures
+          : visibility.showPictures;
+      if (!shouldShowPicture) continue;
+      const bounds = getCachedPictureBounds(item, resolvePictureDimensions);
+      if (bounds && !rectIntersects(bounds, worldRect)) continue;
+      drawItems.push(item);
+      continue;
+    }
+
+    if (!visibility.showObjects) continue;
+    if (!item.source.active) continue;
+    if (!isPointVisible(item.item.position, worldRect)) continue;
+    drawItems.push(item.item);
+  }
+
+  if (!bikeInserted) {
+    drawItems.push(bikeItem);
+  }
+
+  return drawItems;
 }
 
 function buildBikeSceneItem(state: GameState): PlayModeSceneDrawItem {
@@ -198,7 +199,9 @@ function buildBikeSceneItem(state: GameState): PlayModeSceneDrawItem {
   };
 }
 
-function gravityFromProperty(property: LevelData["objects"][number]["property"]) {
+function gravityFromProperty(
+  property: LevelData["objects"][number]["property"],
+) {
   switch (property) {
     case "gravity_up":
       return Gravity.Up;
@@ -218,34 +221,94 @@ function getLevelRenderCache(level: LevelData): LevelRenderCache {
   if (cached) return cached;
 
   const cache: LevelRenderCache = {
-    polygons: level.polygons.map((polygon) => ({ polygon })),
+    polygons: level.polygons.map((polygon) => {
+      const derived = getCachedPolygonDerivedData(polygon);
+      return {
+        bounds: derived.bounds,
+        item: {
+          vertices: polygon.vertices,
+          isGrass: Boolean(polygon.isGrass),
+          grassEdgeIndices: derived.grassEdgeIndices,
+        },
+      };
+    }),
+    staticDrawItems: [
+      ...level.sprites.map(
+        (sprite): PlayModeScenePictureItem => ({
+          type: "picture",
+          cacheKey: sprite,
+          name: sprite.pictureName || undefined,
+          mask: sprite.maskName || undefined,
+          texture: sprite.textureName || undefined,
+          clip: sprite.clipping,
+          distance: sprite.distance,
+          position: {
+            x: sprite.r.x,
+            y: sprite.r.y,
+          },
+        }),
+      ),
+      ...level.objects
+        .filter((obj) => obj.type !== "start")
+        .map((obj) => ({
+          type: "object" as const,
+          source: obj,
+          item: {
+            type: "object" as const,
+            objectKind: obj.type as "food" | "killer" | "exit",
+            gravity: gravityFromProperty(obj.property),
+            animation: obj.animation,
+            clip: Clip.Unclipped,
+            distance: DEFAULT_OBJECT_RENDER_DISTANCE,
+            position: {
+              x: obj.r.x,
+              y: -obj.r.y,
+            },
+          },
+        })),
+    ].sort(
+      (a, b) => getStaticDrawItemDistance(b) - getStaticDrawItemDistance(a),
+    ),
   };
   levelRenderCache.set(level, cache);
   return cache;
 }
 
-function isSpriteVisible(
-  sprite: LevelData["sprites"][number],
-  worldRect: WorldRect,
+function getStaticDrawItemDistance(
+  item: LevelRenderCache["staticDrawItems"][number],
+) {
+  return item.type === "picture" ? item.distance : item.item.distance;
+}
+
+function rectIntersects(a: WorldRect, b: WorldRect) {
+  return (
+    a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY
+  );
+}
+
+function getCachedPictureBounds(
+  item: PlayModeScenePictureItem,
   resolvePictureDimensions?: (picture: {
     name?: string;
     texture?: string;
     mask?: string;
   }) => { width: number; height: number } | null,
 ) {
-  return isPictureVisible(
-    {
-      position: { x: sprite.r.x, y: sprite.r.y },
-      name: sprite.pictureName,
-      texture: sprite.textureName,
-      mask: sprite.maskName,
-    },
-    worldRect,
-    ({ name, texture, mask }) =>
-      resolvePictureDimensions?.({
-        name,
-        texture,
-        mask,
-      }) ?? null,
-  );
+  const cacheKey = item.cacheKey;
+  if (!cacheKey) return null;
+
+  const cached = pictureBoundsCache.get(cacheKey);
+  if (cached) return cached;
+
+  const dimensions = resolvePictureDimensions?.(item);
+  if (!dimensions) return null;
+
+  const bounds = {
+    minX: item.position.x,
+    minY: item.position.y,
+    maxX: item.position.x + dimensions.width,
+    maxY: item.position.y + dimensions.height,
+  };
+  pictureBoundsCache.set(cacheKey, bounds);
+  return bounds;
 }

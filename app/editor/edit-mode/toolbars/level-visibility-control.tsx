@@ -5,6 +5,7 @@ import {
 import { useEditor, useEditorActions } from "~/editor/use-editor-store";
 import {
   ArrowsClockwiseIcon,
+  CheckIcon,
   LayoutIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
@@ -13,62 +14,50 @@ import {
   usePictureSprites,
   useTextureSprites,
 } from "~/components/use-lgr-assets";
-import { IconButton } from "~/components/ui/button";
-import { ToolbarButton, ToolbarSeparator } from "~/components/ui/toolbar";
+import { ToolbarButton } from "~/components/ui/toolbar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { cn } from "~/utils/misc";
-import { useState } from "react";
 import { colors, OBJECT_FRAME_PX } from "~/editor/constants";
 import { VertexIcon } from "./vertex-tool-control";
-import {
-  FloatingToolbar,
-  FloatingToolbarAnchor,
-  FloatingToolbarContent,
-  FloatingToolbarPanel,
-  FloatingToolbarTrigger,
-} from "./floating-toolbar";
 
 export function LevelVisibilityControl() {
   const levelVisibility = useEditor((state) => state.levelVisibility);
   const { toggleLevelVisibility, resetLevelVisibility } = useEditorActions();
-  const [open, setOpen] = useState(false);
 
   return (
-    <FloatingToolbar open={open} onOpenChange={setOpen}>
-      <FloatingToolbarAnchor>
-        <Tooltip>
-          <TooltipTrigger>
-            <FloatingToolbarTrigger>
-              <ToolbarButton
-                aria-label="Visibility options"
-                aria-expanded={open}
-              >
-                <LayoutIcon />
-              </ToolbarButton>
-            </FloatingToolbarTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="text-xs">
-            Visibility options
-          </TooltipContent>
-        </Tooltip>
-      </FloatingToolbarAnchor>
-      <FloatingToolbarContent side="bottom" align="center">
-        <FloatingToolbarPanel
-          orientation="horizontal"
-          className="min-w-max gap-1 p-2"
-        >
-          <LevelVisibilityControls
-            levelVisibility={levelVisibility}
-            onToggle={toggleLevelVisibility}
-            onReset={resetLevelVisibility}
-          />
-        </FloatingToolbarPanel>
-      </FloatingToolbarContent>
-    </FloatingToolbar>
+    <DropdownMenu modal={false}>
+      <Tooltip>
+        <TooltipTrigger>
+          <DropdownMenuTrigger>
+            <ToolbarButton aria-label="Visibility options">
+              <LayoutIcon />
+            </ToolbarButton>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="right" className="text-xs">
+          Visibility options
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent className="min-w-56" side="bottom" align="start">
+        <LevelVisibilityControls
+          levelVisibility={levelVisibility}
+          onToggle={toggleLevelVisibility}
+          onReset={resetLevelVisibility}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -84,78 +73,96 @@ export function LevelVisibilityControls({
   const canReset = !isDefaultLevelVisibility(levelVisibility);
   return (
     <>
-      <VisibilityToggleButton
-        label="Ground/Sky textures"
-        icon={<GroundSkyTexturesIcon />}
-        active={levelVisibility.useGroundSkyTextures}
-        onClick={() => onToggle("useGroundSkyTextures")}
-      />
-      <VisibilityToggleButton
-        label="Polygon handles"
-        icon={<PolygonHandlesIcon />}
-        active={levelVisibility.showPolygonHandles}
-        onClick={() => onToggle("showPolygonHandles")}
-      />
-      <VisibilityToggleButton
-        label="Object animations"
-        icon={<ObjectAnimationsIcon />}
-        active={levelVisibility.showObjectAnimations}
-        onClick={() => onToggle("showObjectAnimations")}
-      />
-      <ToolbarSeparator />
-      <VisibilityToggleButton
-        label="Objects"
-        icon={<ObjectsIcon />}
-        active={levelVisibility.showObjects}
-        onClick={() => onToggle("showObjects")}
-      />
-      <VisibilityToggleButton
-        label="Pictures"
-        icon={<PicturesIcon />}
-        active={levelVisibility.showPictures}
-        onClick={() => onToggle("showPictures")}
-      />
-      <VisibilityToggleButton
-        label="Textures"
-        icon={<BrickTextureIcon className="h-5 w-5" />}
-        active={levelVisibility.showTextures}
-        onClick={() => onToggle("showTextures")}
-      />
-      <VisibilityToggleButton
-        label="Polygons"
-        icon={<PolygonsIcon />}
-        active={levelVisibility.showPolygons}
-        onClick={() => onToggle("showPolygons")}
-      />
-      <ToolbarSeparator />
-      <VisibilityToggleButton
-        label="Object bounds"
-        icon={<ObjectBoundsIcon />}
-        active={levelVisibility.showObjectBounds}
-        onClick={() => onToggle("showObjectBounds")}
-      />
-      <VisibilityToggleButton
-        label="Picture bounds"
-        icon={<PictureBoundsIcon />}
-        active={levelVisibility.showPictureBounds}
-        onClick={() => onToggle("showPictureBounds")}
-      />
-      <VisibilityToggleButton
-        label="Texture bounds"
-        icon={<TextureBoundsIcon />}
-        active={levelVisibility.showTextureBounds}
-        onClick={() => onToggle("showTextureBounds")}
-      />
-      <VisibilityToggleButton
-        label="Polygon bounds"
-        icon={<PolygonBoundsIcon />}
-        active={levelVisibility.showPolygonBounds}
-        onClick={() => onToggle("showPolygonBounds")}
-      />
-      <ToolbarSeparator />
-      <IconButton type="button" onClick={onReset} disabled={!canReset}>
-        <ArrowsClockwiseIcon />
-      </IconButton>
+      <DropdownMenuGroup>
+        <VisibilityToggleButton
+          label="Ground/Sky textures"
+          icon={<GroundSkyTexturesIcon />}
+          active={levelVisibility.useGroundSkyTextures}
+          onSelect={() => onToggle("useGroundSkyTextures")}
+        />
+        <VisibilityToggleButton
+          label="Zoom textures"
+          icon={<BrickTextureIcon className="h-5 w-5" />}
+          active={levelVisibility.zoomTextures}
+          onSelect={() => onToggle("zoomTextures")}
+        />
+        <VisibilityToggleButton
+          label="Polygon handles"
+          icon={<PolygonHandlesIcon />}
+          active={levelVisibility.showPolygonHandles}
+          onSelect={() => onToggle("showPolygonHandles")}
+        />
+        <VisibilityToggleButton
+          label="Object animations"
+          icon={<ObjectAnimationsIcon />}
+          active={levelVisibility.showObjectAnimations}
+          onSelect={() => onToggle("showObjectAnimations")}
+        />
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuGroup>
+        <VisibilityToggleButton
+          label="Objects"
+          icon={<ObjectsIcon />}
+          active={levelVisibility.showObjects}
+          onSelect={() => onToggle("showObjects")}
+        />
+        <VisibilityToggleButton
+          label="Pictures"
+          icon={<PicturesIcon />}
+          active={levelVisibility.showPictures}
+          onSelect={() => onToggle("showPictures")}
+        />
+        <VisibilityToggleButton
+          label="Textures"
+          icon={<BrickTextureIcon className="h-5 w-5" />}
+          active={levelVisibility.showTextures}
+          onSelect={() => onToggle("showTextures")}
+        />
+        <VisibilityToggleButton
+          label="Polygons"
+          icon={<PolygonsIcon />}
+          active={levelVisibility.showPolygons}
+          onSelect={() => onToggle("showPolygons")}
+        />
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuGroup>
+        <VisibilityToggleButton
+          label="Object bounds"
+          icon={<ObjectBoundsIcon />}
+          active={levelVisibility.showObjectBounds}
+          onSelect={() => onToggle("showObjectBounds")}
+        />
+        <VisibilityToggleButton
+          label="Picture bounds"
+          icon={<PictureBoundsIcon />}
+          active={levelVisibility.showPictureBounds}
+          onSelect={() => onToggle("showPictureBounds")}
+        />
+        <VisibilityToggleButton
+          label="Texture bounds"
+          icon={<TextureBoundsIcon />}
+          active={levelVisibility.showTextureBounds}
+          onSelect={() => onToggle("showTextureBounds")}
+        />
+        <VisibilityToggleButton
+          label="Polygon bounds"
+          icon={<PolygonBoundsIcon />}
+          active={levelVisibility.showPolygonBounds}
+          onSelect={() => onToggle("showPolygonBounds")}
+        />
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      <DropdownMenuGroup>
+        <DropdownMenuItem
+          iconBefore={<ArrowsClockwiseIcon />}
+          onClick={onReset}
+          disabled={!canReset}
+        >
+          Reset visibility
+        </DropdownMenuItem>
+      </DropdownMenuGroup>
     </>
   );
 }
@@ -165,30 +172,27 @@ function VisibilityToggleButton({
   icon,
   active,
   className,
+  onSelect,
   ...props
-}: Omit<React.ComponentPropsWithRef<"button">, "children"> & {
+}: Omit<React.ComponentProps<typeof DropdownMenuItem>, "children"> & {
   label: string;
   icon: React.ReactNode;
   active: boolean;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger>
-        <IconButton
-          type="button"
-          iconSize="lg"
-          aria-label={label}
-          aria-pressed={active}
-          className={cn("aria-pressed:bg-primary-hover/50", className)}
-          {...props}
-        >
-          {icon}
-        </IconButton>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="text-xs">
-        {label}
-      </TooltipContent>
-    </Tooltip>
+    <DropdownMenuItem
+      iconBefore={icon}
+      iconAfter={active ? <CheckIcon /> : undefined}
+      aria-pressed={active}
+      className={cn("font-medium", className)}
+      onSelect={(event) => {
+        event.preventDefault();
+        onSelect?.(event);
+      }}
+      {...props}
+    >
+      {label}
+    </DropdownMenuItem>
   );
 }
 

@@ -30,7 +30,9 @@ export function ControlToolbar({
   ...props
 }: ControlToolbarProps) {
   const toolMetas = useEditorRegisteredTools();
-  const orderedTools = sortToolMetas(toolMetas);
+  const orderedTools = sortToolMetas(
+    toolMetas.length > 0 ? toolMetas : Object.values(defaultTools),
+  );
   const navigationToolIds = new Set<string>([
     defaultTools.select.id,
     defaultTools.hand.id,
@@ -39,7 +41,8 @@ export function ControlToolbar({
     navigationToolIds.has(tool.id),
   );
   const drawingTools = orderedTools.filter(
-    (tool) => !navigationTools.some((navigationTool) => navigationTool.id === tool.id),
+    (tool) =>
+      !navigationTools.some((navigationTool) => navigationTool.id === tool.id),
   );
 
   return (
@@ -108,7 +111,12 @@ function RegisteredToolControl({
   }
 
   return (
-    <ToolControlButton id={meta.id} name={meta.name} shortcut={meta.shortcut} {...props}>
+    <ToolControlButton
+      id={meta.id}
+      name={meta.name}
+      shortcut={meta.shortcut}
+      {...props}
+    >
       <GenericToolGlyph label={meta.name} />
     </ToolControlButton>
   );

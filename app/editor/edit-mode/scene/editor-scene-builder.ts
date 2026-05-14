@@ -1,7 +1,6 @@
 import { DRAFT_PREVIEW_OPACITY, uiStrokeWidths } from "~/editor/constants";
 import type { EditorState } from "~/editor/editor-state";
 import { Clip, type Picture } from "~/editor/elma-types";
-import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import {
   type EditorHoverableWorldItem,
@@ -24,10 +23,12 @@ const DEFAULT_DISTANCE_AND_CLIP = {
 
 export function buildEditorWorldScene({
   state,
+  viewportSize,
   viewportRect,
   resolvePictureDimensions,
 }: {
   state: EditorState;
+  viewportSize: { width: number; height: number };
   viewportRect: WorldRect;
   resolvePictureDimensions?: (picture: {
     name?: string;
@@ -45,6 +46,7 @@ export function buildEditorWorldScene({
     groundClipMode: "when-polygons-visible",
     visibility: {
       useGroundSkyTextures: state.levelVisibility.useGroundSkyTextures,
+      zoomTextures: state.levelVisibility.zoomTextures,
       showObjectAnimations: state.levelVisibility.showObjectAnimations,
       showObjects: state.levelVisibility.showObjects,
       showPictures: state.levelVisibility.showPictures,
@@ -53,6 +55,12 @@ export function buildEditorWorldScene({
       showPolygonBounds: state.levelVisibility.showPolygonBounds,
     },
     viewport: {
+      width: viewportSize.width,
+      height: viewportSize.height,
+      center: {
+        x: viewportRect.minX + viewportSize.width / (2 * state.zoom),
+        y: viewportRect.minY + viewportSize.height / (2 * state.zoom),
+      },
       rect: viewportRect,
       zoom: state.zoom,
     },
@@ -108,7 +116,6 @@ function getDrawItemQueue(
 ): EditorWorldDrawItem[] {
   const activeTool = state.actions.getActiveTool();
   const drafts = activeTool?.getDrafts?.() ?? {};
-  const selectState = state.actions.getToolState<SelectToolState>("select");
   const {
     showObjects,
     showPictures,
@@ -121,15 +128,13 @@ function getDrawItemQueue(
   const showAnyPictures =
     showPictures || showTextures || showPictureBounds || showTextureBounds;
   const idleBoundsLineWidth = uiStrokeWidths.boundsIdleScreen / state.zoom;
-  const selectedBoundsLineWidth =
-    uiStrokeWidths.boundsSelectedScreen / state.zoom;
-
   return [
     ...(showAnyPictures
       ? state.pictures
-          .filter((picture) =>
-            !viewportRect ||
-            isPictureVisible(picture, viewportRect, resolvePictureDimensions),
+          .filter(
+            (picture) =>
+              !viewportRect ||
+              isPictureVisible(picture, viewportRect, resolvePictureDimensions),
           )
           .map((picture) => ({
             type: "picture" as const,
@@ -139,8 +144,10 @@ function getDrawItemQueue(
             position: picture.position,
             distance: picture.distance,
             clip: picture.clip,
+            cacheKey: picture,
             showBounds:
-              showPictureBounds || (Boolean(picture.texture) && showTextureBounds),
+              showPictureBounds ||
+              (Boolean(picture.texture) && showTextureBounds),
             boundsLineWidth: idleBoundsLineWidth,
           }))
       : []),
@@ -160,20 +167,17 @@ function getDrawItemQueue(
     })),
     ...(showAnyObjects
       ? state.killers
-          .filter((killer) => !viewportRect || isPointVisible(killer, viewportRect))
-          .map((killer) => {
-          const isSelected = isSelectedObject(selectState, killer);
-          return {
+          .filter(
+            (killer) => !viewportRect || isPointVisible(killer, viewportRect),
+          )
+          .map((killer) => ({
             type: "object" as const,
             objectKind: "killer" as const,
             ...DEFAULT_DISTANCE_AND_CLIP,
             position: killer,
-            showBounds: showObjectBounds || isSelected,
-            boundsLineWidth: isSelected
-              ? selectedBoundsLineWidth
-              : idleBoundsLineWidth,
-          };
-          })
+            showBounds: showObjectBounds,
+            boundsLineWidth: idleBoundsLineWidth,
+          }))
       : []),
     ...(drafts.killers ?? []).map((killer) => ({
       type: "object" as const,
@@ -188,23 +192,19 @@ function getDrawItemQueue(
     ...(showAnyObjects
       ? state.apples
           .filter(
-            (apple) => !viewportRect || isPointVisible(apple.position, viewportRect),
+            (apple) =>
+              !viewportRect || isPointVisible(apple.position, viewportRect),
           )
-          .map((apple) => {
-          const isSelected = isSelectedObject(selectState, apple.position);
-          return {
+          .map((apple) => ({
             type: "object" as const,
             objectKind: "apple" as const,
             ...DEFAULT_DISTANCE_AND_CLIP,
             position: apple.position,
             animation: apple.animation,
             gravity: apple.gravity,
-            showBounds: showObjectBounds || isSelected,
-            boundsLineWidth: isSelected
-              ? selectedBoundsLineWidth
-              : idleBoundsLineWidth,
-          };
-          })
+            showBounds: showObjectBounds,
+            boundsLineWidth: idleBoundsLineWidth,
+          }))
       : []),
     ...(drafts.apples ?? []).map((apple) => ({
       type: "object" as const,
@@ -220,20 +220,17 @@ function getDrawItemQueue(
     })),
     ...(showAnyObjects
       ? state.flowers
-          .filter((flower) => !viewportRect || isPointVisible(flower, viewportRect))
-          .map((flower) => {
-          const isSelected = isSelectedObject(selectState, flower);
-          return {
+          .filter(
+            (flower) => !viewportRect || isPointVisible(flower, viewportRect),
+          )
+          .map((flower) => ({
             type: "object" as const,
             objectKind: "flower" as const,
             ...DEFAULT_DISTANCE_AND_CLIP,
             position: flower,
-            showBounds: showObjectBounds || isSelected,
-            boundsLineWidth: isSelected
-              ? selectedBoundsLineWidth
-              : idleBoundsLineWidth,
-          };
-          })
+            showBounds: showObjectBounds,
+            boundsLineWidth: idleBoundsLineWidth,
+          }))
       : []),
     ...(drafts.flowers ?? []).map((flower) => ({
       type: "object" as const,
@@ -245,21 +242,16 @@ function getDrawItemQueue(
       showBounds: showObjectBounds,
       boundsLineWidth: idleBoundsLineWidth,
     })),
-    ...(showAnyObjects
-      && (!viewportRect || isPointVisible(state.start, viewportRect))
+    ...(showAnyObjects &&
+    (!viewportRect || isPointVisible(state.start, viewportRect))
       ? [
-          (() => {
-            const isSelected = isSelectedObject(selectState, state.start);
-            return {
-              type: "start" as const,
-              ...DEFAULT_DISTANCE_AND_CLIP,
-              position: state.start,
-              showBounds: showObjectBounds || isSelected,
-              boundsLineWidth: isSelected
-                ? selectedBoundsLineWidth
-                : idleBoundsLineWidth,
-            };
-          })(),
+          {
+            type: "start" as const,
+            ...DEFAULT_DISTANCE_AND_CLIP,
+            position: state.start,
+            showBounds: showObjectBounds,
+            boundsLineWidth: idleBoundsLineWidth,
+          },
         ]
       : []),
   ].sort((a, b) => b.distance - a.distance);
@@ -275,13 +267,4 @@ function getScenePolygons(state: EditorState) {
       )
     : state.polygons;
   return [...scenePolygons, ...draftPolygons];
-}
-
-function isSelectedObject(
-  selectState: SelectToolState | undefined,
-  position: { x: number; y: number },
-) {
-  return (selectState?.selectedObjects ?? []).some(
-    (selected) => selected.x === position.x && selected.y === position.y,
-  );
 }

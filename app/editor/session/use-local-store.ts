@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { EditorState } from "~/editor/editor-state";
+import { defaultLevelVisibility } from "~/editor/level-visibility";
 import { defaultPlaySettings } from "~/editor/play-mode/play-settings";
 import { useEditorStore } from "~/editor/use-editor-store";
 
@@ -67,7 +68,11 @@ export function useLocalStorageSync(key = "elma-web-store") {
           showSprites: savedData.showSprites ?? true,
           viewPortOffset: savedData.viewPortOffset || { x: 0, y: 0 },
           zoom: savedData.zoom || 1,
-          levelVisibility: savedData.levelVisibility ?? state.levelVisibility,
+          levelVisibility: {
+            ...defaultLevelVisibility,
+            ...state.levelVisibility,
+            ...(savedData.levelVisibility ?? {}),
+          },
           playSettings: {
             ...defaultPlaySettings,
             keyBindings: {
