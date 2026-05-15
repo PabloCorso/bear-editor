@@ -78,25 +78,25 @@ export function LevelVisibilityControls({
           label="Ground/Sky textures"
           icon={<GroundSkyTexturesIcon />}
           active={levelVisibility.useGroundSkyTextures}
-          onSelect={() => onToggle("useGroundSkyTextures")}
+          onClick={() => onToggle("useGroundSkyTextures")}
         />
         <VisibilityToggleButton
           label="Zoom textures"
           icon={<BrickTextureIcon className="h-5 w-5" />}
           active={levelVisibility.zoomTextures}
-          onSelect={() => onToggle("zoomTextures")}
+          onClick={() => onToggle("zoomTextures")}
         />
         <VisibilityToggleButton
           label="Polygon handles"
           icon={<PolygonHandlesIcon />}
           active={levelVisibility.showPolygonHandles}
-          onSelect={() => onToggle("showPolygonHandles")}
+          onClick={() => onToggle("showPolygonHandles")}
         />
         <VisibilityToggleButton
           label="Object animations"
           icon={<ObjectAnimationsIcon />}
           active={levelVisibility.showObjectAnimations}
-          onSelect={() => onToggle("showObjectAnimations")}
+          onClick={() => onToggle("showObjectAnimations")}
         />
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
@@ -105,25 +105,25 @@ export function LevelVisibilityControls({
           label="Objects"
           icon={<ObjectsIcon />}
           active={levelVisibility.showObjects}
-          onSelect={() => onToggle("showObjects")}
+          onClick={() => onToggle("showObjects")}
         />
         <VisibilityToggleButton
           label="Pictures"
           icon={<PicturesIcon />}
           active={levelVisibility.showPictures}
-          onSelect={() => onToggle("showPictures")}
+          onClick={() => onToggle("showPictures")}
         />
         <VisibilityToggleButton
           label="Textures"
           icon={<BrickTextureIcon className="h-5 w-5" />}
           active={levelVisibility.showTextures}
-          onSelect={() => onToggle("showTextures")}
+          onClick={() => onToggle("showTextures")}
         />
         <VisibilityToggleButton
           label="Polygons"
           icon={<PolygonsIcon />}
           active={levelVisibility.showPolygons}
-          onSelect={() => onToggle("showPolygons")}
+          onClick={() => onToggle("showPolygons")}
         />
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
@@ -132,25 +132,25 @@ export function LevelVisibilityControls({
           label="Object bounds"
           icon={<ObjectBoundsIcon />}
           active={levelVisibility.showObjectBounds}
-          onSelect={() => onToggle("showObjectBounds")}
+          onClick={() => onToggle("showObjectBounds")}
         />
         <VisibilityToggleButton
           label="Picture bounds"
           icon={<PictureBoundsIcon />}
           active={levelVisibility.showPictureBounds}
-          onSelect={() => onToggle("showPictureBounds")}
+          onClick={() => onToggle("showPictureBounds")}
         />
         <VisibilityToggleButton
           label="Texture bounds"
           icon={<TextureBoundsIcon />}
           active={levelVisibility.showTextureBounds}
-          onSelect={() => onToggle("showTextureBounds")}
+          onClick={() => onToggle("showTextureBounds")}
         />
         <VisibilityToggleButton
           label="Polygon bounds"
           icon={<PolygonBoundsIcon />}
           active={levelVisibility.showPolygonBounds}
-          onSelect={() => onToggle("showPolygonBounds")}
+          onClick={() => onToggle("showPolygonBounds")}
         />
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
@@ -172,7 +172,7 @@ function VisibilityToggleButton({
   icon,
   active,
   className,
-  onSelect,
+  onClick,
   ...props
 }: Omit<React.ComponentProps<typeof DropdownMenuItem>, "children"> & {
   label: string;
@@ -184,11 +184,9 @@ function VisibilityToggleButton({
       iconBefore={icon}
       iconAfter={active ? <CheckIcon /> : undefined}
       aria-pressed={active}
+      closeOnClick={false}
       className={cn("font-medium", className)}
-      onSelect={(event) => {
-        event.preventDefault();
-        onSelect?.(event);
-      }}
+      onClick={onClick}
       {...props}
     >
       {label}
