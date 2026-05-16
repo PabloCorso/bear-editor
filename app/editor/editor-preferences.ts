@@ -1,3 +1,4 @@
+import fastDeepEqual from "fast-deep-equal";
 import { useEffect, useRef } from "react";
 import type { EditorState } from "./editor-state";
 import { defaultLevelVisibility } from "./level-visibility";
@@ -6,32 +7,13 @@ import {
   defaultPlaySettings,
 } from "./play-mode/play-settings";
 import type { EditorStore } from "./editor-store";
-import {
-  VERTEX_EDGE_CLICK_BEHAVIOR_STORAGE_KEY,
-  type VertexEdgeClickBehavior,
-} from "./edit-mode/default-level-preset";
+import type { EditorPreferences } from "./editor-preference-types";
 
 const EDITOR_PREFERENCES_STORAGE_KEY = "elma-web-editor-preferences";
-const LEGACY_SESSION_STORAGE_KEY = "elma-web-store";
-
-type LegacyLocalStoragePlaySettings = {
-  deathBehavior?: "stop" | "reset";
-} & Partial<EditorState["playSettings"]>;
 
 type PersistedEditorPreferences = {
   version: 1;
-  animateSprites?: boolean;
-  isUIVisible?: boolean;
-  levelVisibility?: Partial<EditorState["levelVisibility"]>;
-  playModeZoom?: number;
-  playSettings?: LegacyLocalStoragePlaySettings;
-  vertexEdgeClickBehavior?: VertexEdgeClickBehavior;
-};
-
-type LegacySessionPreferences = {
-  animateSprites?: boolean;
-  levelVisibility?: Partial<EditorState["levelVisibility"]>;
-  playSettings?: LegacyLocalStoragePlaySettings;
+  preferences: EditorPreferences;
 };
 
 function isClient() {
@@ -55,88 +37,57 @@ function parseStoredItem<T>(key: string): T | null {
   }
 }
 
-function getLegacyVertexEdgeClickBehaviorPreference() {
-  const item = getStoredItem(VERTEX_EDGE_CLICK_BEHAVIOR_STORAGE_KEY);
-  if (item === "internal" || item === "smibu") {
-    return item;
-  }
-  return undefined;
-}
+const defaultEditorPreferences: EditorPreferences = {
+  animateSprites: true,
+  isUIVisible: true,
+  levelVisibility: defaultLevelVisibility,
+  playModeZoom: DEFAULT_PLAY_MODE_ZOOM,
+  playSettings: defaultPlaySettings,
+  vertexEdgeClickBehavior: "internal",
+};
 
-function normalizePlaySettings(
-  playSettings?: LegacyLocalStoragePlaySettings,
-): EditorState["playSettings"] {
-  return {
-    ...defaultPlaySettings,
-    runEndBehavior:
-      playSettings?.runEndBehavior ??
-      (playSettings?.deathBehavior === "reset"
-        ? "restart"
-        : playSettings?.deathBehavior === "stop"
-          ? "pause"
-          : defaultPlaySettings.runEndBehavior),
-    keyBindings: {
-      ...defaultPlaySettings.keyBindings,
-      ...(playSettings?.keyBindings ?? {}),
-    },
-  };
-}
-
-function getLegacySessionPreferences() {
-  const legacyPreferences =
-    parseStoredItem<LegacySessionPreferences>(LEGACY_SESSION_STORAGE_KEY);
-
-  if (!legacyPreferences) return null;
-
-  return {
-    animateSprites: legacyPreferences.animateSprites,
-    levelVisibility: legacyPreferences.levelVisibility,
-    playSettings: legacyPreferences.playSettings,
-  };
-}
-
-export function loadEditorPreferences(): Partial<EditorState> {
-  const persistedPreferences =
-    parseStoredItem<PersistedEditorPreferences>(EDITOR_PREFERENCES_STORAGE_KEY);
-  const legacySessionPreferences =
-    persistedPreferences ? null : getLegacySessionPreferences();
-
-  const levelVisibility =
-    persistedPreferences?.levelVisibility ??
-    legacySessionPreferences?.levelVisibility;
-  const playSettings =
-    persistedPreferences?.playSettings ?? legacySessionPreferences?.playSettings;
+export function loadEditorPreferences(): EditorPreferences {
+  const persistedPreferences = parseStoredItem<PersistedEditorPreferences>(
+    EDITOR_PREFERENCES_STORAGE_KEY,
+  );
+  const preferences = persistedPreferences?.preferences;
 
   return {
     animateSprites:
-      persistedPreferences?.animateSprites ??
-      legacySessionPreferences?.animateSprites ??
-      true,
-    isUIVisible: persistedPreferences?.isUIVisible ?? true,
+      preferences?.animateSprites ?? defaultEditorPreferences.animateSprites,
+    isUIVisible:
+      preferences?.isUIVisible ?? defaultEditorPreferences.isUIVisible,
     levelVisibility: {
       ...defaultLevelVisibility,
-      ...(levelVisibility ?? {}),
+      ...(preferences?.levelVisibility ?? {}),
     },
     playModeZoom:
-      persistedPreferences?.playModeZoom ?? EditorStateDefaults.playModeZoom,
-    playSettings: normalizePlaySettings(playSettings),
+      preferences?.playModeZoom ?? defaultEditorPreferences.playModeZoom,
+    playSettings: {
+      ...defaultPlaySettings,
+      ...(preferences?.playSettings ?? {}),
+      keyBindings: {
+        ...defaultPlaySettings.keyBindings,
+        ...(preferences?.playSettings?.keyBindings ?? {}),
+      },
+    },
     vertexEdgeClickBehavior:
-      persistedPreferences?.vertexEdgeClickBehavior ??
-      getLegacyVertexEdgeClickBehaviorPreference() ??
-      EditorStateDefaults.vertexEdgeClickBehavior,
+      preferences?.vertexEdgeClickBehavior ??
+      defaultEditorPreferences.vertexEdgeClickBehavior,
   };
 }
-
-const EditorStateDefaults = {
-  playModeZoom: DEFAULT_PLAY_MODE_ZOOM,
-  vertexEdgeClickBehavior: "internal" as VertexEdgeClickBehavior,
-};
 
 function getPersistedEditorPreferences(
   state: EditorState,
 ): PersistedEditorPreferences {
   return {
     version: 1,
+    preferences: getComparableEditorPreferences(state),
+  };
+}
+
+function getComparableEditorPreferences(state: EditorState): EditorPreferences {
+  return {
     animateSprites: state.animateSprites,
     isUIVisible: state.isUIVisible,
     levelVisibility: state.levelVisibility,
@@ -151,12 +102,16 @@ export function useEditorPreferencesSync(
   key = EDITOR_PREFERENCES_STORAGE_KEY,
 ) {
   const lastSavedValueRef = useRef<string | null>(null);
+  const lastSavedPreferencesRef = useRef<EditorPreferences | null>(null);
 
   useEffect(
     function primeSavedPreferencesSnapshot() {
       lastSavedValueRef.current = getStoredItem(key);
+      lastSavedPreferencesRef.current = getComparableEditorPreferences(
+        store.getState(),
+      );
     },
-    [key],
+    [store, key],
   );
 
   useEffect(
@@ -164,12 +119,21 @@ export function useEditorPreferencesSync(
       const unsubscribe = store.subscribe((state) => {
         if (!isClient()) return;
 
+        const nextPreferences = getComparableEditorPreferences(state);
+        if (
+          lastSavedPreferencesRef.current &&
+          fastDeepEqual(lastSavedPreferencesRef.current, nextPreferences)
+        ) {
+          return;
+        }
+
         const nextValue = JSON.stringify(getPersistedEditorPreferences(state));
         if (lastSavedValueRef.current === nextValue) return;
 
         try {
           window.localStorage.setItem(key, nextValue);
           lastSavedValueRef.current = nextValue;
+          lastSavedPreferencesRef.current = nextPreferences;
         } catch (error) {
           console.error(
             "Failed to save editor preferences to localStorage:",

@@ -3,10 +3,6 @@ import { createContext, useContext } from "react";
 import type { DefaultLevelPreset } from "~/editor/helpers/level-parser";
 
 export const DEFAULT_LEVEL_PRESET_STORAGE_KEY = "elma-web-default-level-preset";
-export const VERTEX_EDGE_CLICK_BEHAVIOR_STORAGE_KEY =
-  "elma-web-vertex-edge-click-behavior";
-
-export type VertexEdgeClickBehavior = "internal" | "smibu";
 
 type DefaultLevelPresetContextValue = {
   defaultLevelPreset: DefaultLevelPreset;

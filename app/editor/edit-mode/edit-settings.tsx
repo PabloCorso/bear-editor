@@ -9,8 +9,8 @@ import {
 import {
   useDefaultLevelPreset,
   useSetDefaultLevelPreset,
-  type VertexEdgeClickBehavior,
 } from "~/editor/edit-mode/default-level-preset";
+import type { VertexEdgeClickBehavior } from "~/editor/editor-preference-types";
 import {
   getDefaultLevel,
   type DefaultLevelPreset,

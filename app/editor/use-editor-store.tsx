@@ -29,9 +29,7 @@ export const EditorProvider = ({
   useEditorPreferencesSync(store);
 
   return (
-    <EditorContext.Provider value={store}>
-      {children}
-    </EditorContext.Provider>
+    <EditorContext.Provider value={store}>{children}</EditorContext.Provider>
   );
 };
 

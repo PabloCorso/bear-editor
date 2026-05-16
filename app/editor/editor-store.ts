@@ -19,23 +19,16 @@ import {
 } from "./play-mode/play-settings";
 import type { Position } from "./elma-types";
 import type { SelectToolState } from "./edit-mode/tools/select-tool";
-import type { VertexEdgeClickBehavior } from "./edit-mode/default-level-preset";
+import type {
+  EditorPreferences,
+  VertexEdgeClickBehavior,
+} from "./editor-preference-types";
 
 type CreateEditorStoreOptions = {
   initialToolId?: string;
   defaultLevelTitle?: string;
   historyUpdateThrottle?: number;
-  initialPreferences?: Partial<
-    Pick<
-      EditorState,
-      | "animateSprites"
-      | "isUIVisible"
-      | "levelVisibility"
-      | "playModeZoom"
-      | "playSettings"
-      | "vertexEdgeClickBehavior"
-    >
-  >;
+  initialPreferences?: EditorPreferences;
 };
 
 export type PartialEditorState = Pick<
