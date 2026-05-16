@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-15-05
+
+- Migrated editor and play mode from Canvas 2D to WebGL to improve performance drastically on big levels or levels with many pictures.
+- Grass rendering improvements.
+- Add zoom textures setting.
+
 ## 2026-01-04
 
 - Add mobile play mode.
