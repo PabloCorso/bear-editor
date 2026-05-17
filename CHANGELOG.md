@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-17-05
+
+- @Labs reported that the invisible grass in the sky was confusing, so now polygon lines are visible by default to make it clearer. Split grass and ground bounds into separate visibility options.
+
 ## 2026-15-05
 
 - Migrated editor and play mode from Canvas 2D to WebGL to improve performance drastically on big levels or levels with many pictures.
