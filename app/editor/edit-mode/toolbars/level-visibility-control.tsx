@@ -35,6 +35,8 @@ import { cn } from "~/utils/misc";
 import { colors, OBJECT_FRAME_PX } from "~/editor/constants";
 import { VertexIcon } from "./vertex-tool-control";
 
+const HEADER_DROPDOWN_COLLISION_PADDING = 16;
+
 export function LevelVisibilityControl() {
   const levelVisibility = useEditor((state) => state.levelVisibility);
   const { toggleLevelVisibility, resetLevelVisibility } = useEditorActions();
@@ -61,7 +63,12 @@ export function LevelVisibilityControl() {
           Visibility options
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent className="min-w-56" side="bottom" align="start">
+      <DropdownMenuContent
+        className="min-w-56"
+        side="bottom"
+        align="start"
+        collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
+      >
         <LevelVisibilityControls
           levelVisibility={levelVisibility}
           onToggle={toggleLevelVisibility}

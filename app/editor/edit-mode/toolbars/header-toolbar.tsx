@@ -62,6 +62,7 @@ import { ToolButton } from "./tool";
 
 const ISSUE_FOCUS_MIN_ZOOM = 0.2;
 const ISSUE_FOCUS_MAX_ZOOM = 10000;
+const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
 type HeaderToolbarProps = ToolbarProps & { isLoading?: boolean };
 
@@ -392,7 +393,9 @@ function MainDropdownMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
             </Icon>
           </ToolbarButton>
         </DropdownMenuTrigger>
-        <DropdownMenuContent>
+        <DropdownMenuContent
+          collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
+        >
           <DropdownMenuGroup>
             <DropdownMenuItem
               iconBefore={<FilePlusIcon />}
