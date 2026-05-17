@@ -57,7 +57,7 @@ export const uiColors = {
 
 export const uiStrokeWidths = {
   boundsIdleScreen: 1,
-  boundsSelectedScreen: 2,
+  boundsSelectedScreen: 1.4,
 };
 
 export const debugColors = {

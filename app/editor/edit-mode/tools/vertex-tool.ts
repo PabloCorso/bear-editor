@@ -336,7 +336,7 @@ export class VertexTool extends Tool<VertexToolState> {
         ...createDashedLineOverlays({
           from: isEditingExistingPolygon ? lastPoint : startPoint,
           to: state.mousePosition,
-          color: uiColors.vertexDraftClosingLine,
+          color: strokeColor,
           width: selectedLineWidth,
           dashLength: 8 / state.zoom,
           gapLength: 6 / state.zoom,
