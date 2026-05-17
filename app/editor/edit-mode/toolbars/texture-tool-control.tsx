@@ -17,6 +17,7 @@ import {
   type TextureToolState,
 } from "~/editor/edit-mode/tools/texture-tool";
 import { Toolbar } from "~/components/ui/toolbar";
+import { cn } from "~/utils/misc";
 
 export function TextureToolControl(props: ToolControlButtonProps) {
   const textureTool = useEditorToolState<TextureToolState>(
@@ -49,35 +50,47 @@ export function TextureToolControl(props: ToolControlButtonProps) {
       }
     >
       <div className="pointer-events-auto max-h-full overflow-y-auto">
-        <Toolbar orientation="vertical" className="p-2">
-          <ul className="flex flex-col gap-2">
+        <Toolbar orientation="vertical">
+          <ul className="flex flex-col gap-2.5">
             {standardSprites.textureMasks.map((mask) => (
               <li key={mask}>
-                <ul className="flex flex-col gap-2">
+                <ul className="flex flex-col gap-2.5">
                   {textureSprites
                     .filter((sprite) => sprite.mask === mask)
-                    .map(({ texture, mask: textureMask, ...sprite }) => (
-                      <li key={`${textureMask}-${texture.texture}`}>
-                        <button
-                          className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center gap-2 rounded text-sm font-bold transition-colors hover:bg-primary-hover/80 active:bg-primary-active/80"
-                          onClick={() => {
-                            setToolState<TextureToolState>(
-                              defaultTools.texture.id,
-                              {
-                                ...texture,
-                                mask: textureMask,
-                              },
-                            );
-                          }}
-                          title={`${texture.texture} (${textureMask})`}
-                        >
-                          <PictureIcon
-                            className={getTexturePreviewClassName(textureMask)}
-                            src={sprite.maskedSrc ?? sprite.src}
-                          />
-                        </button>
-                      </li>
-                    ))}
+                    .map(({ texture, mask: textureMask, ...sprite }) => {
+                      const isSelected =
+                        texture.texture === selectedTexture &&
+                        textureMask === selectedMask;
+
+                      return (
+                        <li key={`${textureMask}-${texture.texture}`}>
+                          <button
+                            className={cn(
+                              "inline-flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded p-1.5 text-sm font-bold transition-colors hover:bg-primary-hover/80 active:bg-primary-active/80",
+                              isSelected && "bg-primary-hover/50",
+                            )}
+                            aria-pressed={isSelected}
+                            onClick={() => {
+                              setToolState<TextureToolState>(
+                                defaultTools.texture.id,
+                                {
+                                  ...texture,
+                                  mask: textureMask,
+                                },
+                              );
+                            }}
+                            title={`${texture.texture} (${textureMask})`}
+                          >
+                            <PictureIcon
+                              className={getTexturePreviewClassName(
+                                textureMask,
+                              )}
+                              src={sprite.maskedSrc ?? sprite.src}
+                            />
+                          </button>
+                        </li>
+                      );
+                    })}
                 </ul>
               </li>
             ))}
