@@ -2,11 +2,6 @@
 
 Ideas and plans for Elma Web Editor.
 
-## Feedback
-
-- Labs thought an invisible grass in the sky was a bug, better make that easier to understand somehow.
-  - Could make polygon lines true by default.
-
 ## Planned features
 
 - Match features set of in-game editor:
