@@ -19,6 +19,7 @@ import {
 import { Toolbar, type ToolbarProps } from "~/components/ui/toolbar";
 import { colors, uiColors } from "~/editor/constants";
 import { cn } from "~/utils/misc";
+import { useId } from "react";
 
 export function VertexToolControl(props: ToolControlButtonProps) {
   const vertexToolState = useEditorToolState<VertexToolState>(
@@ -136,22 +137,24 @@ export function VertexIcon({
   handles,
   ...props
 }: VertexIconProps) {
+  const frameClipId = useId();
+
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"
-      className={cn("overflow-visible", className)}
+      className={cn("overflow-visible rounded", className)}
       {...props}
     >
       <defs>
-        <clipPath id="vertex-icon-frame">
+        <clipPath id={frameClipId}>
           <rect x="0" y="0" width="24" height="24" rx="4" />
         </clipPath>
       </defs>
 
-      <rect x="0" y="0" width="24" height="24" rx="4" fill={ground} />
-      <g clipPath="url(#vertex-icon-frame)">
+      <g clipPath={`url(#${frameClipId})`}>
+        <rect x="0" y="0" width="24" height="24" fill={ground} />
         <path d="M0 0H24L0 24Z" fill={sky} />
       </g>
 
@@ -167,18 +170,20 @@ export function VertexIcon({
       {handles && (
         <>
           <rect
-            x="-1.9"
-            y="22.1"
+            x="-0.9"
+            y="21.1"
             width="3.8"
             height="3.8"
+            rx="0.8"
             fill={uiColors.vertexDraftPointFill}
             stroke={uiColors.vertexDraftPointStroke}
           />
           <rect
-            x="22.1"
-            y="-1.9"
+            x="21.1"
+            y="-0.9"
             width="3.8"
             height="3.8"
+            rx="0.8"
             fill={uiColors.vertexDraftPointFill}
             stroke={uiColors.vertexDraftPointStroke}
           />

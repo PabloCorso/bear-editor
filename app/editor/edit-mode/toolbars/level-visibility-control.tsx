@@ -5,7 +5,6 @@ import {
 import { useEditor, useEditorActions } from "~/editor/use-editor-store";
 import {
   ArrowsClockwiseIcon,
-  BoundingBoxIcon,
   CaretDownIcon,
   CheckIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -48,9 +47,9 @@ export function LevelVisibilityControl() {
           <DropdownMenuTrigger>
             <ToolbarButton
               aria-label="Visibility options"
-              className="gap-0 p-2"
+              className="gap-1 p-2"
               iconOnly={false}
-              iconBefore={<BoundingBoxIcon />}
+              iconBefore={<GroundSkyTexturesIcon />}
               iconAfter={
                 <Icon size="xs">
                   <CaretDownIcon />
@@ -59,7 +58,7 @@ export function LevelVisibilityControl() {
             />
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="right" className="text-xs">
+        <TooltipContent side="bottom" className="text-xs">
           Visibility options
         </TooltipContent>
       </Tooltip>
