@@ -75,7 +75,7 @@ export class WebGLRenderContext {
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl", {
       alpha: false,
-      antialias: false,
+      antialias: true,
       preserveDrawingBuffer: import.meta.env.DEV,
       stencil: true,
     });
