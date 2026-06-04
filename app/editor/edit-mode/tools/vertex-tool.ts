@@ -484,6 +484,7 @@ export class VertexTool extends Tool<VertexToolState> {
     const { state } = this.getState();
     return {
       levelName: state.levelName,
+      lgr: state.lgr,
       ground: state.ground,
       sky: state.sky,
       polygons: state.polygons,

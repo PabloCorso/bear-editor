@@ -6,6 +6,7 @@ export type WorldSceneRendererBackend = "webgl";
 
 export interface WorldSceneRenderer {
   readonly backend: WorldSceneRendererBackend;
+  setLgrAssets(lgrAssets: LgrAssets | null): void;
   resize(options: {
     width: number;
     height: number;

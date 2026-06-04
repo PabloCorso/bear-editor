@@ -45,6 +45,15 @@ export class AppleTool extends Tool<AppleToolState> {
       case "2":
         setToolState({ animation: 2 });
         return true;
+      case "3":
+      case "4":
+      case "5":
+      case "6":
+      case "7":
+      case "8":
+      case "9":
+        setToolState({ animation: Number(event.key) as AppleAnimation });
+        return true;
       default:
         return false;
     }

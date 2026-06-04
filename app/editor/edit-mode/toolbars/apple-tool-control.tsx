@@ -9,7 +9,7 @@ import {
   type ToolControlButtonProps,
 } from "./tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
-import { useLgrSprite } from "~/components/use-lgr-assets";
+import { useAppleSprites, useLgrSprite } from "~/components/use-lgr-assets";
 import {
   defaultAppleState,
   type AppleToolState,
@@ -40,10 +40,17 @@ export function AppleToolControl(props: ToolControlButtonProps) {
 
   const apple1 = useLgrSprite("qfood1");
   const apple2 = useLgrSprite("qfood2");
+  const appleSprites = useAppleSprites();
   const currentAnimation =
     appleToolState?.animation || defaultAppleState.animation;
   const currentGravity = appleToolState?.gravity ?? defaultAppleState.gravity;
-  const apple = { 1: apple1, 2: apple2 }[currentAnimation];
+  const fallbackApples: Partial<Record<AppleAnimation, typeof apple1>> = {
+    1: apple1,
+    2: apple2,
+  };
+  const apple =
+    appleSprites.find(({ animation }) => animation === currentAnimation) ??
+    (fallbackApples[currentAnimation] || apple1);
 
   return (
     <ToolControlMenu
@@ -83,8 +90,7 @@ export function AppleToolbar({
   const appleToolState = useEditorToolState<AppleToolState>(
     defaultTools.apple.id,
   );
-  const apple1 = useLgrSprite("qfood1");
-  const apple2 = useLgrSprite("qfood2");
+  const appleSprites = useAppleSprites();
   const apple = useLgrSprite("qfood1");
   const currentAnimation =
     appleToolState?.animation ?? defaultAppleState.animation;
@@ -92,18 +98,15 @@ export function AppleToolbar({
 
   return (
     <Toolbar orientation="vertical" {...props}>
-      <AppleButton
-        shortcut={withShortcuts ? "1" : undefined}
-        isActive={currentAnimation === 1}
-        iconBefore={<SpriteIcon src={apple1.src} />}
-        onClick={() => onAnimationChange(1)}
-      />
-      <AppleButton
-        shortcut={withShortcuts ? "2" : undefined}
-        isActive={currentAnimation === 2}
-        iconBefore={<SpriteIcon src={apple2.src} />}
-        onClick={() => onAnimationChange(2)}
-      />
+      {appleSprites.map(({ animation, src }) => (
+        <AppleButton
+          key={animation}
+          shortcut={withShortcuts ? String(animation) : undefined}
+          isActive={currentAnimation === animation}
+          iconBefore={<SpriteIcon src={src} />}
+          onClick={() => onAnimationChange(animation)}
+        />
+      ))}
       <ToolbarSeparator />
       <AppleButton
         shortcut={withShortcuts ? "N" : undefined}

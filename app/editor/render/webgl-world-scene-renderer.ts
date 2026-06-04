@@ -31,6 +31,12 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
     );
   }
 
+  setLgrAssets(lgrAssets: LgrAssets | null) {
+    this.lgrAssets = lgrAssets;
+    this.polygonDrawer.setLgrAssets(lgrAssets);
+    this.worldItemDrawer.setLgrAssets(lgrAssets);
+  }
+
   resize({
     width,
     height,

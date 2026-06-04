@@ -1,4 +1,5 @@
 import type { LgrAssets } from "~/components/lgr-assets";
+import type { AppleAnimation } from "~/editor/elma-types";
 import {
   OBJECT_DIAMETER,
   OBJECT_FPS,
@@ -18,7 +19,7 @@ export function getObjectSprite(
   },
 ) {
   if (kind === "apple" || kind === "food") {
-    return lgrAssets.getAppleSprite(animation > 1 ? 2 : 1);
+    return lgrAssets.getAppleSprite(toAppleAnimation(animation));
   }
 
   if (kind === "flower" || kind === "exit") {
@@ -26,6 +27,12 @@ export function getObjectSprite(
   }
 
   return lgrAssets.getKillerSprite();
+}
+
+function toAppleAnimation(animation: number): AppleAnimation {
+  return Number.isInteger(animation) && animation >= 1 && animation <= 9
+    ? (animation as AppleAnimation)
+    : 1;
 }
 
 export function getObjectFrame(

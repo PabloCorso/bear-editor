@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ToolbarButton } from "~/components/ui/toolbar";
 import { cn } from "~/utils/misc";
-import { useTextureSprites } from "~/components/use-lgr-assets";
+import { useLgrAssets, useTextureSprites } from "~/components/use-lgr-assets";
 import { standardSprites } from "~/components/standard-sprites";
 import { PictureIcon } from "~/components/sprite-icon";
 import {
@@ -18,10 +18,12 @@ import {
   FloatingToolbarPanel,
   FloatingToolbarTrigger,
 } from "./floating-toolbar";
+import { LgrSelect } from "~/components/lgr-select";
 
 export function LevelPropertiesControl() {
   const [open, setOpen] = useState(false);
-  const { setGround, setSky } = useEditorActions();
+  const { setGround, setLgr, setSky } = useEditorActions();
+  const lgrAssets = useLgrAssets();
 
   const textureSprites = useTextureSprites();
   const allTextures = Array.from(
@@ -29,6 +31,7 @@ export function LevelPropertiesControl() {
   );
 
   const groundTexture = useEditor((state) => state.ground);
+  const levelLgrName = useEditor((state) => state.lgr);
   const skyTexture = useEditor((state) => state.sky);
   const groundTextureSprite = textureSprites.find(
     ({ texture }) => texture.texture === groundTexture,
@@ -102,6 +105,20 @@ export function LevelPropertiesControl() {
             textureSprites={textureSprites}
             onSelect={handleGroundTextureSelect}
           />
+          <div className="flex min-w-max items-center justify-between gap-3 border-t border-separator pt-2">
+            <div className="w-12 text-xs font-semibold">LGR</div>
+            <LgrSelect
+              value={levelLgrName}
+              onValueChange={setLgr}
+              aria-label="Level LGR"
+              className="ml-auto h-8 w-fit min-w-0 text-xs"
+            />
+          </div>
+          {lgrAssets.error ? (
+            <p className="max-w-64 pl-15 text-xs text-red-300">
+              {lgrAssets.error}
+            </p>
+          ) : null}
         </FloatingToolbarPanel>
       </FloatingToolbarContent>
     </FloatingToolbar>

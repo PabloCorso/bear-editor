@@ -2,6 +2,7 @@ import defaultLgr from "../assets/lgr/Default.lgr?url";
 import { decodeLgrSpritePixels } from "~/editor/helpers/pcx-loader";
 import { ElmaLGR, type AppleAnimation } from "~/editor/elma-types";
 import { standardSprites } from "./standard-sprites";
+import type { DecodedLgrSprite, WorkerResponse } from "./lgr-assets.worker";
 
 type LoadedSprite = {
   bitmap: ImageBitmap;
@@ -11,14 +12,23 @@ type LoadedSprite = {
   src?: string;
 };
 
+const SPRITE_LOAD_FRAME_BUDGET_MS = 8;
+
 export class LgrAssets {
-  private lgr: InstanceType<typeof ElmaLGR> | null = null;
+  private ready = false;
   private lgrSprites: Record<string, LoadedSprite> = {};
   private maskedPreviewUrls = new Map<string, string>();
   private loadPromise: Promise<void> | null = null;
+  readonly name: string;
+  readonly levelName: string;
+
+  constructor(name = "Default.lgr", levelName = "default") {
+    this.name = name;
+    this.levelName = levelName;
+  }
 
   async load() {
-    if (this.lgr) return;
+    if (this.ready) return;
     if (this.loadPromise) return this.loadPromise;
 
     this.loadPromise = this.loadDefaultLgr().finally(() => {
@@ -29,8 +39,20 @@ export class LgrAssets {
 
   private async loadDefaultLgr() {
     const buf = await fetch(defaultLgr).then((r) => r.arrayBuffer());
-    this.lgr = ElmaLGR.from(new Uint8Array(buf));
-    await this.loadAllSprites();
+    await this.loadFromBytes(buf);
+  }
+
+  async loadFromBytes(data: ArrayBuffer) {
+    if (this.ready) return;
+    try {
+      const sprites = await decodeLgrSprites(data);
+      await this.loadDecodedSprites(sprites);
+      this.ready = true;
+    } catch (error) {
+      this.destroy();
+      this.ready = false;
+      throw error;
+    }
   }
 
   private normalizeName(name: string) {
@@ -40,33 +62,32 @@ export class LgrAssets {
       .replace(/\.pcx$/, "");
   }
 
-  private async loadAllSprites() {
-    if (!this.lgr) return;
+  private async loadDecodedSprites(sprites: DecodedLgrSprite[]) {
+    let lastYieldTime = getNow();
 
-    const declarations = new Map(
-      this.lgr.pictureList.map((declaration) => [
-        this.normalizeName(declaration.name),
-        declaration,
-      ]),
-    );
+    for (const sprite of sprites) {
+      if (this.lgrSprites[sprite.name]) continue;
+      if (getNow() - lastYieldTime >= SPRITE_LOAD_FRAME_BUDGET_MS) {
+        await yieldToBrowser();
+        lastYieldTime = getNow();
+      }
 
-    for (const picture of this.lgr.pictureData) {
-      const name = this.normalizeName(picture.name);
-      if (this.lgrSprites[name]) continue;
-
-      const declaration = declarations.get(name);
-      const decoded = decodeLgrSpritePixels(picture, declaration);
-      const clamped = new Uint8ClampedArray(decoded.pixels.length);
-      clamped.set(decoded.pixels);
+      const pixels = new Uint8ClampedArray(sprite.pixels.length);
+      pixels.set(sprite.pixels);
       const bitmap = await createImageBitmap(
-        new ImageData(clamped, decoded.width, decoded.height),
+        new ImageData(pixels, sprite.width, sprite.height),
       );
-      this.lgrSprites[name] = {
+      this.lgrSprites[sprite.name] = {
         bitmap,
-        pixels: decoded.pixels,
-        width: decoded.width,
-        height: decoded.height,
+        pixels,
+        width: sprite.width,
+        height: sprite.height,
       };
+
+      if (getNow() - lastYieldTime >= SPRITE_LOAD_FRAME_BUDGET_MS) {
+        await yieldToBrowser();
+        lastYieldTime = getNow();
+      }
     }
   }
 
@@ -116,9 +137,35 @@ export class LgrAssets {
   }
 
   getAppleSprite(animation: AppleAnimation) {
-    const apple1Sprite = this.lgrSprites["qfood1"]?.bitmap;
-    const apple2Sprite = this.lgrSprites["qfood2"]?.bitmap;
-    return animation > 1 ? apple2Sprite : apple1Sprite;
+    const sprites = this.getAppleSpriteEntries();
+    if (sprites.length === 0) return null;
+
+    const index = (animation - 1) % sprites.length;
+    return sprites[index]?.sprite.bitmap ?? null;
+  }
+
+  getAppleSpritePreview(animation: AppleAnimation) {
+    const sprites = this.getAppleSpriteEntries();
+    if (sprites.length === 0) return undefined;
+
+    const index = (animation - 1) % sprites.length;
+    const sprite = sprites[index]?.sprite;
+    if (!sprite) return undefined;
+    if (sprite.src) return sprite.src;
+
+    sprite.src = createImageUrlFromRgba({
+      width: sprite.width,
+      height: sprite.height,
+      pixels: sprite.pixels,
+    });
+    return sprite.src;
+  }
+
+  getAppleAnimationOptions(): AppleAnimation[] {
+    const animations = this.getAppleSpriteEntries().map(({ animation }) => {
+      return animation;
+    });
+    return animations.length > 0 ? animations : [1, 2];
   }
 
   getKillerSprite() {
@@ -170,7 +217,7 @@ export class LgrAssets {
   }
 
   isReady() {
-    return !!this.lgr;
+    return this.ready;
   }
 
   getMaskedTexturePreview(textureName: string, maskName: string) {
@@ -224,7 +271,111 @@ export class LgrAssets {
       URL.revokeObjectURL(src);
     }
     this.maskedPreviewUrls.clear();
+    this.ready = false;
   }
+
+  private getAppleSpriteEntries() {
+    return Object.entries(this.lgrSprites)
+      .flatMap(([name, sprite]) => {
+        const match = /^qfood([1-9])$/i.exec(name);
+        if (!match) return [];
+
+        return [
+          {
+            animation: Number(match[1]) as AppleAnimation,
+            sprite,
+          },
+        ];
+      })
+      .sort((a, b) => a.animation - b.animation);
+  }
+}
+
+async function decodeLgrSprites(data: ArrayBuffer) {
+  if (typeof Worker === "undefined") {
+    return decodeLgrSpritesOnMainThread(data);
+  }
+
+  try {
+    return await decodeLgrSpritesInWorker(data);
+  } catch (error) {
+    console.warn(
+      "LGR worker decode failed; falling back to main thread.",
+      error,
+    );
+    return decodeLgrSpritesOnMainThread(data);
+  }
+}
+
+function decodeLgrSpritesInWorker(data: ArrayBuffer) {
+  return new Promise<DecodedLgrSprite[]>((resolve, reject) => {
+    const worker = new Worker(
+      new URL("./lgr-assets.worker.ts", import.meta.url),
+      {
+        type: "module",
+      },
+    );
+
+    worker.addEventListener("message", function handleWorkerMessage(event) {
+      const response = event.data as WorkerResponse;
+      worker.terminate();
+
+      if (response.type === "error") {
+        reject(new Error(response.message));
+        return;
+      }
+
+      resolve(response.sprites);
+    });
+    worker.addEventListener("error", function handleWorkerError(event) {
+      worker.terminate();
+      reject(event.error ?? new Error(event.message));
+    });
+    const workerData = data.slice(0);
+    worker.postMessage({ data: workerData }, [workerData]);
+  });
+}
+
+async function decodeLgrSpritesOnMainThread(data: ArrayBuffer) {
+  const lgr = ElmaLGR.from(new Uint8Array(data));
+  await yieldToBrowser();
+
+  const declarations = new Map(
+    lgr.pictureList.map((declaration) => [
+      normalizeSpriteName(declaration.name),
+      declaration,
+    ]),
+  );
+  const sprites: DecodedLgrSprite[] = [];
+  let lastYieldTime = getNow();
+
+  for (const picture of lgr.pictureData) {
+    const name = normalizeSpriteName(picture.name);
+    if (sprites.some((sprite) => sprite.name === name)) continue;
+
+    const declaration = declarations.get(name);
+    const decoded = decodeLgrSpritePixels(picture, declaration);
+    sprites.push({
+      name,
+      pixels: decoded.pixels,
+      width: decoded.width,
+      height: decoded.height,
+    });
+
+    if (getNow() - lastYieldTime >= SPRITE_LOAD_FRAME_BUDGET_MS) {
+      await yieldToBrowser();
+      lastYieldTime = getNow();
+    }
+  }
+
+  return sprites;
+}
+
+function normalizeSpriteName(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\.pcx$/, "");
 }
 
 const PNG_SIGNATURE = new Uint8Array([
@@ -360,4 +511,21 @@ function crc32(data: Uint8Array) {
     }
   }
   return (crc ^ 0xffffffff) >>> 0;
+}
+
+function getNow() {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+function yieldToBrowser() {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame !== "undefined") {
+      requestAnimationFrame(function resolveOnNextFrame() {
+        resolve();
+      });
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
 }

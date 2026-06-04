@@ -6,6 +6,7 @@ import {
   ObjectType,
   Texture,
   type Apple,
+  type AppleAnimation,
   type EditorLevel,
   type Position,
 } from "../elma-types";
@@ -43,6 +44,7 @@ export const defaultInternalEditorLevel: Partial<EditorLevel> = {
 
 export const defaultLevel: EditorLevel = {
   levelName: "",
+  lgr: "default",
   ground: Texture.Ground,
   sky: Texture.Sky,
   polygons: [
@@ -132,6 +134,7 @@ async function editorLevelFromBuffer(data: ArrayBuffer) {
 
   const level: EditorLevel = {
     levelName: elmaLevel.name,
+    lgr: elmaLevel.lgr || "default",
     ground: elmaLevel.ground || Texture.Ground,
     sky: elmaLevel.sky || Texture.Sky,
     polygons: elmaLevel.polygons,
@@ -151,8 +154,12 @@ function parseMask(mask: string): Mask | "" {
   return Object.values(Mask).includes(mask as Mask) ? (mask as Mask) : "";
 }
 
-function parseAppleAnimation(animation: number): 1 | 2 {
-  return animation === 2 ? 2 : 1;
+function parseAppleAnimation(animation: number): AppleAnimation {
+  return isAppleAnimation(animation) ? animation : 1;
+}
+
+function isAppleAnimation(animation: number): animation is AppleAnimation {
+  return Number.isInteger(animation) && animation >= 1 && animation <= 9;
 }
 
 export function elmaLevelFromEditorState(state: EditorState) {
@@ -164,6 +171,7 @@ export function elmaLevelFromEditorState(state: EditorState) {
 
   const level = new ElmaLevel();
   level.name = state.levelName || "Untitled";
+  level.lgr = state.lgr || "default";
   level.ground = state.ground || Texture.Ground;
   level.sky = state.sky || Texture.Sky;
 

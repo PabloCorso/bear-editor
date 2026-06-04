@@ -48,7 +48,7 @@ export function PictureTexturePicker({
               <li className="flex flex-col items-center py-2">
                 <button
                   className={cn(
-                    "flex cursor-pointer flex-col items-center gap-1 rounded py-1",
+                    "group flex cursor-pointer flex-col items-center gap-1 rounded py-1 hover:bg-primary-hover/50 hover:text-primary",
                     pickerColumnClassName,
                     item.isSelected && "bg-primary-hover/50 text-primary",
                   )}
@@ -58,7 +58,7 @@ export function PictureTexturePicker({
                 >
                   <span
                     className={cn(
-                      "block truncate text-center text-[10px] leading-3 font-medium text-secondary",
+                      "block truncate text-center text-[10px] leading-3 font-medium text-secondary group-hover:text-primary",
                       pickerLabelClassName,
                       item.isSelected && "text-primary",
                     )}

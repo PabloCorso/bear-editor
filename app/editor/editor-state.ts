@@ -20,6 +20,7 @@ import type {
 type EditorDocumentSnapshot = Pick<
   EditorLevel,
   | "levelName"
+  | "lgr"
   | "ground"
   | "sky"
   | "polygons"
@@ -123,6 +124,7 @@ export type EditorState = EditorLevel & {
     setPictures: (pictures: Picture[]) => void;
 
     setLevelName: (name: string) => void;
+    setLgr: (lgr: string) => void;
     setGround: (ground: string) => void;
     setSky: (sky: string) => void;
     setMousePosition: (position: Position) => void;

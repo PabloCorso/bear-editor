@@ -34,6 +34,7 @@ type CreateEditorStoreOptions = {
 export type PartialEditorState = Pick<
   EditorState,
   | "levelName"
+  | "lgr"
   | "ground"
   | "sky"
   | "polygons"
@@ -52,6 +53,7 @@ export function getLevelSnapshot(
   state: Pick<
     EditorState,
     | "levelName"
+    | "lgr"
     | "ground"
     | "sky"
     | "polygons"
@@ -64,6 +66,7 @@ export function getLevelSnapshot(
 ): PartialEditorState {
   return {
     levelName: state.levelName,
+    lgr: state.lgr,
     ground: state.ground,
     sky: state.sky,
     polygons: state.polygons,
@@ -104,6 +107,7 @@ function normalizeLevelSnapshot(
 ): PartialEditorState {
   return {
     levelName: level.levelName || defaultLevelTitle,
+    lgr: level.lgr || "default",
     ground: level.ground || "ground",
     sky: level.sky || "sky",
     polygons: level.polygons,
@@ -340,6 +344,7 @@ export function createEditorStore({
       (set, get, store) => ({
         // Initial state - level data will be injected via constructor
         levelName: defaultLevelTitle,
+        lgr: "default",
         ground: "ground",
         sky: "sky",
         polygons: [],
@@ -352,6 +357,7 @@ export function createEditorStore({
           {
             level: {
               levelName: defaultLevelTitle,
+              lgr: "default",
               ground: "ground",
               sky: "sky",
               polygons: [],
@@ -409,6 +415,7 @@ export function createEditorStore({
         actions: {
           // Level data operations
           setLevelName: (name) => set({ levelName: name }),
+          setLgr: (lgr) => set({ lgr }),
           setGround: (ground) => set({ ground }),
           setSky: (sky) => set({ sky }),
           setStart: (position) => set({ start: position }),
@@ -666,6 +673,7 @@ export function createEditorStore({
         handleSet: (handleSet) => throttle(handleSet, historyUpdateThrottle),
         partialize: (state) => ({
           levelName: state.levelName,
+          lgr: state.lgr,
           ground: state.ground,
           sky: state.sky,
           polygons: state.polygons,

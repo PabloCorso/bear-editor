@@ -43,6 +43,10 @@ export class WebGLWorldItemDrawer {
     this.shapes = new WebGLShapeDrawer(context);
   }
 
+  setLgrAssets(lgrAssets: LgrAssets | null) {
+    this.lgrAssets = lgrAssets;
+  }
+
   drawQueuedItems(scene: WorldRenderScene, phase: "ground" | "rest") {
     for (const item of scene.drawItems) {
       const isGroundClippedPicture =

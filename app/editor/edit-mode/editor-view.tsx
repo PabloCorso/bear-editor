@@ -163,6 +163,14 @@ export function useEditorView({
     };
   }, []);
 
+  useEffect(
+    function syncEditorEngineLgrAssets() {
+      if (!engineRef.current || !editorLgrAssets) return;
+      engineRef.current.setLgrAssets(editorLgrAssets);
+    },
+    [editorLgrAssets],
+  );
+
   return { canvasRef, engineRef };
 }
 

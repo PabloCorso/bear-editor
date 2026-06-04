@@ -92,7 +92,7 @@ export function PicturePropertiesToolbar({
           <button
             type="button"
             className={cn(
-              "flex h-5 w-full cursor-pointer items-center justify-center truncate rounded border-0 bg-transparent px-1 text-center text-[10px] leading-3 outline-hidden hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring aria-expanded:bg-primary-hover/50 aria-expanded:text-primary",
+              "flex h-5 w-full cursor-pointer items-center justify-center gap-0.5 truncate rounded border-0 bg-transparent px-1 text-center text-[10px] leading-3 outline-hidden hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring aria-expanded:bg-primary-hover/50 aria-expanded:text-primary",
               isSelected ? "text-primary" : "text-secondary",
               className,
             )}

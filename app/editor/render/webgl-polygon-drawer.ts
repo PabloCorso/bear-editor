@@ -22,6 +22,10 @@ export class WebGLPolygonDrawer {
     this.shapes = new WebGLShapeDrawer(context);
   }
 
+  setLgrAssets(lgrAssets: LgrAssets | null) {
+    this.lgrAssets = lgrAssets;
+  }
+
   drawWorldFill(
     scene: WorldRenderScene,
     textureName: string,

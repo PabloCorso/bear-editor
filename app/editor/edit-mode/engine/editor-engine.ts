@@ -868,6 +868,12 @@ export class EditorEngine {
     });
   }
 
+  public setLgrAssets(lgrAssets: LgrAssets) {
+    this.lgrAssets = lgrAssets;
+    this.worldRenderer.setLgrAssets(lgrAssets);
+    this.requestRender();
+  }
+
   private flushRender() {
     const shouldAnimate = this.shouldAnimate();
     if (!this.needsRender && !shouldAnimate) {

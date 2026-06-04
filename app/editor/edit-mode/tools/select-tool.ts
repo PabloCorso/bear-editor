@@ -1200,6 +1200,7 @@ export class SelectTool extends Tool<SelectToolState> {
     const { state } = this.getState();
     return {
       levelName: state.levelName,
+      lgr: state.lgr,
       ground: state.ground,
       sky: state.sky,
       polygons: state.polygons,
@@ -1711,7 +1712,10 @@ function isApple(value: unknown): value is Apple {
   return (
     isRecord(value) &&
     isPosition(value.position) &&
-    (value.animation === 1 || value.animation === 2) &&
+    typeof value.animation === "number" &&
+    Number.isInteger(value.animation) &&
+    value.animation >= 1 &&
+    value.animation <= 9 &&
     typeof value.gravity === "number"
   );
 }

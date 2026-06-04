@@ -1,8 +1,13 @@
 import type { Route } from "./+types/home";
-import { EditorProvider } from "../editor/use-editor-store";
+import { useEffect } from "react";
+import { EditorProvider, useEditor } from "../editor/use-editor-store";
 import { DefaultLevelPresetProvider } from "../editor/edit-mode/default-level-preset";
 import { EditorDocumentGuardProvider } from "~/editor/session/document-guard";
-import { LgrAssetsProvider } from "~/components/use-lgr-assets";
+import {
+  isSameLevelLgrName,
+  LgrAssetsProvider,
+  useLgrAssets,
+} from "~/components/use-lgr-assets";
 import { EditorShell } from "~/editor/app-shell";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
@@ -23,6 +28,7 @@ export default function Home({ params, loaderData }: Route.ComponentProps) {
       <LgrAssetsProvider>
         <DefaultLevelPresetProvider>
           <EditorProvider>
+            <LevelLgrSync />
             <EditorDocumentGuardProvider>
               <div className="flex h-[100dvh]">
                 <EditorShell
@@ -36,4 +42,21 @@ export default function Home({ params, loaderData }: Route.ComponentProps) {
       </LgrAssetsProvider>
     </TooltipProvider>
   );
+}
+
+function LevelLgrSync() {
+  const levelLgrName = useEditor((state) => state.lgr);
+  const lgrAssets = useLgrAssets();
+
+  useEffect(
+    function syncCachedLgrWithLevel() {
+      if (!levelLgrName || isSameLevelLgrName(levelLgrName, "default")) return;
+      if (isSameLevelLgrName(lgrAssets.lgr?.levelName, levelLgrName)) return;
+
+      void lgrAssets.loadCachedLgr(levelLgrName);
+    },
+    [levelLgrName, lgrAssets],
+  );
+
+  return null;
 }
