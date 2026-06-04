@@ -204,7 +204,7 @@ function GeneralSettingsPanel() {
         </a>{" "}
         Discord channel! See latest updates{" "}
         <a
-          href="https://github.com/PabloCorso/elma-web-editor/blob/main/CHANGELOG.md"
+          href="https://github.com/PabloCorso/bear-editor/blob/main/CHANGELOG.md"
           target="_blank"
           rel="noreferrer"
           className="underline focus-visible:focus-ring"
