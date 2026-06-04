@@ -119,12 +119,12 @@ export class WebGLWorldItemDrawer {
     }
 
     if (item.type === "object") {
-      this.drawObject(item, scene);
+      this.drawObject(item, scene, drawBounds);
       return;
     }
 
     if (item.type === "start") {
-      this.drawStart(item, scene);
+      this.drawStart(item, scene, drawBounds);
       return;
     }
 
@@ -132,6 +132,37 @@ export class WebGLWorldItemDrawer {
   }
 
   private drawItemBounds(item: WorldRenderDrawItem, scene: WorldRenderScene) {
+    if (item.type === "object") {
+      if (!item.showBounds) return;
+
+      this.shapes.drawCircleOutline(
+        item.position,
+        OBJECT_DIAMETER / 2,
+        item.boundsLineWidth ?? 0.02,
+        colors.selection,
+        scene,
+      );
+      return;
+    }
+
+    if (item.type === "start") {
+      if (!item.showBounds) return;
+
+      for (const circle of getKuskiSelectionCircles({
+        start: item.position,
+        coords: defaultBikeCoords,
+      })) {
+        this.shapes.drawCircleOutline(
+          { x: circle.x, y: circle.y },
+          circle.radius,
+          item.boundsLineWidth ?? 0.02,
+          colors.selection,
+          scene,
+        );
+      }
+      return;
+    }
+
     if (item.type !== "picture" || !item.showBounds) return;
 
     const dimensions = this.getPictureWorldDimensions(item);
@@ -282,7 +313,11 @@ export class WebGLWorldItemDrawer {
     };
   }
 
-  private drawObject(item: WorldRenderObjectItem, scene: WorldRenderScene) {
+  private drawObject(
+    item: WorldRenderObjectItem,
+    scene: WorldRenderScene,
+    drawBounds = true,
+  ) {
     if (!this.lgrAssets) return;
     const shouldShowBounds = item.showBounds ?? false;
     if (
@@ -331,7 +366,7 @@ export class WebGLWorldItemDrawer {
       }
     }
 
-    if (shouldShowBounds) {
+    if (drawBounds && shouldShowBounds) {
       this.shapes.drawCircleOutline(
         item.position,
         OBJECT_DIAMETER / 2,
@@ -345,6 +380,7 @@ export class WebGLWorldItemDrawer {
   private drawStart(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "start" }>,
     scene: WorldRenderScene,
+    drawBounds = true,
   ) {
     const shouldShowBounds = item.showBounds ?? false;
     if (!scene.visibility.showObjects && !shouldShowBounds) return;
@@ -384,7 +420,7 @@ export class WebGLWorldItemDrawer {
       }
     }
 
-    if (shouldShowBounds) {
+    if (drawBounds && shouldShowBounds) {
       for (const circle of getKuskiSelectionCircles({
         start: item.position,
         coords: defaultBikeCoords,
