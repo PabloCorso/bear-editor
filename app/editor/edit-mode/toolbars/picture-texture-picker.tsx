@@ -11,10 +11,19 @@ const PICKER_PREVIEW_MAX_WIDTH_PX = 96;
 const PICKER_PREVIEW_MAX_HEIGHT_PX = 86;
 const PICKER_PREVIEW_MIN_SIZE_PX = 34;
 const TRUE_SIZE_PREVIEW_WEIGHT = 0.3;
+const spriteTitles: Record<string, string> = {
+  st3top: "Stone 3 top",
+  supphred: "Support horizontal",
+  suppvred: "Support vertical",
+  susp: "Suspension",
+  suspdown: "Suspension down",
+  suspup: "Suspension up",
+};
 
 type PictureTexturePickerItem = {
   key: string;
   label: string;
+  title?: string;
   previewSrc?: string;
   previewClassName?: string;
   width?: number;
@@ -57,6 +66,7 @@ export function PictureTexturePicker({
                   onClick={item.onActivate}
                 >
                   <span
+                    title={item.title}
                     className={cn(
                       "block truncate text-center text-[10px] leading-3 font-medium text-secondary group-hover:text-primary",
                       pickerLabelClassName,
@@ -151,6 +161,11 @@ function getPreviewFrameStyle({
   };
 }
 
-export function capitalizeSpriteName(name: string) {
-  return name.charAt(0).toUpperCase() + name.slice(1);
+export function formatSpriteTitle(name: string) {
+  const spriteTitle = spriteTitles[name];
+  if (spriteTitle) return spriteTitle;
+
+  const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
+
+  return capitalizedName.replace(/^([^0-9]+?)([0-9]+)$/, "$1 $2");
 }

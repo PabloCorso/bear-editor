@@ -17,7 +17,7 @@ import {
   type TextureToolState,
 } from "~/editor/edit-mode/tools/texture-tool";
 import {
-  capitalizeSpriteName,
+  formatSpriteTitle,
   PictureTexturePicker,
 } from "./picture-texture-picker";
 
@@ -53,7 +53,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
         texture.texture === selectedTexture && textureMask === selectedMask;
       const distance = isSelected ? selectedDistance : texture.distance;
       const clip = isSelected ? selectedClip : texture.clip;
-      const textureLabel = capitalizeSpriteName(texture.texture);
+      const textureLabel = formatSpriteTitle(texture.texture);
       const activateTexture = () => {
         setToolState<TextureToolState>(defaultTools.texture.id, {
           ...texture,
@@ -66,6 +66,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
       return {
         key: `${textureMask}-${texture.texture}`,
         label: textureLabel,
+        title: texture.texture,
         previewSrc: sprite.maskedSrc ?? sprite.src,
         previewClassName: getTexturePreviewClassName(textureMask),
         width: sprite.width,

@@ -15,7 +15,7 @@ import {
   type PictureToolState,
 } from "~/editor/edit-mode/tools/picture-tool";
 import {
-  capitalizeSpriteName,
+  formatSpriteTitle,
   PictureTexturePicker,
 } from "./picture-texture-picker";
 
@@ -41,7 +41,7 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     const isSelected = picture.name === selectedPictureName;
     const distance = isSelected ? selectedDistance : picture.distance;
     const clip = isSelected ? selectedClip : picture.clip;
-    const pictureLabel = capitalizeSpriteName(picture.name);
+    const pictureLabel = formatSpriteTitle(picture.name);
     const activatePicture = () => {
       setToolState<PictureToolState>(defaultTools.picture.id, {
         ...picture,
@@ -53,6 +53,7 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     return {
       key: picture.name,
       label: pictureLabel,
+      title: picture.name,
       previewSrc: sprite.src,
       width: sprite.width,
       height: sprite.height,
