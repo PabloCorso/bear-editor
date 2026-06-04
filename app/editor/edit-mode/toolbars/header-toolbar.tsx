@@ -384,9 +384,6 @@ function MainDropdownMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
             className="relative w-14 gap-0"
             aria-label="Bear Level Editor"
           >
-            <span className="absolute -top-0 right-0.5 rounded-full bg-blue-500 px-1 text-[8px] font-semibold">
-              BETA
-            </span>
             <Logo className="isolate h-8 w-8" />
             <Icon size="xs">
               <CaretDownIcon />
