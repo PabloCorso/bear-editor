@@ -193,7 +193,10 @@ export function decodeLgrSpritePixels(
   picture: PictureData,
   declaration?: PictureDeclarationLike,
 ) {
-  const normalizedName = picture.name.trim().toLowerCase();
+  const normalizedName = picture.name
+    .trim()
+    .toLowerCase()
+    .replace(/\.pcx$/, "");
   const bytes = new Uint8Array(
     picture.data.buffer,
     picture.data.byteOffset,
