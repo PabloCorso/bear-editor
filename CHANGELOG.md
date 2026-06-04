@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## 2026-04-06
 
 - Add picture properties for distance and clipping.
+- Add custom LGR support in level properties.
+- Show boundary outlines when enabled above pictures and textures for better visibility.
 
 ## 2026-17-05
 

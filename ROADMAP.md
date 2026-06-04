@@ -4,13 +4,6 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
-- Match features set of in-game editor:
-  - General help dialog
-  - Level properties:
-    - LGR file
-    - Add support for 1-9 food animation numbers. Default LGR use 1-2, use modulo for higher numbers.
-  - Zoom level info.
-
 - Better save safety.
   - Save state to local storage and show a recover message on init. One entry per tab and show a dialog with recover or clear up saved state.
 
