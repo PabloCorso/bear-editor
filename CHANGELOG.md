@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-04-06
+
+- Add picture properties for distance and clipping.
+
 ## 2026-17-05
 
 - @Labs reported that the invisible grass in the sky was confusing, so now polygon lines are visible by default to make it clearer. Split grass and ground bounds into separate visibility options.
