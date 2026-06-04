@@ -35,7 +35,11 @@ export function TooltipContent({
 }: TooltipContentProps) {
   return (
     <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner sideOffset={sideOffset} {...props}>
+      <TooltipPrimitive.Positioner
+        className="z-[70]"
+        sideOffset={sideOffset}
+        {...props}
+      >
         <TooltipPrimitive.Popup
           className={cn(
             "z-50 overflow-hidden rounded-md border border-default bg-screen px-3 py-1.5 text-sm shadow-md",
