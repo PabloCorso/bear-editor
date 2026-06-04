@@ -14,8 +14,10 @@ import {
   defaultPictureState,
   type PictureToolState,
 } from "~/editor/edit-mode/tools/picture-tool";
-import { Toolbar } from "~/components/ui/toolbar";
-import { cn } from "~/utils/misc";
+import {
+  capitalizeSpriteName,
+  PictureTexturePicker,
+} from "./picture-texture-picker";
 
 export function PictureToolControl(props: ToolControlButtonProps) {
   const pictureTool = useEditorToolState<PictureToolState>(
@@ -26,6 +28,64 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   const selectedPictureName = pictureTool?.name ?? defaultPictureState.name;
   const sprite = useLgrSprite(selectedPictureName);
   const pictureSprites = usePictureSprites();
+  const maxPictureSpriteDimension = Math.max(
+    ...pictureSprites.map(({ width = 0, height = 0 }) =>
+      Math.max(width, height),
+    ),
+    1,
+  );
+  const selectedDistance =
+    pictureTool?.distance ?? defaultPictureState.distance;
+  const selectedClip = pictureTool?.clip ?? defaultPictureState.clip;
+  const pickerItems = pictureSprites.map(({ picture, ...sprite }) => {
+    const isSelected = picture.name === selectedPictureName;
+    const distance = isSelected ? selectedDistance : picture.distance;
+    const clip = isSelected ? selectedClip : picture.clip;
+    const pictureLabel = capitalizeSpriteName(picture.name);
+    const activatePicture = () => {
+      setToolState<PictureToolState>(defaultTools.picture.id, {
+        ...picture,
+        distance,
+        clip,
+      });
+    };
+
+    return {
+      key: picture.name,
+      label: pictureLabel,
+      previewSrc: sprite.src,
+      width: sprite.width,
+      height: sprite.height,
+      distance,
+      clip,
+      defaultDistance: picture.distance,
+      defaultClip: picture.clip,
+      isSelected,
+      onActivate: activatePicture,
+      onDistanceChange: (distance: number) => {
+        setToolState<PictureToolState>(defaultTools.picture.id, {
+          ...picture,
+          distance,
+          clip,
+        });
+      },
+      onClipChange: (clip: PictureToolState["clip"]) => {
+        setToolState<PictureToolState>(defaultTools.picture.id, {
+          ...picture,
+          distance,
+          clip,
+        });
+      },
+      onResetDefaults: () => {
+        setToolState<PictureToolState>(defaultTools.picture.id, {
+          ...picture,
+          distance: picture.distance,
+          clip: picture.clip,
+        });
+      },
+    };
+  });
+
   return (
     <ToolControlMenu
       id={defaultTools.picture.id}
@@ -39,35 +99,10 @@ export function PictureToolControl(props: ToolControlButtonProps) {
         </ToolControlButton>
       }
     >
-      <div className="pointer-events-auto max-h-full overflow-y-auto">
-        <Toolbar orientation="vertical">
-          <ul className="flex flex-col gap-2.5">
-            {pictureSprites.map(({ picture, ...sprite }) => {
-              const isSelected = picture.name === selectedPictureName;
-
-              return (
-                <li key={picture.name}>
-                  <button
-                    className={cn(
-                      "inline-flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded p-1.5 text-sm font-bold transition-colors hover:bg-primary-hover/80 active:bg-primary-active/80",
-                      isSelected && "bg-primary-hover/50",
-                    )}
-                    aria-pressed={isSelected}
-                    onClick={() => {
-                      setToolState<PictureToolState>(
-                        defaultTools.picture.id,
-                        picture,
-                      );
-                    }}
-                  >
-                    <PictureIcon className="h-full w-full" src={sprite.src} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </Toolbar>
-      </div>
+      <PictureTexturePicker
+        items={pickerItems}
+        maxSpriteDimension={maxPictureSpriteDimension}
+      />
     </ToolControlMenu>
   );
 }

@@ -16,8 +16,10 @@ import {
   defaultTextureState,
   type TextureToolState,
 } from "~/editor/edit-mode/tools/texture-tool";
-import { Toolbar } from "~/components/ui/toolbar";
-import { cn } from "~/utils/misc";
+import {
+  capitalizeSpriteName,
+  PictureTexturePicker,
+} from "./picture-texture-picker";
 
 export function TextureToolControl(props: ToolControlButtonProps) {
   const textureTool = useEditorToolState<TextureToolState>(
@@ -25,6 +27,15 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   );
   const { setToolState } = useEditorActions();
   const textureSprites = useTextureMaskSprites();
+  const maxTextureSpriteDimension = Math.max(
+    ...textureSprites.map(({ width = 0, height = 0 }) =>
+      Math.max(width, height),
+    ),
+    1,
+  );
+  const texturePickerSprites = standardSprites.textureMasks.flatMap((mask) =>
+    textureSprites.filter((sprite) => sprite.mask === mask),
+  );
   const selectedTexture = textureTool?.texture ?? defaultTextureState.texture;
   const selectedMask = textureTool?.mask ?? standardSprites.textureMasks[0];
   const selectedTextureSprite = textureSprites.find(
@@ -33,6 +44,66 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   );
   const textureSrc =
     selectedTextureSprite?.maskedSrc ?? selectedTextureSprite?.src;
+  const selectedDistance =
+    textureTool?.distance ?? defaultTextureState.distance;
+  const selectedClip = textureTool?.clip ?? defaultTextureState.clip;
+  const pickerItems = texturePickerSprites.map(
+    ({ texture, mask: textureMask, ...sprite }) => {
+      const isSelected =
+        texture.texture === selectedTexture && textureMask === selectedMask;
+      const distance = isSelected ? selectedDistance : texture.distance;
+      const clip = isSelected ? selectedClip : texture.clip;
+      const textureLabel = capitalizeSpriteName(texture.texture);
+      const activateTexture = () => {
+        setToolState<TextureToolState>(defaultTools.texture.id, {
+          ...texture,
+          mask: textureMask,
+          distance,
+          clip,
+        });
+      };
+
+      return {
+        key: `${textureMask}-${texture.texture}`,
+        label: textureLabel,
+        previewSrc: sprite.maskedSrc ?? sprite.src,
+        previewClassName: getTexturePreviewClassName(textureMask),
+        width: sprite.width,
+        height: sprite.height,
+        distance,
+        clip,
+        defaultDistance: texture.distance,
+        defaultClip: texture.clip,
+        isSelected,
+        onActivate: activateTexture,
+        onDistanceChange: (distance: number) => {
+          setToolState<TextureToolState>(defaultTools.texture.id, {
+            ...texture,
+            mask: textureMask,
+            distance,
+            clip,
+          });
+        },
+        onClipChange: (clip: TextureToolState["clip"]) => {
+          setToolState<TextureToolState>(defaultTools.texture.id, {
+            ...texture,
+            mask: textureMask,
+            distance,
+            clip,
+          });
+        },
+        onResetDefaults: () => {
+          setToolState<TextureToolState>(defaultTools.texture.id, {
+            ...texture,
+            mask: textureMask,
+            distance: texture.distance,
+            clip: texture.clip,
+          });
+        },
+      };
+    },
+  );
+
   return (
     <ToolControlMenu
       id={defaultTools.texture.id}
@@ -49,54 +120,10 @@ export function TextureToolControl(props: ToolControlButtonProps) {
         </ToolControlButton>
       }
     >
-      <div className="pointer-events-auto max-h-full overflow-y-auto">
-        <Toolbar orientation="vertical">
-          <ul className="flex flex-col gap-2.5">
-            {standardSprites.textureMasks.map((mask) => (
-              <li key={mask}>
-                <ul className="flex flex-col gap-2.5">
-                  {textureSprites
-                    .filter((sprite) => sprite.mask === mask)
-                    .map(({ texture, mask: textureMask, ...sprite }) => {
-                      const isSelected =
-                        texture.texture === selectedTexture &&
-                        textureMask === selectedMask;
-
-                      return (
-                        <li key={`${textureMask}-${texture.texture}`}>
-                          <button
-                            className={cn(
-                              "inline-flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded p-1.5 text-sm font-bold transition-colors hover:bg-primary-hover/80 active:bg-primary-active/80",
-                              isSelected && "bg-primary-hover/50",
-                            )}
-                            aria-pressed={isSelected}
-                            onClick={() => {
-                              setToolState<TextureToolState>(
-                                defaultTools.texture.id,
-                                {
-                                  ...texture,
-                                  mask: textureMask,
-                                },
-                              );
-                            }}
-                            title={`${texture.texture} (${textureMask})`}
-                          >
-                            <PictureIcon
-                              className={getTexturePreviewClassName(
-                                textureMask,
-                              )}
-                              src={sprite.maskedSrc ?? sprite.src}
-                            />
-                          </button>
-                        </li>
-                      );
-                    })}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        </Toolbar>
-      </div>
+      <PictureTexturePicker
+        items={pickerItems}
+        maxSpriteDimension={maxTextureSpriteDimension}
+      />
     </ToolControlMenu>
   );
 }

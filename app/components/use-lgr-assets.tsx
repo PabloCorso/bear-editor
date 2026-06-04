@@ -92,17 +92,20 @@ export function useTextureMaskSprites() {
   return useMemo(() => {
     const textureSprites = lgrAssets.lgr?.getTextureSprites() ?? [];
     return standardSprites.textureMasks.flatMap((mask) =>
-      textureSprites.map(({ texture, sprite }) => ({
-        texture,
-        mask,
-        src: lgrAssets.lgr?.getSpritePreview(texture.texture),
-        maskedSrc: lgrAssets.lgr?.getMaskedTexturePreview(
-          texture.texture,
+      textureSprites.map(({ texture }) => {
+        const maskSprite = lgrAssets.lgr?.getSprite(mask);
+        return {
+          texture,
           mask,
-        ),
-        width: sprite?.width,
-        height: sprite?.height,
-      })),
+          src: lgrAssets.lgr?.getSpritePreview(texture.texture),
+          maskedSrc: lgrAssets.lgr?.getMaskedTexturePreview(
+            texture.texture,
+            mask,
+          ),
+          width: maskSprite?.width,
+          height: maskSprite?.height,
+        };
+      }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lgrAssets.lgr, lgrAssets.isLoaded]);

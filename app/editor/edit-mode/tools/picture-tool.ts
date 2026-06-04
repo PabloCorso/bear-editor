@@ -34,6 +34,7 @@ export class PictureTool extends Tool<PictureToolState> {
       defaultPictureState;
     state.actions.addPicture({
       ...defaults,
+      ...toolState,
       name: toolState.name,
       texture: "",
       mask: "",
@@ -51,6 +52,7 @@ export class PictureTool extends Tool<PictureToolState> {
       defaultPictureState;
     const picture: Picture = {
       ...defaults,
+      ...toolState,
       name: toolState.name,
       texture: "",
       mask: "",

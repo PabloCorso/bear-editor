@@ -522,15 +522,16 @@ export class EditorEngine {
   private handleRightClick = (event: MouseEvent) => {
     event.preventDefault();
     const state = this.store.getState();
+    const context = getEventContext(
+      event,
+      this.canvas,
+      state.viewPortOffset,
+      state.zoom,
+    );
+    this.updateSelectHoverState(state, context.worldPos);
 
-    const activeTool = state.actions.getActiveTool();
+    const activeTool = this.store.getState().actions.getActiveTool();
     if (activeTool?.onRightClick) {
-      const context = getEventContext(
-        event,
-        this.canvas,
-        state.viewPortOffset,
-        state.zoom,
-      );
       const consumed = activeTool.onRightClick(event, context);
       if (consumed) return;
     }

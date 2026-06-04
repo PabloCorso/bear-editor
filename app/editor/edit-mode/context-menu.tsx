@@ -9,12 +9,13 @@ import {
 } from "~/editor/edit-mode/tools/select-tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import { AppleToolbar } from "~/editor/edit-mode/toolbars/apple-tool-control";
+import { PicturePropertiesToolbar } from "~/editor/edit-mode/toolbars/picture-properties-toolbar";
 import { VertexContextMenuToolbar } from "~/editor/edit-mode/toolbars/vertex-tool-control";
 import { OBJECT_DIAMETER } from "~/editor/constants";
 import { worldToScreen } from "~/editor/helpers/coordinate-helpers";
 import { useEditor } from "~/editor/use-editor-store";
 import { Popover, PopoverContent } from "~/components/ui/popover";
-import type { Position } from "~/editor/elma-types";
+import type { Picture, Position } from "~/editor/elma-types";
 
 const TOOLBAR_OFFSET_PX = 12;
 const TOOLBAR_COLLISION_PADDING_PX = 8;
@@ -24,7 +25,7 @@ type PointAnchor = {
 };
 
 export function EditorContextMenu() {
-  const { updateApple, setPolygons } = useEditorActions();
+  const { updateApple, setPictures, setPolygons } = useEditorActions();
   const selectToolState = useEditorToolState<SelectToolState>(
     defaultTools.select.id,
   );
@@ -32,15 +33,21 @@ export function EditorContextMenu() {
   const viewPortOffset = useEditor((state) => state.viewPortOffset);
   const zoom = useEditor((state) => state.zoom);
   const polygons = useEditor((state) => state.polygons);
+  const pictures = useEditor((state) => state.pictures);
 
   const contextMenuType = selectToolState?.contextMenuType;
   if (!contextMenuType) return null;
 
   const selectedApple = selectToolState.selectedObjects[0];
   const selectedPolygon = selectToolState.selectedVertices[0]?.polygon;
+  const selectedPicturePosition = selectToolState.selectedPictures[0];
+  const selectedPicture = selectedPicturePosition
+    ? findPictureByPosition(pictures, selectedPicturePosition)
+    : null;
 
   if (contextMenuType === "apple" && !selectedApple) return null;
   if (contextMenuType === "vertex" && !selectedPolygon) return null;
+  if (contextMenuType === "picture" && !selectedPicture) return null;
 
   const canvas =
     typeof document === "undefined" ? null : document.querySelector("canvas");
@@ -137,8 +144,53 @@ export function EditorContextMenu() {
           />
         </PopoverContent>
       ) : null}
+      {contextMenuType === "picture" && selectedPicture ? (
+        <PopoverContent
+          anchor={anchor}
+          positionMethod="fixed"
+          initialFocus={(openType) => openType === "keyboard"}
+          finalFocus={false}
+          side="top"
+          align="center"
+          sideOffset={TOOLBAR_OFFSET_PX}
+          collisionBoundary={collisionBoundary}
+          collisionPadding={TOOLBAR_COLLISION_PADDING_PX}
+          collisionAvoidance={{
+            side: "flip",
+            align: "shift",
+            fallbackAxisSide: "none",
+          }}
+          className="z-50 outline-hidden"
+        >
+          <PicturePropertiesToolbar
+            tabIndex={-1}
+            distance={selectedPicture.distance}
+            clip={selectedPicture.clip}
+            onDistanceChange={(distance) => {
+              setPictures(
+                pictures.map((picture) =>
+                  picture === selectedPicture
+                    ? { ...picture, distance }
+                    : picture,
+                ),
+              );
+            }}
+            onClipChange={(clip) => {
+              setPictures(
+                pictures.map((picture) =>
+                  picture === selectedPicture ? { ...picture, clip } : picture,
+                ),
+              );
+            }}
+          />
+        </PopoverContent>
+      ) : null}
     </Popover>
   );
+}
+
+function findPictureByPosition(pictures: Picture[], position: Position) {
+  return pictures.find((picture) => picture.position === position) ?? null;
 }
 
 function createRectAnchor(

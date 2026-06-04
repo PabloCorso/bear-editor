@@ -43,6 +43,7 @@ export class TextureTool extends Tool<TextureToolState> {
 
     state.actions.addPicture({
       ...defaults,
+      ...toolState,
       name: "",
       texture: toolState.texture,
       mask,
@@ -63,6 +64,7 @@ export class TextureTool extends Tool<TextureToolState> {
       ) || defaultTextureState;
     const picture: Picture = {
       ...defaults,
+      ...toolState,
       name: "",
       texture: toolState.texture,
       mask: maskName,

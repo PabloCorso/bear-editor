@@ -18,6 +18,16 @@ export function PopoverTrigger({ ...props }: PopoverTriggerProps) {
   return <PopoverPrimitive.Trigger render={children} {...triggerProps} />;
 }
 
+export type PopoverCloseProps = Omit<
+  React.ComponentProps<typeof PopoverPrimitive.Close>,
+  "children" | "render"
+> & { children: React.ReactElement };
+
+export function PopoverClose(props: PopoverCloseProps) {
+  const { children, ...closeProps } = props;
+  return <PopoverPrimitive.Close render={children} {...closeProps} />;
+}
+
 export type PopoverContentProps = Omit<
   React.ComponentProps<typeof PopoverPrimitive.Positioner>,
   "children" | "className"
@@ -28,10 +38,12 @@ export type PopoverContentProps = Omit<
   > & {
     children?: React.ReactNode;
     className?: string;
+    positionerClassName?: string;
   };
 
 export function PopoverContent({
   className,
+  positionerClassName,
   align = "center",
   sideOffset = 8,
   children,
@@ -41,6 +53,7 @@ export function PopoverContent({
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
         align={align}
+        className={cn("z-40", positionerClassName)}
         sideOffset={sideOffset}
         {...props}
       >

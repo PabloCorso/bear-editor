@@ -4,7 +4,7 @@ import {
 } from "~/editor/level-visibility";
 import { useEditor, useEditorActions } from "~/editor/use-editor-store";
 import {
-  ArrowsClockwiseIcon,
+  ArrowCounterClockwiseIcon,
   CaretDownIcon,
   CheckIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -185,7 +185,7 @@ export function LevelVisibilityControls({
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
         <DropdownMenuItem
-          iconBefore={<ArrowsClockwiseIcon />}
+          iconBefore={<ArrowCounterClockwiseIcon />}
           onClick={onReset}
           closeOnClick={false}
           disabled={!canReset}

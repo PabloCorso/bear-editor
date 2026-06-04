@@ -113,7 +113,7 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   onRightClick(_event: MouseEvent, context: EventContext) {
-    const { state, setToolState } = this.getState();
+    const { state, toolState, setToolState } = this.getState();
     this.pruneHiddenSelection();
 
     const object = this.isObjectSelectable()
@@ -127,6 +127,35 @@ export class SelectTool extends Tool<SelectToolState> {
       this.selectObject(object);
       setToolState({
         contextMenuType: "apple",
+        contextMenuPosition: { x: context.screenX, y: context.screenY },
+      });
+      return true;
+    }
+
+    const hoveredPicture = toolState?.hoveredPictureBounds?.position;
+    if (hoveredPicture) {
+      this.clear();
+      this.selectPicture(hoveredPicture);
+      setToolState({
+        contextMenuType: "picture",
+        contextMenuPosition: { x: context.screenX, y: context.screenY },
+      });
+      return true;
+    }
+
+    const selectablePictures = state.pictures.filter((picture) =>
+      this.isPictureSelectable(picture),
+    );
+    const picture = findObjectNearPosition(
+      context.worldPos,
+      selectablePictures.map((p) => p.position),
+      selectionThresholds.object / state.zoom,
+    );
+    if (picture) {
+      this.clear();
+      this.selectPicture(picture);
+      setToolState({
+        contextMenuType: "picture",
         contextMenuPosition: { x: context.screenX, y: context.screenY },
       });
       return true;
