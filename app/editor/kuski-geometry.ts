@@ -41,6 +41,7 @@ export const defaultBikeCoords = {
   rightR: 0.42,
   headX: 0,
   headY: 439,
+  turnProgress: 1,
   voltDirection: null as "right" | "left" | null,
   voltProgress: 0,
 };

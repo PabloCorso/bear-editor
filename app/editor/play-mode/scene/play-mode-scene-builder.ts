@@ -44,6 +44,9 @@ const pictureBoundsCache = new WeakMap<object, WorldRect>();
 const VOLT_ARM_ANIMATION_FRAMES = 28;
 const VOLT_ARM_ANIMATION_DURATION =
   VOLT_ARM_ANIMATION_FRAMES * FRAME_INDEX_TO_TIME;
+const TURN_ANIMATION_WALL_SECONDS = 0.55;
+const TURN_ANIMATION_DURATION =
+  TURN_ANIMATION_WALL_SECONDS * 30 * FRAME_INDEX_TO_TIME;
 
 export function buildPlayModeScene({
   state,
@@ -152,6 +155,11 @@ function buildBikeSceneItem(state: GameState): PlayModeSceneDrawItem {
       ? 0
       : (state.gameTime - state.lastVoltTime) / VOLT_ARM_ANIMATION_DURATION;
   const voltProgress = Math.max(0, Math.min(rawVoltProgress, 1));
+  const rawTurnProgress =
+    state.lastTurnTime <= -100
+      ? 1
+      : (state.gameTime - state.lastTurnTime) / TURN_ANIMATION_DURATION;
+  const turnProgress = Math.max(0, Math.min(rawTurnProgress, 1));
 
   return {
     fallback: {
@@ -193,6 +201,7 @@ function buildBikeSceneItem(state: GameState): PlayModeSceneDrawItem {
       // near the torso/neck, not the physics head collision center.
       headX: (motor.bodyR.x - motor.bike.r.x) * 1000,
       headY: (motor.bodyR.y - motor.bike.r.y) * 1000,
+      turnProgress,
       voltDirection: voltProgress > 0 ? state.lastVoltDirection : null,
       voltProgress,
     },

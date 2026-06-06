@@ -50,15 +50,19 @@ export function buildWebGLBikePose({
   const rightRotation = (coords.rightR * Math.PI * 2) / 250;
   const headX = coords.headX / 1000;
   const headY = coords.headY / 1000;
+  const turnProgress = Math.max(0, Math.min(coords.turnProgress ?? 1, 1));
+  const turnScale =
+    turnProgress < 0.999 ? -Math.cos(turnProgress * Math.PI) : 1;
 
   const baseMatrix = translateMatrix(
     translateMatrix(identityMatrix(), start.x, start.y),
     -leftX,
     leftY,
   );
-  const bikeMatrix = turn
+  const targetBikeMatrix = turn
     ? scaleMatrix(rotateMatrix(baseMatrix, -bikeRotation), -1, 1)
     : rotateMatrix(baseMatrix, -bikeRotation);
+  const bikeMatrix = scaleMatrix(targetBikeMatrix, turnScale, 1);
   const suspensionMatrix = scaleMatrix(
     bikeMatrix,
     ELMA_PIXEL_SCALE,

@@ -276,6 +276,7 @@ export function gameFrame(state: GameState, timestamp: number): void {
   // Handle turn
   if (input.wasJustPressed(keys.turn)) {
     motor.flippedBike = !motor.flippedBike;
+    state.lastTurnTime = state.gameTime;
     calculateHeadPosition(motor);
   }
 
