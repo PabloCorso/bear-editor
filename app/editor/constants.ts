@@ -43,6 +43,9 @@ export const colors = {
 export const uiColors = {
   selectionHandleFill: "#ffffff",
   selectionHandleStroke: "#1b3b5c",
+  boundsIdle: "#5ec8ff",
+  boundsHover: "#ffffff",
+  boundsSelected: "#5ec8ff",
   marqueeFill: "rgba(94, 200, 255, 0.16)",
   marqueeStroke: "#5ec8ff",
   pictureBounds: "#5ec8ff",
@@ -57,7 +60,8 @@ export const uiColors = {
 
 export const uiStrokeWidths = {
   boundsIdleScreen: 1,
-  boundsSelectedScreen: 1.4,
+  boundsHoverScreen: 1.5,
+  boundsSelectedScreen: 2.2,
 };
 
 export const debugColors = {

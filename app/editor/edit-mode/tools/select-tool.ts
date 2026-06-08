@@ -9,6 +9,8 @@ import {
   getAllObjects,
   isPointInRect,
   getSelectionBounds,
+  isStartObjectHit,
+  type StartSelectionMode,
 } from "~/editor/helpers/selection-helpers";
 import {
   colors,
@@ -20,6 +22,7 @@ import {
   uiStrokeWidths,
 } from "~/editor/constants";
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
+import type { EditorState } from "~/editor/editor-state";
 import type { EditorStore, PartialEditorState } from "~/editor/editor-store";
 import { defaultTools } from "./default-tools";
 import type { WorldRect } from "~/editor/render/world-geometry";
@@ -30,10 +33,7 @@ import {
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import { checkModifierKey } from "~/utils/misc";
 import fastDeepEqual from "fast-deep-equal";
-import {
-  getKuskiSelectionCircles,
-  isPointInKuskiSelectionBounds,
-} from "~/editor/kuski-geometry";
+import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import { getObjectBoundsRadius } from "~/editor/render/object-assets";
 
 const DUPLICATE_OFFSET_STEP = 1;
@@ -42,11 +42,14 @@ export type SelectToolState = {
   selectedVertices: Array<{ polygon: Polygon; vertex: Position }>;
   selectedObjects: Position[];
   selectedPictures: Position[];
+  isDragging: boolean;
+  isMarqueeSelecting?: boolean;
   hoveredObject?: Position;
   hoveredPictureBounds?: {
     position: Position;
     width: number;
     height: number;
+    distance: number;
   };
   contextMenuType?: "apple" | "killer" | "flower" | "picture" | "vertex";
   contextMenuPosition?: Position;
@@ -101,6 +104,8 @@ export class SelectTool extends Tool<SelectToolState> {
       selectedVertices: [],
       selectedObjects: [],
       selectedPictures: [],
+      isDragging: false,
+      isMarqueeSelecting: false,
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
       contextMenuType: undefined,
@@ -112,13 +117,19 @@ export class SelectTool extends Tool<SelectToolState> {
     this.endDragHistoryBatch(false);
   }
 
-  onRightClick(_event: MouseEvent, context: EventContext) {
+  onRightClick(event: MouseEvent, context: EventContext) {
     const { state, toolState, setToolState } = this.getState();
+    const forceObjectSelection = event.altKey || event.shiftKey;
     this.pruneHiddenSelection();
 
-    const object = this.isObjectSelectable()
-      ? this.findObjectNearPosition(context.worldPos)
-      : null;
+    const hoveredPicture = this.resolveHoveredPictureFromState(
+      state,
+      toolState?.hoveredPictureBounds,
+    );
+    const object =
+      this.isObjectSelectable() && (forceObjectSelection || !hoveredPicture)
+        ? this.findObjectNearPosition(context.worldPos)
+        : null;
     const isApple = object
       ? state.apples.some((a) => a.position === object)
       : false;
@@ -132,28 +143,9 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
 
-    const hoveredPicture = toolState?.hoveredPictureBounds?.position;
     if (hoveredPicture) {
       this.clear();
-      this.selectPicture(hoveredPicture);
-      setToolState({
-        contextMenuType: "picture",
-        contextMenuPosition: { x: context.screenX, y: context.screenY },
-      });
-      return true;
-    }
-
-    const selectablePictures = state.pictures.filter((picture) =>
-      this.isPictureSelectable(picture),
-    );
-    const picture = findObjectNearPosition(
-      context.worldPos,
-      selectablePictures.map((p) => p.position),
-      selectionThresholds.object / state.zoom,
-    );
-    if (picture) {
-      this.clear();
-      this.selectPicture(picture);
+      this.selectPicture(hoveredPicture.position);
       setToolState({
         contextMenuType: "picture",
         contextMenuPosition: { x: context.screenX, y: context.screenY },
@@ -182,29 +174,108 @@ export class SelectTool extends Tool<SelectToolState> {
     return false;
   }
 
+  private resolveHoveredPictureFromState(
+    state: EditorState,
+    hoverState?: SelectToolState["hoveredPictureBounds"],
+  ): Picture | null {
+    if (!hoverState) return null;
+
+    const match = state.pictures.find(
+      (picture) =>
+        picture.position.x === hoverState.position.x &&
+        picture.position.y === hoverState.position.y &&
+        picture.distance === hoverState.distance,
+    );
+    if (match) return match;
+
+    const fallback = state.pictures.find(
+      (picture) =>
+        picture.position.x === hoverState.position.x &&
+        picture.position.y === hoverState.position.y,
+    );
+    if (fallback) return fallback;
+
+    return null;
+  }
+
   onPointerDown(event: PointerEvent, context: EventContext): boolean {
     this.pruneHiddenSelection();
     const { state, toolState } = this.getState();
     const hoveredObject = toolState?.hoveredObject;
-    const hoveredPicture = toolState?.hoveredPictureBounds?.position;
+    const hoveredPicture = this.resolveHoveredPictureFromState(
+      state,
+      toolState?.hoveredPictureBounds,
+    );
 
     const modifier = checkModifierKey(event);
+    const forceObjectSelection = event.altKey || event.shiftKey;
     const isSingleSelect = !modifier;
-
-    const hasSelectedItems =
-      toolState &&
-      (toolState.selectedVertices.length > 0 ||
-        toolState.selectedObjects.length > 0 ||
-        toolState.selectedPictures.length > 0);
-    if (isSingleSelect && !hasSelectedItems) {
-      this.clear();
-    }
 
     const clearIfNewSingleSelect = (isSelected: boolean | undefined) => {
       if (isSingleSelect && !isSelected) {
         this.clear();
       }
     };
+
+    if (toolState?.selectedObjects.length && this.isObjectSelectable()) {
+      const selectedObject = this.findSelectedObjectNearPosition(
+        context.worldPos,
+        toolState.selectedObjects,
+        Math.max(selectionThresholds.object / state.zoom, OBJECT_DIAMETER / 2),
+        {
+          // For already-selected objects, prefer the visual bounds hit-test over
+          // full sprite image so overlapping pictures/textures can still win.
+          useStartImageSelection: false,
+        },
+      );
+      if (selectedObject) {
+        this.selectObject(selectedObject);
+        this.startDragging(context.worldPos);
+        return true;
+      }
+
+      clearIfNewSingleSelect(false);
+    }
+
+    if (hoveredObject) {
+      const isSelected = isObjectSelected(
+        hoveredObject,
+        toolState?.selectedObjects ?? [],
+      );
+      clearIfNewSingleSelect(isSelected);
+      this.selectObject(hoveredObject);
+      this.startDragging(context.worldPos);
+      return true;
+    }
+
+    if (forceObjectSelection && this.isObjectSelectable()) {
+      const object = this.findObjectNearPosition(context.worldPos);
+      if (object) {
+        const isSelected = isObjectSelected(
+          object,
+          toolState?.selectedObjects ?? [],
+        );
+        clearIfNewSingleSelect(isSelected);
+        this.selectObject(object);
+        this.startDragging(context.worldPos);
+        return true;
+      }
+    }
+
+    const object =
+      this.isObjectSelectable() && !hoveredPicture
+        ? this.findObjectNearPosition(context.worldPos)
+        : null;
+    if (object) {
+      const isSelected = isObjectSelected(
+        object,
+        toolState?.selectedObjects ?? [],
+      );
+      clearIfNewSingleSelect(isSelected);
+      this.selectObject(object);
+      this.startDragging(context.worldPos);
+      return true;
+    }
 
     const vertex = this.isPolygonSelectable()
       ? findVertexNearPosition(
@@ -248,51 +319,12 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
 
-    if (hoveredObject) {
-      const isSelected = isObjectSelected(
-        hoveredObject,
-        toolState?.selectedObjects ?? [],
-      );
-      clearIfNewSingleSelect(isSelected);
-      this.selectObject(hoveredObject);
-      this.startDragging(context.worldPos);
-      return true;
-    }
-
     if (hoveredPicture) {
-      const isSelected = toolState?.selectedPictures.includes(hoveredPicture);
-      clearIfNewSingleSelect(isSelected);
-      this.selectPicture(hoveredPicture);
-      this.startDragging(context.worldPos);
-      return true;
-    }
-
-    const selectablePictures = state.pictures.filter((picture) =>
-      this.isPictureSelectable(picture),
-    );
-    const picture = findObjectNearPosition(
-      context.worldPos,
-      selectablePictures.map((p) => p.position),
-      selectionThresholds.object / state.zoom,
-    );
-    if (picture) {
-      const isSelected = toolState?.selectedPictures.includes(picture);
-      clearIfNewSingleSelect(isSelected);
-      this.selectPicture(picture);
-      this.startDragging(context.worldPos);
-      return true;
-    }
-
-    const object = this.isObjectSelectable()
-      ? this.findObjectNearPosition(context.worldPos)
-      : null;
-    if (object) {
-      const isSelected = isObjectSelected(
-        object,
-        toolState?.selectedObjects ?? [],
+      const isSelected = toolState?.selectedPictures.includes(
+        hoveredPicture.position,
       );
       clearIfNewSingleSelect(isSelected);
-      this.selectObject(object);
+      this.selectPicture(hoveredPicture.position);
       this.startDragging(context.worldPos);
       return true;
     }
@@ -318,6 +350,7 @@ export class SelectTool extends Tool<SelectToolState> {
   onPointerUp(_event: PointerEvent, _context: EventContext): boolean {
     if (this.isDragging) {
       this.isDragging = false;
+      this.getState().setToolState({ isDragging: false });
       this.endDragHistoryBatch(true);
       return true;
     }
@@ -325,6 +358,7 @@ export class SelectTool extends Tool<SelectToolState> {
     if (this.isMarqueeSelecting) {
       this.finalizeMarqueeSelection();
       this.isMarqueeSelecting = false;
+      this.getState().setToolState({ isMarqueeSelecting: false });
       return true;
     }
 
@@ -449,41 +483,16 @@ export class SelectTool extends Tool<SelectToolState> {
 
     const overlays: WorldRenderOverlayItem[] = [];
     const handleSize = uiSelectionHandle.halfWidthPx / state.zoom;
-    const idleLineWidth = uiStrokeWidths.boundsIdleScreen / state.zoom;
+    const hoverLineWidth = uiStrokeWidths.boundsHoverScreen / state.zoom;
     const selectedLineWidth = uiStrokeWidths.boundsSelectedScreen / state.zoom;
     const handleStrokeWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
 
     if (!this.isDragging && !this.isMarqueeSelecting && state.mouseOnCanvas) {
-      const { hoveredObject, hoveredPictureBounds } = toolState;
-      const isHoveredPictureSelected =
-        hoveredPictureBounds &&
-        toolState.selectedPictures.includes(hoveredPictureBounds.position);
-      if (hoveredPictureBounds && !isHoveredPictureSelected) {
-        if (
-          rectIntersectsViewport(
-            {
-              minX: hoveredPictureBounds.position.x,
-              minY: hoveredPictureBounds.position.y,
-              maxX:
-                hoveredPictureBounds.position.x + hoveredPictureBounds.width,
-              maxY:
-                hoveredPictureBounds.position.y + hoveredPictureBounds.height,
-            },
-            viewportRect,
-          )
-        ) {
-          overlays.push({
-            type: "rect",
-            position: hoveredPictureBounds.position,
-            width: hoveredPictureBounds.width,
-            height: hoveredPictureBounds.height,
-            strokeColor: uiColors.selectionHandleFill,
-            lineWidth: idleLineWidth,
-          });
-        }
-      }
-
-      if (hoveredObject && !toolState.selectedObjects.includes(hoveredObject)) {
+      const { hoveredObject } = toolState;
+      if (
+        hoveredObject &&
+        !toolState?.selectedObjects.includes(hoveredObject)
+      ) {
         if (hoveredObject === state.start) {
           const circles = getKuskiSelectionCircles({ start: state.start });
           overlays.push(
@@ -491,8 +500,8 @@ export class SelectTool extends Tool<SelectToolState> {
               type: "circle" as const,
               center: { x: circle.x, y: circle.y },
               radius: circle.radius,
-              strokeColor: uiColors.selectionHandleFill,
-              lineWidth: idleLineWidth,
+              strokeColor: uiColors.boundsHover,
+              lineWidth: hoverLineWidth,
             })),
           );
         } else if (isPointVisible(hoveredObject, viewportRect)) {
@@ -500,54 +509,59 @@ export class SelectTool extends Tool<SelectToolState> {
             type: "circle",
             center: hoveredObject,
             radius: OBJECT_DIAMETER / 2,
-            strokeColor: uiColors.selectionHandleFill,
-            lineWidth: idleLineWidth,
+            strokeColor: uiColors.boundsHover,
+            lineWidth: hoverLineWidth,
           });
         }
       }
 
       if (!this.isDragging && this.isPolygonSelectable()) {
-        const hoveredVertex = findVertexNearPosition(
-          state.mousePosition,
-          state.polygons,
-          selectionThresholds.vertex / state.zoom,
-        );
-        if (hoveredVertex) {
-          if (isPointVisible(hoveredVertex.vertex, viewportRect)) {
-            overlays.push(
-              createSelectionHandleOverlay(
-                hoveredVertex.vertex,
-                handleSize,
-                handleStrokeWidth,
-              ),
-            );
-          }
-        }
+        const hoveredObject = toolState.hoveredObject;
 
-        const hoveredPolygon = findPolygonEdgeNearPosition(
-          state.mousePosition,
-          state.polygons,
-          selectionThresholds.polygonEdge / state.zoom,
-          this.isSelectablePolygonEdge,
-        );
-        if (!hoveredVertex && hoveredPolygon) {
-          const polygonSelectionCount = toolState.selectedVertices.filter(
-            (sv) => sv.polygon === hoveredPolygon,
-          ).length;
-          const isHoveredPolygonSelected =
-            polygonSelectionCount === hoveredPolygon.vertices.length &&
-            polygonSelectionCount > 0;
-          if (
-            !isHoveredPolygonSelected &&
-            isPolygonVisible(hoveredPolygon, viewportRect)
-          ) {
-            overlays.push({
-              type: "polyline",
-              points: hoveredPolygon.vertices,
-              closed: true,
-              color: uiColors.selectionHandleFill,
-              width: idleLineWidth,
-            });
+        if (!hoveredObject) {
+          const hoveredVertex = findVertexNearPosition(
+            state.mousePosition,
+            state.polygons,
+            selectionThresholds.vertex / state.zoom,
+          );
+          if (hoveredVertex) {
+            if (isPointVisible(hoveredVertex.vertex, viewportRect)) {
+              overlays.push(
+                createSelectionHandleOverlay(
+                  hoveredVertex.vertex,
+                  handleSize,
+                  handleStrokeWidth,
+                ),
+              );
+            }
+          }
+
+          const hoveredPolygon = findPolygonEdgeNearPosition(
+            state.mousePosition,
+            state.polygons,
+            selectionThresholds.polygonEdge / state.zoom,
+            this.isSelectablePolygonEdge,
+          );
+          if (!hoveredVertex && hoveredPolygon) {
+            const hoveredPolygonBoundsColor = uiColors.boundsHover;
+            const polygonSelectionCount = toolState.selectedVertices.filter(
+              (sv) => sv.polygon === hoveredPolygon,
+            ).length;
+            const isHoveredPolygonSelected =
+              polygonSelectionCount === hoveredPolygon.vertices.length &&
+              polygonSelectionCount > 0;
+            if (
+              !isHoveredPolygonSelected &&
+              isPolygonVisible(hoveredPolygon, viewportRect)
+            ) {
+              overlays.push({
+                type: "polyline",
+                points: hoveredPolygon.vertices,
+                closed: true,
+                color: hoveredPolygonBoundsColor,
+                width: hoverLineWidth,
+              });
+            }
           }
         }
       }
@@ -563,13 +577,18 @@ export class SelectTool extends Tool<SelectToolState> {
             polygon.vertices.length >= 2 &&
             isPolygonVisible(polygon, viewportRect),
         )
-        .map((polygon) => ({
-          type: "polyline" as const,
-          points: polygon.vertices,
-          closed: true,
-          color: polygon.grass ? colors.grass : uiColors.marqueeStroke,
-          width: selectedLineWidth,
-        })),
+        .map((polygon) => {
+          const selectedPolygonBoundsColor = polygon.grass
+            ? colors.grass
+            : uiColors.boundsSelected;
+          return {
+            type: "polyline" as const,
+            points: polygon.vertices,
+            closed: true,
+            color: selectedPolygonBoundsColor,
+            width: selectedLineWidth,
+          };
+        }),
     );
 
     overlays.push(
@@ -591,7 +610,7 @@ export class SelectTool extends Tool<SelectToolState> {
               type: "circle" as const,
               center: { x: circle.x, y: circle.y },
               radius: circle.radius,
-              strokeColor: uiColors.marqueeStroke,
+              strokeColor: uiColors.boundsSelected,
               lineWidth: selectedLineWidth,
             }));
         }
@@ -602,7 +621,7 @@ export class SelectTool extends Tool<SelectToolState> {
             type: "circle" as const,
             center: position,
             radius: getObjectBoundsRadius(),
-            strokeColor: uiColors.marqueeStroke,
+            strokeColor: uiColors.boundsSelected,
             lineWidth: selectedLineWidth,
           },
         ];
@@ -615,13 +634,9 @@ export class SelectTool extends Tool<SelectToolState> {
     const selectedObjectHandlePositions = toolState.selectedObjects.filter(
       (position) => isPointVisible(position, viewportRect),
     );
-    const selectedPictureHandlePositions = toolState.selectedPictures.filter(
-      (position) => isPointVisible(position, viewportRect),
-    );
     const allSelected = [
       ...selectedHandlePositions,
       ...selectedObjectHandlePositions,
-      ...selectedPictureHandlePositions,
     ];
     if (
       allSelected.length <= selectionRenderLimits.maxIndividualHandles &&
@@ -633,19 +648,24 @@ export class SelectTool extends Tool<SelectToolState> {
         ),
       );
     } else {
-      const selectionBounds = getSelectionBoundsForPositions(allSelected);
-      if (selectionBounds) {
-        overlays.push({
-          type: "rect",
-          position: {
-            x: selectionBounds.minX,
-            y: selectionBounds.minY,
-          },
-          width: selectionBounds.maxX - selectionBounds.minX,
-          height: selectionBounds.maxY - selectionBounds.minY,
-          strokeColor: uiColors.marqueeStroke,
-          lineWidth: selectedLineWidth,
-        });
+      if (allSelected.length > 0) {
+        const selectedHandleStride = Math.max(
+          1,
+          Math.ceil(
+            allSelected.length / selectionRenderLimits.maxIndividualHandles,
+          ),
+        );
+        overlays.push(
+          ...allSelected
+            .filter((_, index) => index % selectedHandleStride === 0)
+            .map((position) =>
+              createSelectionHandleOverlay(
+                position,
+                handleSize,
+                handleStrokeWidth,
+              ),
+            ),
+        );
       }
     }
 
@@ -683,6 +703,7 @@ export class SelectTool extends Tool<SelectToolState> {
       selectionThresholds.object / state.zoom,
       OBJECT_DIAMETER / 2,
     );
+    const useImageStartSelection = state.levelVisibility.showObjects;
 
     const apple = findObjectNearPosition(
       position,
@@ -705,11 +726,47 @@ export class SelectTool extends Tool<SelectToolState> {
     );
     if (flower) return flower;
 
-    const start = isPointInKuskiSelectionBounds({
-      point: position,
-      start: state.start,
-    });
+    const start = isStartObjectHit(
+      position,
+      state.start,
+      useImageStartSelection ? "boundsWithImage" : "boundsOnly",
+      useImageStartSelection,
+    );
     if (start) return state.start;
+
+    return null;
+  }
+
+  private findSelectedObjectNearPosition(
+    position: Position,
+    objects: Position[],
+    threshold: number,
+    options?: {
+      useStartImageSelection?: boolean;
+    },
+  ): Position | null {
+    const { state } = this.getState();
+    const startSelectionMode: StartSelectionMode =
+      options?.useStartImageSelection ? "boundsWithImage" : "boundsOnly";
+
+    for (const object of objects) {
+      if (object === state.start) {
+        const isHovered = isStartObjectHit(
+          position,
+          state.start,
+          startSelectionMode,
+          !!(
+            state.levelVisibility.showObjects && options?.useStartImageSelection
+          ),
+        );
+        if (isHovered) return object;
+        continue;
+      }
+
+      if (findObjectNearPosition(position, [object], threshold)) {
+        return object;
+      }
+    }
 
     return null;
   }
@@ -748,6 +805,7 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!toolState) return;
 
     this.isDragging = true;
+    this.getState().setToolState({ isDragging: true });
     this.dragStartPos = worldPos;
     this.dragHasChanges = false;
     this.beginDragHistoryBatch();
@@ -766,6 +824,11 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!modifier) {
       this.clear();
     }
+    this.getState().setToolState({
+      isMarqueeSelecting: true,
+      hoveredObject: undefined,
+      hoveredPictureBounds: undefined,
+    });
     this.isMarqueeSelecting = true;
     this.marqueeStartPos = worldPos;
     this.marqueeEndPos = worldPos;
@@ -1778,23 +1841,4 @@ function rectIntersectsViewport(rect: WorldRect, viewportRect: WorldRect) {
     rect.maxY < viewportRect.minY ||
     rect.minY > viewportRect.maxY
   );
-}
-
-function getSelectionBoundsForPositions(positions: Position[]) {
-  if (positions.length === 0) return null;
-
-  let minX = positions[0]!.x;
-  let maxX = positions[0]!.x;
-  let minY = positions[0]!.y;
-  let maxY = positions[0]!.y;
-
-  for (let index = 1; index < positions.length; index += 1) {
-    const position = positions[index]!;
-    if (position.x < minX) minX = position.x;
-    if (position.x > maxX) maxX = position.x;
-    if (position.y < minY) minY = position.y;
-    if (position.y > maxY) maxY = position.y;
-  }
-
-  return { minX, maxX, minY, maxY };
 }

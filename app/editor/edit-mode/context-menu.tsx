@@ -75,12 +75,19 @@ export function EditorContextMenu() {
       : createRectAnchor(anchorPosition, canvas, { width: 0, height: 0 });
 
   return (
-    <Popover open modal={false}>
+    <Popover
+      open={Boolean(contextMenuType)}
+      modal={false}
+      onOpenChange={(open) => {
+        if (!open) {
+          selectTool?.clear();
+        }
+      }}
+    >
       {contextMenuType === "apple" ? (
         <PopoverContent
           anchor={anchor}
           positionMethod="fixed"
-          initialFocus={(openType) => openType === "keyboard"}
           finalFocus={false}
           side="top"
           align="center"
@@ -113,7 +120,6 @@ export function EditorContextMenu() {
         <PopoverContent
           anchor={anchor}
           positionMethod="fixed"
-          initialFocus={(openType) => openType === "keyboard"}
           finalFocus={false}
           side="top"
           align="start"
@@ -148,7 +154,6 @@ export function EditorContextMenu() {
         <PopoverContent
           anchor={anchor}
           positionMethod="fixed"
-          initialFocus={(openType) => openType === "keyboard"}
           finalFocus={false}
           side="top"
           align="center"

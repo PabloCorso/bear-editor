@@ -9,18 +9,23 @@ import {
   updateZoom,
   fitToView,
 } from "~/editor/helpers/camera-helpers";
-import { OBJECT_DIAMETER, uiSelectionHandle } from "~/editor/constants";
+import {
+  OBJECT_DIAMETER,
+  uiColors,
+  uiSelectionHandle,
+  uiStrokeWidths,
+  selectionThresholds,
+} from "~/editor/constants";
 import type { Tool } from "~/editor/edit-mode/tools/tool-interface";
 import type { Widget } from "~/editor/edit-mode/widgets/widget-interface";
 import { createEditorStore, type EditorStore } from "~/editor/editor-store";
 import type { DefaultLevelPreset } from "~/editor/helpers/level-parser";
-import { isPointInKuskiSelectionBounds } from "~/editor/kuski-geometry";
 import { LgrAssets } from "~/components/lgr-assets";
 import {
   screenToWorld,
   worldToScreen,
 } from "~/editor/helpers/coordinate-helpers";
-import { type Picture, type Position } from "~/editor/elma-types";
+import { Clip, type Picture, type Position } from "~/editor/elma-types";
 import { getDefaultLevel } from "~/editor/helpers/level-parser";
 import { checkModifierKey } from "~/utils/misc";
 import {
@@ -31,7 +36,11 @@ import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import type { EditorDocumentInput } from "~/editor/editor-state";
 import { buildEditorWorldScene } from "~/editor/edit-mode/scene/editor-scene-builder";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
-import { getPictureWorldDimensions } from "~/editor/render/picture-metrics";
+import {
+  getPictureWorldDimensions,
+  getPictureWorldOutlineSegments,
+  isWorldPointInPictureVisiblePixel,
+} from "~/editor/render/picture-metrics";
 import {
   createWorldSceneRenderer,
   type WorldSceneRendererBackend,
@@ -42,6 +51,15 @@ import {
   isPointVisible,
 } from "~/editor/render/world-derived-data-cache";
 import { getViewportWorldRectFromOffset } from "~/editor/render/world-geometry";
+import {
+  findObjectNearPosition,
+  findPolygonEdgeNearPosition,
+  findVertexNearPosition,
+  isStartObjectHit,
+} from "~/editor/helpers/selection-helpers";
+import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
+import type { Polygon } from "~/editor/elma-types";
+import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
 
 type EditorEngineOptions = {
   initialDocument?: EditorDocumentInput;
@@ -65,6 +83,45 @@ type EditorEngineOptions = {
 const KEYBOARD_PAN_STEP = 200;
 const KEYBOARD_ZOOM_STEP_DIVISOR = 100;
 const WHEEL_PAN_MULTIPLIER = 0.5;
+
+type CachedLongestGrassEdge = {
+  vertices: Polygon["vertices"];
+  edgeIndex: number;
+};
+
+const longestGrassEdgeCache = new WeakMap<Polygon, CachedLongestGrassEdge>();
+
+function getLongestGrassEdgeIndex(polygon: Polygon): number {
+  const cached = longestGrassEdgeCache.get(polygon);
+  if (cached && cached.vertices === polygon.vertices) {
+    return cached.edgeIndex;
+  }
+
+  const n = polygon.vertices.length;
+  if (n < 2) {
+    return -1;
+  }
+
+  let longestEdgeIndex = -1;
+  let longestEdgeLengthSquared = -1;
+  for (let i = 0; i < n; i += 1) {
+    const from = polygon.vertices[i];
+    const to = polygon.vertices[(i + 1) % n];
+    const deltaX = to.x - from.x;
+    const deltaY = to.y - from.y;
+    const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+    if (lengthSquared > longestEdgeLengthSquared) {
+      longestEdgeLengthSquared = lengthSquared;
+      longestEdgeIndex = i;
+    }
+  }
+
+  longestGrassEdgeCache.set(polygon, {
+    vertices: polygon.vertices,
+    edgeIndex: longestEdgeIndex,
+  });
+  return longestEdgeIndex;
+}
 
 export class EditorEngine {
   private canvas: HTMLCanvasElement;
@@ -236,8 +293,9 @@ export class EditorEngine {
       state.viewPortOffset,
       state.zoom,
     );
+    const forceObjectSelection = event.shiftKey || event.altKey;
     const activeTool = state.actions.getActiveTool();
-    this.updateSelectHoverState(state, context.worldPos);
+    this.updateSelectHoverState(state, context.worldPos, forceObjectSelection);
 
     if (phase === "down") {
       activeTool?.onPointerDown?.(event, context);
@@ -683,11 +741,15 @@ export class EditorEngine {
     const activeTool = state.actions.getActiveTool();
     if (activeTool?.onKeyDown) {
       const consumed = activeTool.onKeyDown(event, keyboardContext);
-      if (consumed) return;
+      if (consumed) {
+        this.refreshSelectionHoverForModifierKeys(state, event);
+        return;
+      }
     }
 
     const key = event.key.toUpperCase();
     const modifier = checkModifierKey(event);
+    this.refreshSelectionHoverForModifierKeys(state, event);
 
     if (modifier && key === "A") {
       if (state.activeToolId !== "select") {
@@ -775,6 +837,8 @@ export class EditorEngine {
 
   private handleKeyUp = (event: KeyboardEvent) => {
     this.pressedKeys.delete(event.code);
+    const state = this.store.getState();
+    this.refreshSelectionHoverForModifierKeys(state, event);
   };
 
   private zoomInOut(step: number) {
@@ -956,15 +1020,57 @@ export class EditorEngine {
     this.worldRenderer.render(scene);
   }
 
-  private updateSelectHoverState(state: EditorState, worldPos: Position) {
+  private refreshSelectionHoverForModifierKeys(
+    state: EditorState,
+    event: KeyboardEvent,
+  ) {
+    if (
+      state.activeToolId !== "select" ||
+      !state.mouseOnCanvas ||
+      !this.isSelectionModifierKey(event.code)
+    ) {
+      return;
+    }
+
+    this.updateSelectHoverState(
+      state,
+      state.mousePosition,
+      event.shiftKey || event.altKey,
+    );
+  }
+
+  private isSelectionModifierKey(code: string): boolean {
+    return (
+      code === "ShiftLeft" ||
+      code === "ShiftRight" ||
+      code === "AltLeft" ||
+      code === "AltRight" ||
+      code === "AltGraph"
+    );
+  }
+
+  private updateSelectHoverState(
+    state: EditorState,
+    worldPos: Position,
+    forceObjectSelection = false,
+  ) {
     const activeTool = state.actions.getActiveTool();
     if (activeTool?.meta.id !== "select") {
       this.clearSelectHoverState(state);
       return;
     }
 
-    const nextHover = this.resolveSelectHoverTarget(state, worldPos);
-    const currentHover = state.actions.getToolState<SelectToolState>("select");
+    const selectState = state.actions.getToolState<SelectToolState>("select");
+    if (selectState?.isDragging) {
+      return;
+    }
+
+    const nextHover = this.resolveSelectHoverTarget(
+      state,
+      worldPos,
+      forceObjectSelection,
+    );
+    const currentHover = selectState;
     const currentPictureBounds = currentHover?.hoveredPictureBounds;
     const nextPictureBounds = nextHover.hoveredPictureBounds;
 
@@ -972,7 +1078,8 @@ export class EditorEngine {
       currentHover?.hoveredObject === nextHover.hoveredObject &&
       currentPictureBounds?.position === nextPictureBounds?.position &&
       currentPictureBounds?.width === nextPictureBounds?.width &&
-      currentPictureBounds?.height === nextPictureBounds?.height;
+      currentPictureBounds?.height === nextPictureBounds?.height &&
+      currentPictureBounds?.distance === nextPictureBounds?.distance;
     if (isSameHover) return;
 
     state.actions.setToolState<SelectToolState>("select", nextHover);
@@ -993,6 +1100,7 @@ export class EditorEngine {
   private resolveSelectHoverTarget(
     state: EditorState,
     worldPos: Position,
+    forceObjectSelection = false,
   ): Pick<SelectToolState, "hoveredObject" | "hoveredPictureBounds"> {
     const viewportRect = getViewportWorldRectFromOffset({
       width: this.canvas.width,
@@ -1002,14 +1110,101 @@ export class EditorEngine {
       zoom: state.zoom,
     });
 
-    // Objects take precedence over pictures/textures when overlapping.
-    if (this.isObjectSelectable(state)) {
+    // Selection priority:
+    // 1) Active selected objects (for bikes/players we intentionally use bounds-only).
+    // 2) Objects behind/under visible pictures/textures unless forced.
+    // 3) Picture/texture bounds.
+    const pictureCandidates: Array<{
+      picture: Picture;
+      width: number;
+      height: number;
+      isVisible: boolean;
+      fallbackToBounds: boolean;
+    }> = [];
+
+    for (let index = 0; index < state.pictures.length; index++) {
+      const picture = state.pictures[index]!;
+      if (!this.isPictureSelectable(state, picture)) continue;
+      if (
+        !isPictureVisible(picture, viewportRect, (candidate) =>
+          getPictureWorldDimensions(candidate, this.lgrAssets),
+        )
+      ) {
+        continue;
+      }
+      const pictureDimensions = this.getPictureWorldDimensions(picture);
+      if (!pictureDimensions) continue;
+
+      const { width, height } = pictureDimensions;
+      const isInPictureBounds =
+        worldPos.x >= picture.position.x &&
+        worldPos.x <= picture.position.x + width &&
+        worldPos.y >= picture.position.y &&
+        worldPos.y <= picture.position.y + height;
+      if (!isInPictureBounds) continue;
+      const isTexture = Boolean(picture.texture && picture.mask);
+
+      const isVisibleOnTopLayer = this.isPictureCandidateSelectable(
+        state,
+        picture,
+        worldPos,
+      );
+      pictureCandidates.push({
+        picture,
+        width,
+        height,
+        isVisible: isVisibleOnTopLayer,
+        fallbackToBounds: isTexture,
+      });
+    }
+
+    pictureCandidates.sort((a, b) => a.picture.distance - b.picture.distance);
+
+    const frontmostVisiblePicture = pictureCandidates.find(
+      (entry) => entry.isVisible,
+    );
+    const frontmostTextureFallbackPicture = pictureCandidates.find(
+      (entry) => entry.fallbackToBounds,
+    );
+    const isObjectSelectionBlockedByPicture =
+      frontmostVisiblePicture !== undefined &&
+      frontmostVisiblePicture.picture.distance < DEFAULT_OBJECT_RENDER_DISTANCE;
+
+    const toolState = state.actions.getToolState<SelectToolState>("select");
+    if (toolState?.selectedObjects.length && this.isObjectSelectable(state)) {
+      const selectedObject = this.findObjectNearSelectedPosition(
+        worldPos,
+        toolState.selectedObjects,
+        Math.max(selectionThresholds.object / state.zoom, OBJECT_DIAMETER / 2),
+        {
+          // For already-selected objects, prefer visual bounds over full image hit-area
+          // so textures/pictures can win on non-bounds overlap regions.
+          allowStartImageSelection: false,
+        },
+      );
+      if (selectedObject) {
+        return {
+          hoveredObject: selectedObject,
+          hoveredPictureBounds: undefined,
+        };
+      }
+    }
+
+    if (
+      this.isObjectSelectable(state) &&
+      (forceObjectSelection || !isObjectSelectionBlockedByPicture)
+    ) {
+      const useImageStartSelection =
+        state.levelVisibility.showObjects &&
+        this.isStartObjectImageSelectionReady();
       if (
         isPointVisible(state.start, viewportRect) &&
-        isPointInKuskiSelectionBounds({
-          point: worldPos,
-          start: state.start,
-        })
+        isStartObjectHit(
+          worldPos,
+          state.start,
+          useImageStartSelection ? "boundsWithImage" : "boundsOnly",
+          useImageStartSelection,
+        )
       ) {
         return {
           hoveredObject: state.start,
@@ -1038,33 +1233,44 @@ export class EditorEngine {
       }
     }
 
-    for (let index = state.pictures.length - 1; index >= 0; index--) {
-      const picture = state.pictures[index]!;
-      if (!this.isPictureSelectable(state, picture)) continue;
-      if (
-        !isPictureVisible(picture, viewportRect, (candidate) =>
-          getPictureWorldDimensions(candidate, this.lgrAssets),
-        )
-      ) {
-        continue;
+    if (this.isPolygonSelectable(state)) {
+      const hoveredVertex = findVertexNearPosition(
+        worldPos,
+        state.polygons,
+        selectionThresholds.vertex / state.zoom,
+      );
+      if (hoveredVertex) {
+        return {
+          hoveredObject: undefined,
+          hoveredPictureBounds: undefined,
+        };
       }
-      const pictureDimensions = this.getPictureWorldDimensions(picture);
-      if (!pictureDimensions) continue;
 
-      const { width, height } = pictureDimensions;
-      const isHovered =
-        worldPos.x >= picture.position.x &&
-        worldPos.x <= picture.position.x + width &&
-        worldPos.y >= picture.position.y &&
-        worldPos.y <= picture.position.y + height;
-      if (!isHovered) continue;
+      const hoveredEdge = findPolygonEdgeNearPosition(
+        worldPos,
+        state.polygons,
+        selectionThresholds.polygonEdge / state.zoom,
+        (polygon, edgeIndex) =>
+          this.isSelectablePolygonEdge(state, polygon, edgeIndex),
+      );
+      if (hoveredEdge) {
+        return {
+          hoveredObject: undefined,
+          hoveredPictureBounds: undefined,
+        };
+      }
+    }
 
+    const hoveredPicture =
+      frontmostVisiblePicture ?? frontmostTextureFallbackPicture ?? null;
+    if (hoveredPicture) {
       return {
         hoveredObject: undefined,
         hoveredPictureBounds: {
-          position: picture.position,
-          width,
-          height,
+          position: hoveredPicture.picture.position,
+          width: hoveredPicture.width,
+          height: hoveredPicture.height,
+          distance: hoveredPicture.picture.distance,
         },
       };
     }
@@ -1073,6 +1279,103 @@ export class EditorEngine {
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
     };
+  }
+
+  private findObjectNearSelectedPosition(
+    position: Position,
+    objects: Position[],
+    threshold: number,
+    options?: {
+      allowStartImageSelection?: boolean;
+    },
+  ) {
+    const state = this.store.getState();
+    const useImageStartSelection =
+      options?.allowStartImageSelection === true &&
+      state.levelVisibility.showObjects &&
+      this.isStartObjectImageSelectionReady();
+    const startSelectionMode = options?.allowStartImageSelection
+      ? "boundsWithImage"
+      : "boundsOnly";
+
+    for (const object of objects) {
+      if (object === state.start) {
+        const isHovered = isStartObjectHit(
+          position,
+          state.start,
+          startSelectionMode,
+          useImageStartSelection,
+        );
+        if (isHovered) return object;
+        continue;
+      }
+
+      if (findObjectNearPosition(position, [object], threshold)) return object;
+    }
+
+    return null;
+  }
+
+  private isStartObjectImageSelectionReady(): boolean {
+    const requiredSprites = [
+      "q1wheel",
+      "q1susp1",
+      "q1susp2",
+      "q1bike",
+      "q1body",
+      "q1head",
+      "q1thigh",
+      "q1leg",
+      "q1up_arm",
+      "q1forarm",
+    ];
+    return requiredSprites.every((spriteName) =>
+      Boolean(this.lgrAssets.getSprite(spriteName)),
+    );
+  }
+
+  private isSelectablePolygonEdge(
+    state: EditorState,
+    polygon: Polygon,
+    edgeIndex: number,
+  ) {
+    const toolState = state.actions.getToolState<SelectToolState>("select");
+    const polygonSelectionCount =
+      toolState?.selectedVertices.filter((sv) => sv.polygon === polygon)
+        .length ?? 0;
+    const isPolygonFullySelected =
+      polygonSelectionCount === polygon.vertices.length &&
+      polygonSelectionCount > 0;
+    if (isPolygonFullySelected) return true;
+    if (!polygon.grass) return true;
+
+    const longestEdgeIndex = getLongestGrassEdgeIndex(polygon);
+    if (longestEdgeIndex === -1) return false;
+    return edgeIndex !== longestEdgeIndex;
+  }
+
+  private isPicturePixelClippedByRegion(
+    state: EditorState,
+    picture: Picture,
+    point: Position,
+  ): boolean {
+    if (picture.clip === Clip.Unclipped) return true;
+    const isInGround = isWorldPointInGroundRegion(point, state.polygons);
+    return picture.clip === Clip.Ground ? isInGround : !isInGround;
+  }
+
+  private isPictureCandidateSelectable(
+    state: EditorState,
+    picture: Picture,
+    worldPos: Position,
+  ): boolean {
+    const isWithinRegion = this.isPicturePixelClippedByRegion(
+      state,
+      picture,
+      worldPos,
+    );
+    if (!isWithinRegion) return false;
+    return isWorldPointInPictureVisiblePixel(worldPos, picture, this.lgrAssets);
   }
 
   private isObjectSelectable(state: EditorState) {
@@ -1111,6 +1414,65 @@ export class EditorEngine {
   ): WorldRenderOverlayItem[] {
     const overlays: WorldRenderOverlayItem[] = [];
     const selectState = state.actions.getToolState<SelectToolState>("select");
+    if (state.activeToolId !== "select") {
+      return overlays;
+    }
+
+    const hoveredPicture = selectState?.isMarqueeSelecting
+      ? undefined
+      : selectState?.hoveredPictureBounds;
+    const hoveredPictureIsSelected =
+      hoveredPicture &&
+      selectState?.selectedPictures.includes(hoveredPicture.position);
+
+    if (hoveredPicture && !hoveredPictureIsSelected && state.mouseOnCanvas) {
+      const picture =
+        state.pictures.find(
+          (entry) =>
+            entry.position.x === hoveredPicture.position.x &&
+            entry.position.y === hoveredPicture.position.y &&
+            entry.distance === hoveredPicture.distance,
+        ) ??
+        state.pictures.find(
+          (entry) =>
+            entry.position.x === hoveredPicture.position.x &&
+            entry.position.y === hoveredPicture.position.y,
+        );
+      if (picture) {
+        const hoveredDimensions = this.getPictureWorldDimensions(picture);
+        if (hoveredDimensions) {
+          const rect = {
+            minX: hoveredPicture.position.x,
+            minY: hoveredPicture.position.y,
+            maxX: hoveredPicture.position.x + hoveredDimensions.width,
+            maxY: hoveredPicture.position.y + hoveredDimensions.height,
+          };
+          if (
+            !(
+              rect.maxX < viewportRect.minX ||
+              rect.minX > viewportRect.maxX ||
+              rect.maxY < viewportRect.minY ||
+              rect.minY > viewportRect.maxY
+            )
+          ) {
+            const outlineSegments = getPictureWorldOutlineSegments(
+              picture,
+              this.lgrAssets,
+            );
+            if (outlineSegments && outlineSegments.length > 0) {
+              overlays.push(
+                ...outlineSegments.map((segment) => ({
+                  type: "polyline" as const,
+                  points: segment,
+                  color: uiColors.boundsHover,
+                  width: uiStrokeWidths.boundsHoverScreen / state.zoom,
+                })),
+              );
+            }
+          }
+        }
+      }
+    }
 
     for (const position of selectState?.selectedPictures ?? []) {
       const picture = state.pictures.find(
@@ -1136,14 +1498,20 @@ export class EditorEngine {
         continue;
       }
 
-      overlays.push({
-        type: "rect",
-        position: picture.position,
-        width: dimensions.width,
-        height: dimensions.height,
-        strokeColor: "#5ec8ff",
-        lineWidth: 2 / state.zoom,
-      });
+      const outlineSegments = getPictureWorldOutlineSegments(
+        picture,
+        this.lgrAssets,
+      );
+      if (outlineSegments && outlineSegments.length > 0) {
+        overlays.push(
+          ...outlineSegments.map((segment) => ({
+            type: "polyline" as const,
+            points: segment,
+            color: uiColors.boundsSelected,
+            width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
+          })),
+        );
+      }
     }
 
     if (

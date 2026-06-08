@@ -15,6 +15,7 @@ import {
 } from "~/editor/render/affine-math";
 import { getObjectFrame, getObjectSprite } from "~/editor/render/object-assets";
 import { PICTURE_SCALE } from "~/editor/render/picture-metrics";
+import { getPictureWorldOutlineSegments } from "~/editor/render/picture-metrics";
 import { buildWebGLBikePose } from "~/editor/render/webgl-bike-pose";
 import { type WebGLRenderContext } from "~/editor/render/webgl-render-context";
 import { WebGLShapeDrawer } from "~/editor/render/webgl-shape-drawer";
@@ -139,12 +140,15 @@ export class WebGLWorldItemDrawer {
     if (item.type === "object") {
       if (!item.showBounds) return;
 
+      const boundsColor = item.boundsColor ?? colors.selection;
+      const boundsOpacity = item.boundsOpacity ?? 1;
       this.shapes.drawCircleOutline(
         item.position,
         OBJECT_DIAMETER / 2,
         item.boundsLineWidth ?? 0.02,
-        colors.selection,
+        boundsColor,
         scene,
+        boundsOpacity,
       );
       return;
     }
@@ -152,6 +156,8 @@ export class WebGLWorldItemDrawer {
     if (item.type === "start") {
       if (!item.showBounds) return;
 
+      const boundsColor = item.boundsColor ?? colors.selection;
+      const boundsOpacity = item.boundsOpacity ?? 1;
       for (const circle of getKuskiSelectionCircles({
         start: item.position,
         coords: defaultBikeCoords,
@@ -160,27 +166,16 @@ export class WebGLWorldItemDrawer {
           { x: circle.x, y: circle.y },
           circle.radius,
           item.boundsLineWidth ?? 0.02,
-          colors.selection,
+          boundsColor,
           scene,
+          boundsOpacity,
         );
       }
       return;
     }
 
     if (item.type !== "picture" || !item.showBounds) return;
-
-    const dimensions = this.getPictureWorldDimensions(item);
-    if (!dimensions) return;
-
-    this.shapes.drawRectOutline(
-      item.position.x,
-      item.position.y,
-      dimensions.width,
-      dimensions.height,
-      item.boundsLineWidth ?? 0.02,
-      colors.selection,
-      scene,
-    );
+    this.drawPictureOutlineBounds(item, scene);
   }
 
   private drawPicture(
@@ -210,15 +205,7 @@ export class WebGLWorldItemDrawer {
       });
 
       if (drawBounds && item.showBounds) {
-        this.shapes.drawRectOutline(
-          item.position.x,
-          item.position.y,
-          width,
-          height,
-          item.boundsLineWidth ?? 0.02,
-          colors.selection,
-          scene,
-        );
+        this.drawPictureOutlineBounds(item, scene);
       }
       return;
     }
@@ -243,16 +230,33 @@ export class WebGLWorldItemDrawer {
     }
 
     if (drawBounds && item.showBounds) {
-      this.shapes.drawRectOutline(
-        item.position.x,
-        item.position.y,
-        width,
-        height,
-        item.boundsLineWidth ?? 0.02,
-        colors.selection,
-        scene,
-      );
+      this.drawPictureOutlineBounds(item, scene);
     }
+  }
+
+  private drawPictureOutlineBounds(
+    item: WorldRenderPictureItem,
+    scene: WorldRenderScene,
+  ) {
+    const outlineSegments = getPictureWorldOutlineSegments(
+      item,
+      this.lgrAssets,
+    );
+    if (!outlineSegments || outlineSegments.length === 0) return;
+
+    const lineWidth = item.boundsLineWidth ?? 0.02;
+    const boundsColor = item.boundsColor ?? colors.selection;
+    const boundsOpacity = item.boundsOpacity ?? 1;
+    outlineSegments.forEach((segment) => {
+      this.shapes.drawLine(
+        segment[0],
+        segment[1],
+        lineWidth,
+        boundsColor,
+        scene,
+        boundsOpacity,
+      );
+    });
   }
 
   private getPictureWorldDimensions(item: WorldRenderPictureItem) {

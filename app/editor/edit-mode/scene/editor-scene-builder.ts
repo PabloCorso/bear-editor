@@ -1,4 +1,8 @@
-import { DRAFT_PREVIEW_OPACITY, uiStrokeWidths } from "~/editor/constants";
+import {
+  DRAFT_PREVIEW_OPACITY,
+  uiColors,
+  uiStrokeWidths,
+} from "~/editor/constants";
 import type { EditorState } from "~/editor/editor-state";
 import { Clip, type Picture } from "~/editor/elma-types";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
@@ -130,6 +134,8 @@ function getDrawItemQueue(
   const showAnyPictures =
     showPictures || showTextures || showPictureBounds || showTextureBounds;
   const idleBoundsLineWidth = uiStrokeWidths.boundsIdleScreen / state.zoom;
+  const idleBoundsColor = uiColors.boundsIdle;
+  const idleBoundsOpacity = 0.5;
   return [
     ...(showAnyPictures
       ? state.pictures
@@ -151,6 +157,8 @@ function getDrawItemQueue(
               showPictureBounds ||
               (Boolean(picture.texture) && showTextureBounds),
             boundsLineWidth: idleBoundsLineWidth,
+            boundsColor: idleBoundsColor,
+            boundsOpacity: idleBoundsOpacity,
           }))
       : []),
     ...(drafts.pictures ?? []).map((picture) => ({
@@ -165,6 +173,8 @@ function getDrawItemQueue(
       opacity: DRAFT_PREVIEW_OPACITY,
       showBounds: true,
       boundsLineWidth: idleBoundsLineWidth,
+      boundsColor: idleBoundsColor,
+      boundsOpacity: idleBoundsOpacity,
       forceVisible: true,
     })),
     ...(showAnyObjects
@@ -179,6 +189,8 @@ function getDrawItemQueue(
             position: killer,
             showBounds: showObjectBounds,
             boundsLineWidth: idleBoundsLineWidth,
+            boundsColor: idleBoundsColor,
+            boundsOpacity: idleBoundsOpacity,
           }))
       : []),
     ...(drafts.killers ?? []).map((killer) => ({
@@ -190,6 +202,8 @@ function getDrawItemQueue(
       forceVisible: true,
       showBounds: showObjectBounds,
       boundsLineWidth: idleBoundsLineWidth,
+      boundsColor: idleBoundsColor,
+      boundsOpacity: idleBoundsOpacity,
     })),
     ...(showAnyObjects
       ? state.apples
@@ -206,6 +220,8 @@ function getDrawItemQueue(
             gravity: apple.gravity,
             showBounds: showObjectBounds,
             boundsLineWidth: idleBoundsLineWidth,
+            boundsColor: idleBoundsColor,
+            boundsOpacity: idleBoundsOpacity,
           }))
       : []),
     ...(drafts.apples ?? []).map((apple) => ({
@@ -219,6 +235,8 @@ function getDrawItemQueue(
       forceVisible: true,
       showBounds: showObjectBounds,
       boundsLineWidth: idleBoundsLineWidth,
+      boundsColor: idleBoundsColor,
+      boundsOpacity: idleBoundsOpacity,
     })),
     ...(showAnyObjects
       ? state.flowers
@@ -232,6 +250,8 @@ function getDrawItemQueue(
             position: flower,
             showBounds: showObjectBounds,
             boundsLineWidth: idleBoundsLineWidth,
+            boundsColor: idleBoundsColor,
+            boundsOpacity: idleBoundsOpacity,
           }))
       : []),
     ...(drafts.flowers ?? []).map((flower) => ({
@@ -243,6 +263,8 @@ function getDrawItemQueue(
       forceVisible: true,
       showBounds: showObjectBounds,
       boundsLineWidth: idleBoundsLineWidth,
+      boundsColor: idleBoundsColor,
+      boundsOpacity: idleBoundsOpacity,
     })),
     ...(showAnyObjects &&
     (!viewportRect || isPointVisible(state.start, viewportRect))
@@ -253,6 +275,8 @@ function getDrawItemQueue(
             position: state.start,
             showBounds: showObjectBounds,
             boundsLineWidth: idleBoundsLineWidth,
+            boundsColor: idleBoundsColor,
+            boundsOpacity: idleBoundsOpacity,
           },
         ]
       : []),

@@ -45,6 +45,8 @@ export type WorldRenderPictureItem = {
   opacity?: number;
   showBounds?: boolean;
   boundsLineWidth?: number;
+  boundsColor?: string;
+  boundsOpacity?: number;
   forceVisible?: boolean;
   draft?: boolean;
   cacheKey?: object;
@@ -61,6 +63,8 @@ export type WorldRenderObjectItem = {
   opacity?: number;
   showBounds?: boolean;
   boundsLineWidth?: number;
+  boundsColor?: string;
+  boundsOpacity?: number;
   forceVisible?: boolean;
 };
 
@@ -72,6 +76,8 @@ export type WorldRenderStartItem = {
   opacity?: number;
   showBounds?: boolean;
   boundsLineWidth?: number;
+  boundsColor?: string;
+  boundsOpacity?: number;
 };
 
 export type WorldRenderBikeItem = {

@@ -111,6 +111,18 @@ export class LgrAssets {
     return this.lgrSprites[normName]?.bitmap || null;
   }
 
+  getSpritePixels(name: string) {
+    const normName = this.normalizeName(name);
+    const sprite = this.lgrSprites[normName];
+    if (!sprite) return null;
+
+    return {
+      pixels: sprite.pixels,
+      width: sprite.width,
+      height: sprite.height,
+    };
+  }
+
   getSpritePreview(name: string) {
     const normName = this.normalizeName(name);
     const sprite = this.lgrSprites[normName];

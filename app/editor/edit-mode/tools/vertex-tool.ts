@@ -286,8 +286,9 @@ export class VertexTool extends Tool<VertexToolState> {
 
     const overlays: WorldRenderOverlayItem[] = [];
     const isGrass = toolState.drawingPolygon.grass;
-    const strokeColor = isGrass ? colors.grass : uiColors.vertexDraftLine;
-    const selectedLineWidth = uiStrokeWidths.boundsSelectedScreen / state.zoom;
+    const strokeColor = isGrass ? colors.grass : uiColors.boundsIdle;
+    const draftPolygonLineWidth = uiStrokeWidths.boundsIdleScreen / state.zoom;
+    const draftPolygonLineOpacity = 0.75;
     const handleSize = uiSelectionHandle.halfWidthPx / state.zoom;
     const handleStrokeWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
 
@@ -296,7 +297,8 @@ export class VertexTool extends Tool<VertexToolState> {
         type: "polyline",
         points: toolState.drawingPolygon.vertices,
         color: strokeColor,
-        width: selectedLineWidth,
+        width: draftPolygonLineWidth,
+        opacity: draftPolygonLineOpacity,
       });
     }
 
@@ -327,7 +329,8 @@ export class VertexTool extends Tool<VertexToolState> {
         from: isEditingExistingPolygon ? startPoint : lastPoint,
         to: state.mousePosition,
         color: strokeColor,
-        width: selectedLineWidth,
+        width: draftPolygonLineWidth,
+        opacity: draftPolygonLineOpacity,
       });
     }
 
@@ -337,7 +340,8 @@ export class VertexTool extends Tool<VertexToolState> {
           from: isEditingExistingPolygon ? lastPoint : startPoint,
           to: state.mousePosition,
           color: strokeColor,
-          width: selectedLineWidth,
+          width: draftPolygonLineWidth,
+          opacity: draftPolygonLineOpacity,
           dashLength: 8 / state.zoom,
           gapLength: 6 / state.zoom,
         }),
@@ -550,6 +554,7 @@ function createDashedLineOverlays({
   to,
   color,
   width,
+  opacity,
   dashLength,
   gapLength,
 }: {
@@ -557,6 +562,7 @@ function createDashedLineOverlays({
   to: Position;
   color: string;
   width: number;
+  opacity?: number;
   dashLength: number;
   gapLength: number;
 }): WorldRenderOverlayItem[] {
@@ -585,6 +591,7 @@ function createDashedLineOverlays({
       },
       color,
       width,
+      opacity,
     });
     offset += dashLength + gapLength;
   }

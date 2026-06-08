@@ -1,4 +1,9 @@
 import type { Polygon, Position } from "../elma-types";
+import { buildPolygonPath } from "../render/world-geometry";
+
+let cachedGroundRegionPath: Path2D | null = null;
+let cachedGroundRegionPathPolygons: Polygon[] | null = null;
+let groundRegionPathContext: CanvasRenderingContext2D | null | undefined;
 
 export function isPolygonClockwise(vertices: Position[]): boolean {
   let sum = 0;
@@ -67,6 +72,97 @@ export function correctPolygonWinding(
 export function correctPolygonPrecision(polygon: Polygon) {
   const vertices = polygon.vertices.map((pos) => correctVertexPrecision(pos));
   return { ...polygon, vertices };
+}
+
+export function isWorldPointInGroundRegion(
+  point: Position,
+  polygons: Polygon[],
+): boolean {
+  if (polygons.length === 0) return true;
+  if (typeof Path2D !== "undefined") {
+    const groundPath = getCachedGroundRegionPath(polygons);
+    const context = getGroundRegionHitTestContext();
+    if (context) {
+      const isPointInPath = (
+        context as unknown as {
+          isPointInPath: (
+            path: Path2D,
+            x: number,
+            y: number,
+            fillRule?: CanvasFillRule,
+          ) => boolean;
+        }
+      ).isPointInPath;
+      if (typeof isPointInPath === "function") {
+        return !isPointInPath.call(
+          context,
+          groundPath,
+          point.x,
+          point.y,
+          "evenodd",
+        );
+      }
+    }
+  }
+
+  let containmentCount = 0;
+  for (const polygon of polygons) {
+    if (polygon.grass) continue;
+    if (isPointInPolygon(point, polygon.vertices)) {
+      containmentCount += 1;
+    }
+  }
+
+  // Even parity => ground; odd parity => sky.
+  return containmentCount % 2 === 0;
+}
+
+function getGroundRegionHitTestContext() {
+  if (groundRegionPathContext !== undefined) {
+    return groundRegionPathContext;
+  }
+
+  if (typeof document !== "undefined") {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (context) {
+      groundRegionPathContext = context;
+      return context;
+    }
+  }
+
+  const offscreenCanvas = (
+    globalThis as {
+      OffscreenCanvas?: {
+        new (
+          width: number,
+          height: number,
+        ): { getContext: (type: string) => any };
+      };
+    }
+  ).OffscreenCanvas;
+  if (offscreenCanvas) {
+    const canvas = new offscreenCanvas(1, 1);
+    const context = canvas.getContext("2d") as CanvasRenderingContext2D | null;
+    if (context) {
+      groundRegionPathContext = context;
+      return context;
+    }
+  }
+
+  groundRegionPathContext = null;
+  return null;
+}
+
+function getCachedGroundRegionPath(polygons: Polygon[]): Path2D {
+  if (cachedGroundRegionPathPolygons === polygons && cachedGroundRegionPath) {
+    return cachedGroundRegionPath;
+  }
+
+  const groundPath = buildPolygonPath(polygons);
+  cachedGroundRegionPath = groundPath;
+  cachedGroundRegionPathPolygons = polygons;
+  return groundPath;
 }
 
 // Ensure coordinates are floating point (not integers)

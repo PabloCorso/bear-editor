@@ -1,5 +1,10 @@
 import type { LgrAssets } from "~/components/lgr-assets";
-import { colors, ELMA_PIXEL_SCALE } from "~/editor/constants";
+import {
+  colors,
+  ELMA_PIXEL_SCALE,
+  uiColors,
+  uiStrokeWidths,
+} from "~/editor/constants";
 import {
   composeGrassTexture,
   pixelsToWorldUnits,
@@ -151,14 +156,23 @@ export class WebGLPolygonDrawer {
     for (const polygon of scene.polygons) {
       if (polygon.vertices.length < 2) continue;
 
-      const lineWidth = 1 / Math.max(scene.viewport.zoom, 1);
+      const lineWidth =
+        uiStrokeWidths.boundsIdleScreen / Math.max(scene.viewport.zoom, 1);
+      const idlePolygonBoundsOpacity = 0.5;
       if (polygon.isGrass) {
         if (!scene.visibility.showGrassBounds) continue;
 
         for (const index of polygon.grassEdgeIndices) {
           const from = polygon.vertices[index]!;
           const to = polygon.vertices[(index + 1) % polygon.vertices.length]!;
-          this.shapes.drawLine(from, to, lineWidth, colors.grass, scene);
+          this.shapes.drawLine(
+            from,
+            to,
+            lineWidth,
+            colors.grass,
+            scene,
+            idlePolygonBoundsOpacity,
+          );
         }
         continue;
       }
@@ -168,7 +182,14 @@ export class WebGLPolygonDrawer {
       for (let index = 0; index < polygon.vertices.length; index += 1) {
         const from = polygon.vertices[index]!;
         const to = polygon.vertices[(index + 1) % polygon.vertices.length]!;
-        this.shapes.drawLine(from, to, lineWidth, colors.edges, scene);
+        this.shapes.drawLine(
+          from,
+          to,
+          lineWidth,
+          uiColors.boundsIdle,
+          scene,
+          idlePolygonBoundsOpacity,
+        );
       }
     }
   }
