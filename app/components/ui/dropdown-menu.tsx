@@ -58,7 +58,7 @@ const contentAnimationClassName = cn(
 export function DropdownMenuContent({
   className,
   align = "start",
-  sideOffset = 4,
+  sideOffset = 12,
   collisionPadding = 8,
   children,
   finalFocus,

@@ -15,6 +15,9 @@ browser APIs, subscriptions, timers, or imperative event listeners.
 Avoid using `useEffect` for logic that should happen directly in response to a
 user action. Put that logic in the event handler instead.
 
+When adding or changing a keyboard shortcut, document it in the keyboard
+shortcuts dialog so users can discover it.
+
 When `useEffect` is appropriate, always use a named function:
 
 ```tsx

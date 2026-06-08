@@ -16,6 +16,7 @@ import {
   SelectTool,
   type SelectToolState,
 } from "~/editor/edit-mode/tools/select-tool";
+import { useModifier } from "~/utils/misc";
 
 export function SelectToolControl(props: ToolControlButtonProps) {
   return (
@@ -37,6 +38,7 @@ function SelectToolbar() {
   const selectToolState = useEditorToolState<SelectToolState>(
     defaultTools.select.id,
   );
+  const modifier = useModifier();
 
   const hasSelection =
     (selectToolState?.selectedVertices.length ?? 0) > 0 ||
@@ -60,7 +62,7 @@ function SelectToolbar() {
       </ToolButton>
       <ToolButton
         name="Duplicate selection"
-        shortcut="Mod + C, Mod + V"
+        shortcut={`${modifier} + C, ${modifier} + V`}
         tooltipSide="right"
         size="sm"
         disabled={!canDuplicate}
