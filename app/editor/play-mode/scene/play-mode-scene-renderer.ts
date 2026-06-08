@@ -16,6 +16,7 @@ export class PlayModeSceneRenderer {
   private pixelsPerMeter = 48;
   private viewportWidth = 0;
   private viewportHeight = 0;
+  private devicePixelRatio = 1;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -38,6 +39,7 @@ export class PlayModeSceneRenderer {
     const pixelHeight = Math.max(1, Math.round(rect.height * dpr));
     this.viewportWidth = pixelWidth / dpr;
     this.viewportHeight = pixelHeight / dpr;
+    this.devicePixelRatio = dpr;
     this.worldRenderer.resize({
       width: this.viewportWidth,
       height: this.viewportHeight,
@@ -56,14 +58,22 @@ export class PlayModeSceneRenderer {
     if (width <= 0 || height <= 0) return;
     const cam = state.camera;
     const ppm = this.pixelsPerMeter * cam.zoom;
+    const snappedCenter = getDevicePixelSnappedViewportCenter({
+      centerX: cam.x,
+      centerY: -cam.y,
+      width,
+      height,
+      zoom: ppm,
+      devicePixelRatio: this.devicePixelRatio,
+    });
 
     const scene = buildPlayModeScene({
       state,
       viewport: {
         width,
         height,
-        centerX: cam.x,
-        centerY: -cam.y,
+        centerX: snappedCenter.x,
+        centerY: snappedCenter.y,
         zoom: ppm,
       },
       visibility: options?.visibility ?? {
@@ -83,4 +93,35 @@ export class PlayModeSceneRenderer {
     });
     this.worldRenderer.render(scene);
   }
+}
+
+function getDevicePixelSnappedViewportCenter({
+  centerX,
+  centerY,
+  width,
+  height,
+  zoom,
+  devicePixelRatio,
+}: {
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+  zoom: number;
+  devicePixelRatio: number;
+}) {
+  const unitsPerDevicePixel = 1 / Math.max(zoom * devicePixelRatio, 0.0001);
+  const halfWidth = width / (2 * zoom);
+  const halfHeight = height / (2 * zoom);
+  const minX = snapToGrid(centerX - halfWidth, unitsPerDevicePixel);
+  const minY = snapToGrid(centerY - halfHeight, unitsPerDevicePixel);
+
+  return {
+    x: minX + halfWidth,
+    y: minY + halfHeight,
+  };
+}
+
+function snapToGrid(value: number, gridSize: number) {
+  return Math.round(value / gridSize) * gridSize;
 }
