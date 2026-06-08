@@ -23,6 +23,7 @@ const spriteTitles: Record<string, string> = {
 type PictureTexturePickerItem = {
   key: string;
   label: string;
+  secondaryLabel?: string;
   title?: string;
   previewSrc?: string;
   previewClassName?: string;
@@ -54,7 +55,12 @@ export function PictureTexturePicker({
         <ul className="flex w-full flex-col items-stretch">
           {items.map((item, index) => (
             <Fragment key={item.key}>
-              <li className="flex flex-col items-center py-2">
+              <li
+                ref={
+                  item.isSelected ? scrollSelectedPickerItemIntoView : undefined
+                }
+                className="flex flex-col items-center py-2"
+              >
                 <button
                   className={cn(
                     "group flex cursor-pointer flex-col items-center gap-1 rounded py-1 hover:bg-primary-hover/50 hover:text-primary",
@@ -68,12 +74,28 @@ export function PictureTexturePicker({
                   <span
                     title={item.title}
                     className={cn(
-                      "block truncate text-center text-[10px] leading-3 font-medium text-secondary group-hover:text-primary",
+                      "flex items-baseline justify-between gap-1 text-[10px] leading-3",
                       pickerLabelClassName,
-                      item.isSelected && "text-primary",
                     )}
                   >
-                    {item.label}
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 truncate text-left font-medium text-secondary group-hover:text-primary",
+                        item.isSelected && "text-primary",
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                    {item.secondaryLabel ? (
+                      <span
+                        className={cn(
+                          "shrink-0 text-right text-[9px] font-normal text-secondary/70 group-hover:text-primary/70",
+                          item.isSelected && "text-primary/70",
+                        )}
+                      >
+                        {item.secondaryLabel}
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     className="inline-flex items-center justify-center rounded"
@@ -112,6 +134,15 @@ export function PictureTexturePicker({
       </Toolbar>
     </div>
   );
+}
+
+function scrollSelectedPickerItemIntoView(node: HTMLLIElement | null) {
+  if (!node) return;
+
+  node.scrollIntoView({
+    block: "center",
+    inline: "nearest",
+  });
 }
 
 function PickerSeparator() {

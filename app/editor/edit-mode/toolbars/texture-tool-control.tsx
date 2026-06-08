@@ -33,9 +33,6 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     ),
     1,
   );
-  const texturePickerSprites = standardSprites.textureMasks.flatMap((mask) =>
-    textureSprites.filter((sprite) => sprite.mask === mask),
-  );
   const selectedTexture = textureTool?.texture ?? defaultTextureState.texture;
   const selectedMask = textureTool?.mask ?? standardSprites.textureMasks[0];
   const selectedTextureSprite = textureSprites.find(
@@ -47,7 +44,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   const selectedDistance =
     textureTool?.distance ?? defaultTextureState.distance;
   const selectedClip = textureTool?.clip ?? defaultTextureState.clip;
-  const pickerItems = texturePickerSprites.map(
+  const pickerItems = textureSprites.map(
     ({ texture, mask: textureMask, ...sprite }) => {
       const isSelected =
         texture.texture === selectedTexture && textureMask === selectedMask;
@@ -66,7 +63,8 @@ export function TextureToolControl(props: ToolControlButtonProps) {
       return {
         key: `${textureMask}-${texture.texture}`,
         label: textureLabel,
-        title: texture.texture,
+        secondaryLabel: formatMaskTitle(textureMask),
+        title: `${texture.texture} ${textureMask}`,
         previewSrc: sprite.maskedSrc ?? sprite.src,
         previewClassName: getTexturePreviewClassName(textureMask),
         width: sprite.width,
@@ -131,4 +129,19 @@ export function TextureToolControl(props: ToolControlButtonProps) {
 
 function getTexturePreviewClassName(mask: Mask | "") {
   return mask === Mask.Litt ? "h-3 w-3" : "h-full w-full";
+}
+
+function formatMaskTitle(mask: Mask | "") {
+  switch (mask) {
+    case Mask.Big:
+      return "big";
+    case Mask.Horizontal:
+      return "hor";
+    case Mask.Litt:
+      return "litt";
+    case Mask.Top:
+      return "top";
+    default:
+      return "";
+  }
 }

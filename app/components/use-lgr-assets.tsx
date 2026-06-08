@@ -8,7 +8,6 @@ import {
   useState,
 } from "react";
 import { LgrAssets } from "./lgr-assets";
-import { standardSprites } from "./standard-sprites";
 import { loadStoredLgr, loadStoredLgrs, saveStoredLgr } from "./lgr-storage";
 import type { AppleAnimation } from "~/editor/elma-types";
 
@@ -340,21 +339,15 @@ export function useTextureSprites() {
 export function useTextureMaskSprites() {
   const lgrAssets = useLgrAssets();
   return useMemo(() => {
-    const textureSprites = lgrAssets.lgr?.getTextureSprites() ?? [];
-    return standardSprites.textureMasks.flatMap((mask) =>
-      textureSprites.map(({ texture }) => {
-        const maskSprite = lgrAssets.lgr?.getSprite(mask);
-        return {
-          texture,
-          mask,
-          src: lgrAssets.lgr?.getSpritePreview(texture.texture),
-          maskedSrc: lgrAssets.lgr?.getMaskedTexturePreview(
-            texture.texture,
-            mask,
-          ),
-          width: maskSprite?.width,
-          height: maskSprite?.height,
-        };
+    const textureSprites = lgrAssets.lgr?.getTextureMaskSprites() ?? [];
+    return textureSprites.map(
+      ({ texture, mask, maskSprite, src, maskedSrc }) => ({
+        texture,
+        mask,
+        src,
+        maskedSrc,
+        width: maskSprite?.width,
+        height: maskSprite?.height,
       }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps

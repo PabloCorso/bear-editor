@@ -204,6 +204,20 @@ export class LgrAssets {
     }));
   }
 
+  getTextureMaskSprites() {
+    const textureSprites = this.getTextureSprites();
+
+    return textureSprites.flatMap(({ texture }) =>
+      standardSprites.textureMasks.map((mask) => ({
+        texture,
+        mask,
+        maskSprite: this.getSprite(mask),
+        src: this.getSpritePreview(texture.texture),
+        maskedSrc: this.getMaskedTexturePreview(texture.texture, mask),
+      })),
+    );
+  }
+
   getGrassSprites() {
     const qgrass = this.getSprite("qgrass");
     const variants = this.getSpriteEntries()
