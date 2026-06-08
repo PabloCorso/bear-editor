@@ -36,40 +36,34 @@ export function CanvasToolbar({
       )}
       {...props}
     >
-      <CanvasBar>
-        <UntoToolButton engineRef={engineRef} />
+      <Toolbar className="w-fit gap-2">
+        <UndoToolButton engineRef={engineRef} />
         <RedoToolButton engineRef={engineRef} />
-      </CanvasBar>
-      <CanvasBar>
-        <CanvasToolButton
+      </Toolbar>
+      <Toolbar className="w-fit gap-2">
+        <ToolButton
           name="Zoom In"
           shortcut="+"
           onClick={() => engineRef.current?.zoomIn()}
         >
           <PlusIcon />
-        </CanvasToolButton>
-        <CanvasToolButton
+        </ToolButton>
+        <ToolButton
           name="Zoom Out"
           shortcut="-"
           onClick={() => engineRef.current?.zoomOut()}
         >
           <MinusIcon />
-        </CanvasToolButton>
-      </CanvasBar>
-      <CanvasBar>
-        <CanvasToolButton
-          name="Fit to view"
-          shortcut="1"
-          onClick={triggerFitToView}
-        >
+        </ToolButton>
+        <ToolButton name="Fit to view" shortcut="1" onClick={triggerFitToView}>
           <CornersOutIcon />
-        </CanvasToolButton>
-      </CanvasBar>
+        </ToolButton>
+      </Toolbar>
     </div>
   );
 }
 
-function UntoToolButton({
+function UndoToolButton({
   engineRef,
   ...props
 }: ToolButtonProps & {
@@ -84,7 +78,7 @@ function UntoToolButton({
   );
   const modifier = useModifier();
   return (
-    <CanvasToolButton
+    <ToolButton
       id="undo"
       name="Undo"
       shortcut={`${modifier} + Z`}
@@ -93,7 +87,7 @@ function UntoToolButton({
       {...props}
     >
       <ArrowArcLeftIcon />
-    </CanvasToolButton>
+    </ToolButton>
   );
 }
 
@@ -107,7 +101,7 @@ function RedoToolButton({
   const canRedo = useEditorCanRedo();
   const modifier = useModifier();
   return (
-    <CanvasToolButton
+    <ToolButton
       id="redo"
       name="Redo"
       shortcut={`${modifier} + Y`}
@@ -116,27 +110,6 @@ function RedoToolButton({
       {...props}
     >
       <ArrowArcRightIcon />
-    </CanvasToolButton>
-  );
-}
-
-function CanvasBar(props: ToolbarProps) {
-  return <Toolbar className="gap-0 rounded-full p-0" {...props} />;
-}
-
-function CanvasToolButton({ className, ...props }: ToolButtonProps) {
-  return (
-    <ToolButton
-      className={cn(
-        "peer rounded-none peer-[button]:border-l peer-[button]:border-separator/40",
-        "first-of-type:rounded-l-full last-of-type:rounded-r-full only-of-type:rounded-full",
-        // Visually center icons
-        "first-of-type:*:translate-x-px last-of-type:*:-translate-x-px only-of-type:*:translate-x-0",
-        className,
-      )}
-      size="sm"
-      iconSize="sm"
-      {...props}
-    />
+    </ToolButton>
   );
 }

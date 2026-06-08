@@ -15,11 +15,7 @@ import {
   ArrowBendDoubleUpRightIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import {
-  Toolbar,
-  ToolbarSeparator,
-  type ToolbarProps,
-} from "~/components/ui/toolbar";
+import { Toolbar, ToolbarSeparator } from "~/components/ui/toolbar";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { checkModifierKey, cn } from "~/utils/misc";
 import { PlaySettingsDialog } from "~/editor/edit-mode/edit-settings";
@@ -568,20 +564,16 @@ export function PlayModeOverlay({
         </Toolbar>
       </div>
       <div className="pointer-events-none absolute right-4 bottom-4 z-10 flex items-center gap-2">
-        <PlayModeToolbarGroup className="pointer-events-auto">
-          <PlayModeToolbarButton
-            name="Zoom In"
-            shortcut="+ / ="
-            onClick={zoomIn}
-          >
+        <Toolbar className="pointer-events-auto w-fit gap-2">
+          <ToolButton name="Zoom In" shortcut="+ / =" onClick={zoomIn}>
             <PlusIcon />
-          </PlayModeToolbarButton>
-          <PlayModeToolbarButton name="Zoom Out" shortcut="-" onClick={zoomOut}>
+          </ToolButton>
+          <ToolButton name="Zoom Out" shortcut="-" onClick={zoomOut}>
             <MinusIcon />
-          </PlayModeToolbarButton>
-        </PlayModeToolbarGroup>
-        <PlayModeToolbarGroup className="pointer-events-auto">
-          <PlayModeToolbarButton
+          </ToolButton>
+        </Toolbar>
+        <Toolbar className="pointer-events-auto w-fit gap-2">
+          <ToolButton
             name={
               mobileControlsOpen
                 ? "Hide mobile controls"
@@ -590,8 +582,8 @@ export function PlayModeOverlay({
             onClick={toggleMobileControls}
           >
             <GameControllerIcon />
-          </PlayModeToolbarButton>
-        </PlayModeToolbarGroup>
+          </ToolButton>
+        </Toolbar>
       </div>
       {mobileControlsOpen && !isDoubleTapTipDismissed ? (
         <div className="pointer-events-none absolute bottom-4 left-4 z-10">
@@ -626,31 +618,6 @@ export function PlayModeOverlay({
       element.textContent = nextPlayTime;
     }
   }
-}
-
-function PlayModeToolbarGroup({ className, ...props }: ToolbarProps) {
-  return (
-    <Toolbar className={cn("gap-0 rounded-full p-0", className)} {...props} />
-  );
-}
-
-function PlayModeToolbarButton({
-  className,
-  ...props
-}: React.ComponentProps<typeof ToolButton>) {
-  return (
-    <ToolButton
-      className={cn(
-        "peer rounded-none peer-[button]:border-l peer-[button]:border-separator/40",
-        "first-of-type:rounded-l-full last-of-type:rounded-r-full only-of-type:rounded-full",
-        "first-of-type:*:translate-x-px last-of-type:*:-translate-x-px only-of-type:*:translate-x-0",
-        className,
-      )}
-      size="sm"
-      iconSize="sm"
-      {...props}
-    />
-  );
 }
 
 function PlayModeDoubleTapTip({ onDismiss }: { onDismiss: () => void }) {
