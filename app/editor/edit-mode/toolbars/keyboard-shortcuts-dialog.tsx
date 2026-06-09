@@ -205,6 +205,10 @@ function getShortcutGroups(
               label: "Select all visible",
             },
             {
+              shortcut: "Shift + Drag",
+              label: "Move selected vertices along an edge",
+            },
+            {
               shortcut: ["Del", "Backspace"],
               label: "Erase selection",
             },

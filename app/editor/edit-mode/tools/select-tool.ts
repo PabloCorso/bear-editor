@@ -87,6 +87,7 @@ export class SelectTool extends Tool<SelectToolState> {
   private isDragging = false;
   private dragStartPos = { x: 0, y: 0 };
   private dragOriginPositions: Position[] = [];
+  private dragConstraintDirections: Position[] = [];
   private isMarqueeSelecting = false;
   private marqueeStartPos = { x: 0, y: 0 };
   private marqueeEndPos = { x: 0, y: 0 };
@@ -114,6 +115,7 @@ export class SelectTool extends Tool<SelectToolState> {
     this.isDragging = false;
     this.isMarqueeSelecting = false;
     this.dragOriginPositions = [];
+    this.dragConstraintDirections = [];
     this.endDragHistoryBatch(false);
   }
 
@@ -210,6 +212,14 @@ export class SelectTool extends Tool<SelectToolState> {
     const modifier = checkModifierKey(event);
     const forceObjectSelection = event.altKey || event.shiftKey;
     const isSingleSelect = !modifier;
+
+    if (
+      isSingleSelect &&
+      this.isExistingSelectionHit(context.worldPos, hoveredPicture)
+    ) {
+      this.startDragging(context.worldPos);
+      return true;
+    }
 
     const clearIfNewSingleSelect = (isSelected: boolean | undefined) => {
       if (isSingleSelect && !isSelected) {
@@ -333,9 +343,9 @@ export class SelectTool extends Tool<SelectToolState> {
     return true;
   }
 
-  onPointerMove(_event: PointerEvent, context: EventContext): boolean {
+  onPointerMove(event: PointerEvent, context: EventContext): boolean {
     if (this.isDragging) {
-      this.handleDragging(context.worldPos);
+      this.handleDragging(context.worldPos, event.shiftKey);
       return true;
     }
 
@@ -771,6 +781,57 @@ export class SelectTool extends Tool<SelectToolState> {
     return null;
   }
 
+  private isExistingSelectionHit(
+    position: Position,
+    hoveredPicture: Picture | null,
+  ): boolean {
+    const { state, toolState } = this.getState();
+    if (!toolState) return false;
+
+    if (
+      this.isObjectSelectable() &&
+      this.findSelectedObjectNearPosition(
+        position,
+        toolState.selectedObjects,
+        Math.max(selectionThresholds.object / state.zoom, OBJECT_DIAMETER / 2),
+        {
+          useStartImageSelection: false,
+        },
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      this.isPolygonSelectable() &&
+      toolState.selectedVertices.some(({ polygon, vertex }) => {
+        if (!state.polygons.includes(polygon)) return false;
+        if (!polygon.vertices.includes(vertex)) return false;
+        return isWithinVertexSelectionThreshold(position, vertex, state.zoom);
+      })
+    ) {
+      return true;
+    }
+
+    if (
+      this.isPolygonSelectable() &&
+      findPolygonEdgeNearPosition(
+        position,
+        state.polygons,
+        selectionThresholds.polygonEdge / state.zoom,
+        (polygon, edgeIndex) =>
+          this.isSelectablePolygonEdge(polygon, edgeIndex) &&
+          this.isPolygonFullySelected(polygon),
+      )
+    ) {
+      return true;
+    }
+
+    return hoveredPicture
+      ? toolState.selectedPictures.includes(hoveredPicture.position)
+      : false;
+  }
+
   private isSelectablePolygonEdge = (polygon: Polygon, edgeIndex: number) => {
     const { toolState } = this.getState();
     const polygonSelectionCount =
@@ -818,6 +879,9 @@ export class SelectTool extends Tool<SelectToolState> {
       ...toolState.selectedObjects.map((obj: ObjectSelection) => ({ ...obj })),
       ...toolState.selectedPictures.map((pic: Position) => ({ ...pic })),
     ];
+    this.dragConstraintDirections = getVertexDragConstraintDirections(
+      toolState.selectedVertices,
+    );
   }
 
   private startMarqueeSelection(worldPos: Position, modifier: boolean): void {
@@ -834,12 +898,23 @@ export class SelectTool extends Tool<SelectToolState> {
     this.marqueeEndPos = worldPos;
   }
 
-  private handleDragging(worldPos: Position): void {
+  private handleDragging(worldPos: Position, shouldConstrain: boolean): void {
     const { toolState } = this.getState();
     if (!toolState) return;
 
-    const totalDeltaX = worldPos.x - this.dragStartPos.x;
-    const totalDeltaY = worldPos.y - this.dragStartPos.y;
+    const rawDelta = {
+      x: worldPos.x - this.dragStartPos.x,
+      y: worldPos.y - this.dragStartPos.y,
+    };
+    const totalDelta =
+      shouldConstrain && toolState.selectedVertices.length > 0
+        ? constrainDeltaToClosestDirection(
+            rawDelta,
+            this.dragConstraintDirections,
+          )
+        : rawDelta;
+    const totalDeltaX = totalDelta.x;
+    const totalDeltaY = totalDelta.y;
     if (totalDeltaX === 0 && totalDeltaY === 0) return;
     this.dragHasChanges = true;
 
@@ -979,6 +1054,17 @@ export class SelectTool extends Tool<SelectToolState> {
       state.killers.includes(object) ||
       state.flowers.includes(object) ||
       state.apples.some((apple) => apple.position === object)
+    );
+  }
+
+  private isPolygonFullySelected(polygon: Polygon): boolean {
+    const { toolState } = this.getState();
+    const polygonSelectionCount =
+      toolState?.selectedVertices.filter((sv) => sv.polygon === polygon)
+        .length ?? 0;
+    return (
+      polygonSelectionCount === polygon.vertices.length &&
+      polygonSelectionCount > 0
     );
   }
 
@@ -1809,6 +1895,94 @@ function translatePosition(position: Position, offset: Position): Position {
     x: position.x + offset.x,
     y: position.y + offset.y,
   };
+}
+
+function getVertexDragConstraintDirections(
+  selectedVertices: VertexSelection[],
+): Position[] {
+  const directions: Position[] = [];
+
+  for (const selection of selectedVertices) {
+    const vertexIndex = selection.polygon.vertices.indexOf(selection.vertex);
+    if (vertexIndex === -1) continue;
+
+    const vertexCount = selection.polygon.vertices.length;
+    const previous =
+      selection.polygon.vertices[(vertexIndex - 1 + vertexCount) % vertexCount];
+    const current = selection.polygon.vertices[vertexIndex];
+    const next = selection.polygon.vertices[(vertexIndex + 1) % vertexCount];
+
+    addDirection(directions, getNormalizedDirection(previous, current));
+    addDirection(directions, getNormalizedDirection(current, next));
+  }
+
+  return directions;
+}
+
+function addDirection(
+  directions: Position[],
+  direction: Position | null,
+): void {
+  if (!direction) return;
+
+  const alreadyIncluded = directions.some((candidate) => {
+    const dot = candidate.x * direction.x + candidate.y * direction.y;
+    return Math.abs(dot) > 0.999;
+  });
+  if (!alreadyIncluded) {
+    directions.push(direction);
+  }
+}
+
+function getNormalizedDirection(
+  from: Position | undefined,
+  to: Position | undefined,
+): Position | null {
+  if (!from || !to) return null;
+
+  const x = to.x - from.x;
+  const y = to.y - from.y;
+  const length = Math.hypot(x, y);
+  if (length === 0) return null;
+
+  return {
+    x: x / length,
+    y: y / length,
+  };
+}
+
+function constrainDeltaToClosestDirection(
+  delta: Position,
+  directions: Position[],
+): Position {
+  if (directions.length === 0) return delta;
+
+  let bestDirection = directions[0];
+  let bestProjection = delta.x * bestDirection.x + delta.y * bestDirection.y;
+
+  for (const direction of directions.slice(1)) {
+    const projection = delta.x * direction.x + delta.y * direction.y;
+    if (Math.abs(projection) > Math.abs(bestProjection)) {
+      bestDirection = direction;
+      bestProjection = projection;
+    }
+  }
+
+  return {
+    x: bestDirection.x * bestProjection,
+    y: bestDirection.y * bestProjection,
+  };
+}
+
+function isWithinVertexSelectionThreshold(
+  position: Position,
+  vertex: Position,
+  zoom: number,
+): boolean {
+  return (
+    Math.hypot(position.x - vertex.x, position.y - vertex.y) <=
+    selectionThresholds.vertex / zoom
+  );
 }
 
 function createSelectionHandleOverlay(
