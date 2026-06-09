@@ -193,7 +193,9 @@ export function VertexIcon({
   );
 }
 
-function getVertexIconProps(variant?: VertexToolVariant): VertexIconProps {
+export function getVertexIconProps(
+  variant?: VertexToolVariant,
+): VertexIconProps {
   if (variant === "grass") {
     return {
       sky: colors.sky,

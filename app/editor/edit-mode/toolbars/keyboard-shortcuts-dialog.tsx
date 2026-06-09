@@ -16,9 +16,12 @@ import {
   useTextureMaskSprites,
 } from "~/components/use-lgr-assets";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
-import { usePlaySettings } from "~/editor/use-editor-store";
+import {
+  usePlaySettings,
+  useVertexEdgeClickPreference,
+} from "~/editor/use-editor-store";
 import { cn, useModifier } from "~/utils/misc";
-import { VertexIcon } from "./vertex-tool-control";
+import { VertexIcon, getVertexIconProps } from "./vertex-tool-control";
 import { OPEN_KEYBOARD_SHORTCUTS_SHORTCUT } from "./keyboard-shortcuts";
 
 type ShortcutGroup = {
@@ -50,6 +53,7 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
   const pictureSprites = usePictureSprites();
   const textureMaskSprites = useTextureMaskSprites();
   const playSettings = usePlaySettings();
+  const vertexEdgeClickBehavior = useVertexEdgeClickPreference();
   const appleSprite = appleSprites[0]?.src ?? appleDefaultSprite.src;
   const pictureSprite = pictureSprites[0]?.src;
   const textureSprite =
@@ -61,6 +65,7 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
     pictureSprite,
     textureSprite,
     playKeyBindings: playSettings.keyBindings,
+    showVertexInternalEdgeClickHint: vertexEdgeClickBehavior === "internal",
   });
 
   return (
@@ -179,6 +184,7 @@ function getShortcutGroups(
     pictureSprite?: string;
     textureSprite?: string;
     playKeyBindings: ReturnType<typeof usePlaySettings>["keyBindings"];
+    showVertexInternalEdgeClickHint?: boolean;
   },
 ): ShortcutGroup[] {
   return [
@@ -193,6 +199,10 @@ function getShortcutGroups(
             {
               shortcut: ["Shift", "Alt"],
               label: "Select object behind images",
+            },
+            {
+              shortcut: `${modifier} + A`,
+              label: "Select all visible",
             },
             {
               shortcut: ["Del", "Backspace"],
@@ -212,12 +222,22 @@ function getShortcutGroups(
         {
           shortcut: defaultTools.vertex.shortcut,
           label: defaultTools.vertex.name,
-          icon: <VertexIcon className="h-6 w-6" />,
+          icon: (
+            <VertexIcon {...getVertexIconProps("normal")} className="h-6 w-6" />
+          ),
           subItems: [
             {
               shortcut: defaultTools.vertex.variants?.grass?.shortcut ?? "G",
-              label: "Switch to grass vertex mode",
+              label: "Toggle grass mode",
             },
+            ...(toolIcons.showVertexInternalEdgeClickHint
+              ? [
+                  {
+                    shortcut: `${modifier} + Click`,
+                    label: "Edit polygon edge in internal mode",
+                  },
+                ]
+              : []),
             {
               shortcut: "Space",
               label: "Reverse drawing direction",
