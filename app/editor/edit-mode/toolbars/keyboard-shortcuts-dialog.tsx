@@ -76,7 +76,7 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
           <DialogTitle className="text-2xl">Shortcuts</DialogTitle>
         </DialogHeader>
 
-        <DialogBody className="min-h-0 gap-8 overflow-y-auto pb-6">
+        <DialogBody className="min-h-0 gap-8 overflow-y-auto px-2 pb-6 sm:px-6">
           {shortcutGroups.map((group) => (
             <ShortcutGroupSection key={group.title} group={group} />
           ))}
@@ -122,7 +122,7 @@ function ShortcutRow({
   isFirst: boolean;
 }) {
   return (
-    <div className="grid h-10 grid-cols-[2rem_minmax(4.75rem,7rem)_1fr] items-center gap-x-4 px-4 sm:grid-cols-[2.5rem_minmax(6rem,8rem)_1fr] sm:gap-x-5 sm:px-6">
+    <div className="grid min-h-10 grid-cols-[2rem_minmax(4.75rem,7rem)_1fr] items-center gap-x-2 px-2 sm:grid-cols-[2.5rem_minmax(6rem,8rem)_1fr] sm:gap-x-5 sm:px-6">
       <div className="flex h-8 w-8 items-center justify-center text-primary/85">
         {item.icon ? <Icon size="lg">{item.icon}</Icon> : null}
       </div>
