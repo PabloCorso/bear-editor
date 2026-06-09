@@ -191,6 +191,10 @@ function getShortcutGroups(
           icon: <CursorIcon weight="light" />,
           subItems: [
             {
+              shortcut: ["Shift", "Alt"],
+              label: "Select object behind images",
+            },
+            {
               shortcut: ["Del", "Backspace"],
               label: "Erase selection",
             },
