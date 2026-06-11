@@ -41,6 +41,7 @@ export function CanvasToolbar({
   ...props
 }: CanvasToolbarProps) {
   const { triggerFitToView } = useEditorActions();
+  const modifier = useModifier();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(function handleKeyboardShortcutsListener() {
@@ -93,7 +94,7 @@ export function CanvasToolbar({
           </ToolButton>
           <ToolButton
             name="Fit to view"
-            shortcut="1"
+            shortcut={`${modifier} + 0`}
             onClick={triggerFitToView}
           >
             <CornersOutIcon />

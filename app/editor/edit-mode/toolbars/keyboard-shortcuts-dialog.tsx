@@ -20,7 +20,7 @@ import {
   usePlaySettings,
   useVertexEdgeClickPreference,
 } from "~/editor/use-editor-store";
-import { cn, useModifier } from "~/utils/misc";
+import { cn, useAlternateModifier, useModifier } from "~/utils/misc";
 import { VertexIcon, getVertexIconProps } from "./vertex-tool-control";
 import { OPEN_KEYBOARD_SHORTCUTS_SHORTCUT } from "./keyboard-shortcuts";
 
@@ -46,6 +46,7 @@ type Shortcut = string | string[];
 
 export function KeyboardShortcutsDialog(props: DialogProps) {
   const modifier = useModifier();
+  const alternateModifier = useAlternateModifier();
   const appleDefaultSprite = useLgrSprite("qfood1");
   const killerSprite = useLgrSprite("qkiller");
   const flowerSprite = useLgrSprite("qexit");
@@ -58,15 +59,18 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
   const pictureSprite = pictureSprites[0]?.src;
   const textureSprite =
     textureMaskSprites[0]?.maskedSrc ?? textureMaskSprites[0]?.src;
-  const shortcutGroups = getShortcutGroups(modifier, {
-    appleSprite,
-    killerSprite: killerSprite.src,
-    flowerSprite: flowerSprite.src,
-    pictureSprite,
-    textureSprite,
-    playKeyBindings: playSettings.keyBindings,
-    showVertexInternalEdgeClickHint: vertexEdgeClickBehavior === "internal",
-  });
+  const shortcutGroups = getShortcutGroups(
+    { modifier, alternateModifier },
+    {
+      appleSprite,
+      killerSprite: killerSprite.src,
+      flowerSprite: flowerSprite.src,
+      pictureSprite,
+      textureSprite,
+      playKeyBindings: playSettings.keyBindings,
+      showVertexInternalEdgeClickHint: vertexEdgeClickBehavior === "internal",
+    },
+  );
 
   return (
     <Dialog {...props}>
@@ -176,7 +180,13 @@ function ShortcutKeys({ shortcut }: { shortcut: Shortcut }) {
 }
 
 function getShortcutGroups(
-  modifier: string,
+  {
+    modifier,
+    alternateModifier,
+  }: {
+    modifier: string;
+    alternateModifier: string;
+  },
   toolIcons: {
     appleSprite?: string;
     killerSprite?: string;
@@ -209,12 +219,44 @@ function getShortcutGroups(
               label: "Move selected vertices along an edge",
             },
             {
-              shortcut: ["Del", "Backspace"],
-              label: "Erase selection",
+              shortcut: ["Right click", "Long press"],
+              label: "Open selection context menu",
             },
             {
-              shortcut: [`${modifier} + C`, `${modifier} + V`],
+              shortcut: `${alternateModifier || "Alt"} + Click`,
+              label: "Quick filter",
+            },
+            {
+              shortcut: "Delete",
+              label: "Delete selection",
+            },
+            {
+              shortcut: `${modifier} + C`,
+              label: "Copy selection",
+            },
+            {
+              shortcut: `${modifier} + V`,
+              label: "Paste selection",
+            },
+            {
+              shortcut: `${modifier} + D`,
               label: "Duplicate selection",
+            },
+            {
+              shortcut: `${modifier} + ]`,
+              label: "Bring picture forward",
+            },
+            {
+              shortcut: `${modifier} + Shift + ]`,
+              label: "Bring picture to front",
+            },
+            {
+              shortcut: `${modifier} + [`,
+              label: "Send picture backward",
+            },
+            {
+              shortcut: `${modifier} + Shift + [`,
+              label: "Send picture to back",
             },
           ],
         },
@@ -381,7 +423,7 @@ function getShortcutGroups(
           label: "Zoom out",
         },
         {
-          shortcut: "1",
+          shortcut: `${modifier} + 0`,
           label: "Fit to view",
         },
         {

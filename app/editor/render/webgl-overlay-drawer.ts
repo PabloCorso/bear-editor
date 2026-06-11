@@ -13,6 +13,8 @@ import {
   appendLineVertices,
   appendRectOutlineVertices,
   appendRectVertices,
+  appendRoundedRectOutlineVertices,
+  appendRoundedRectVertices,
 } from "~/editor/render/webgl-geometry";
 
 export class WebGLOverlayDrawer {
@@ -24,7 +26,13 @@ export class WebGLOverlayDrawer {
     const filledCircleBatches = new Map<string, number[]>();
     const circleOutlineBatches = new Map<string, number[]>();
 
-    for (const overlay of scene.overlays ?? []) {
+    const overlays = scene.overlays ?? [];
+    const defaultOverlays = overlays.filter(
+      (overlay) => overlay.layer !== "top",
+    );
+    const topOverlays = overlays.filter((overlay) => overlay.layer === "top");
+
+    for (const overlay of defaultOverlays) {
       switch (overlay.type) {
         case "line":
           this.appendLineBatch(lineBatches, {
@@ -45,6 +53,7 @@ export class WebGLOverlayDrawer {
               y: overlay.position.y,
               width: overlay.width,
               height: overlay.height,
+              cornerRadius: overlay.cornerRadius,
               color: overlay.fillColor,
               opacity: overlay.opacity ?? 1,
             });
@@ -55,6 +64,68 @@ export class WebGLOverlayDrawer {
               y: overlay.position.y,
               width: overlay.width,
               height: overlay.height,
+              cornerRadius: overlay.cornerRadius,
+              lineWidth: overlay.lineWidth,
+              color: overlay.strokeColor,
+              opacity: overlay.opacity ?? 1,
+            });
+          }
+          break;
+        case "circle":
+          if (overlay.fillColor) {
+            this.appendCircleBatch(filledCircleBatches, {
+              center: overlay.center,
+              radius: overlay.radius,
+              color: overlay.fillColor,
+              opacity: overlay.opacity ?? 1,
+            });
+          }
+          if (overlay.strokeColor && overlay.lineWidth != null) {
+            this.appendCircleOutlineBatch(circleOutlineBatches, {
+              center: overlay.center,
+              radius: overlay.radius,
+              lineWidth: overlay.lineWidth,
+              color: overlay.strokeColor,
+              opacity: overlay.opacity ?? 1,
+            });
+          }
+          break;
+      }
+    }
+
+    for (const overlay of topOverlays) {
+      switch (overlay.type) {
+        case "line":
+          this.appendLineBatch(lineBatches, {
+            from: overlay.from,
+            to: overlay.to,
+            width: overlay.width,
+            color: overlay.color,
+            opacity: overlay.opacity ?? 1,
+          });
+          break;
+        case "polyline":
+          this.appendPolylineBatch(lineBatches, overlay);
+          break;
+        case "rect":
+          if (overlay.fillColor) {
+            this.appendRectBatch(filledRectBatches, {
+              x: overlay.position.x,
+              y: overlay.position.y,
+              width: overlay.width,
+              height: overlay.height,
+              cornerRadius: overlay.cornerRadius,
+              color: overlay.fillColor,
+              opacity: overlay.opacity ?? 1,
+            });
+          }
+          if (overlay.strokeColor && overlay.lineWidth != null) {
+            this.appendRectOutlineBatch(lineBatches, {
+              x: overlay.position.x,
+              y: overlay.position.y,
+              width: overlay.width,
+              height: overlay.height,
+              cornerRadius: overlay.cornerRadius,
               lineWidth: overlay.lineWidth,
               color: overlay.strokeColor,
               opacity: overlay.opacity ?? 1,
@@ -96,6 +167,7 @@ export class WebGLOverlayDrawer {
       y,
       width,
       height,
+      cornerRadius,
       color,
       opacity,
     }: {
@@ -103,11 +175,17 @@ export class WebGLOverlayDrawer {
       y: number;
       width: number;
       height: number;
+      cornerRadius?: number;
       color: string;
       opacity: number;
     },
   ) {
     const vertices = getOverlayBatchVertices(batches, color, opacity);
+    if (cornerRadius && cornerRadius > 0) {
+      appendRoundedRectVertices(vertices, x, y, width, height, cornerRadius);
+      return;
+    }
+
     appendRectVertices(vertices, x, y, width, height);
   }
 
@@ -118,6 +196,7 @@ export class WebGLOverlayDrawer {
       y,
       width,
       height,
+      cornerRadius,
       lineWidth,
       color,
       opacity,
@@ -126,6 +205,7 @@ export class WebGLOverlayDrawer {
       y: number;
       width: number;
       height: number;
+      cornerRadius?: number;
       lineWidth: number;
       color: string;
       opacity: number;
@@ -135,8 +215,21 @@ export class WebGLOverlayDrawer {
       batches,
       color,
       opacity,
-      lineWidth.toFixed(6),
+      [lineWidth, cornerRadius ?? 0].map((value) => value.toFixed(6)).join(":"),
     );
+    if (cornerRadius && cornerRadius > 0) {
+      appendRoundedRectOutlineVertices(
+        vertices,
+        x,
+        y,
+        width,
+        height,
+        cornerRadius,
+        lineWidth,
+      );
+      return;
+    }
+
     appendRectOutlineVertices(vertices, x, y, width, height, lineWidth);
   }
 

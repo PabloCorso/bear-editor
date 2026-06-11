@@ -45,7 +45,9 @@ export function PopoverContent({
   className,
   positionerClassName,
   align = "center",
-  sideOffset = 8,
+  sideOffset = 12,
+  initialFocus,
+  finalFocus,
   children,
   ...props
 }: PopoverContentProps) {
@@ -57,7 +59,11 @@ export function PopoverContent({
         sideOffset={sideOffset}
         {...props}
       >
-        <PopoverPrimitive.Popup className={cn("z-40", className)}>
+        <PopoverPrimitive.Popup
+          className={cn("z-40", className)}
+          initialFocus={initialFocus}
+          finalFocus={finalFocus}
+        >
           {children}
         </PopoverPrimitive.Popup>
       </PopoverPrimitive.Positioner>

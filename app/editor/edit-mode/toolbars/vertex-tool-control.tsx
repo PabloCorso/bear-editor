@@ -113,7 +113,7 @@ export function VertexContextMenuToolbar({
 }: PolygonToolbarProps) {
   return (
     <Toolbar orientation="vertical" {...props}>
-      <ToolButton name="Toggle grass" size="sm" onClick={onGrassToggle}>
+      <ToolButton name="Toggle grass" onClick={onGrassToggle}>
         <VertexIcon {...getVertexIconProps("both")} />
       </ToolButton>
     </Toolbar>

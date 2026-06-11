@@ -1,4 +1,4 @@
-import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
+import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Menu as DropdownMenuPrimitive } from "@base-ui/react/menu";
 import { Icon } from "./icon";
 import { cn } from "~/utils/misc";
@@ -48,6 +48,35 @@ export function DropdownMenuItem({
   );
 }
 
+export const DropdownMenuSub = DropdownMenuPrimitive.SubmenuRoot;
+
+export function DropdownMenuSubTrigger({
+  className,
+  children,
+  iconBefore,
+  iconAfter = <CaretRightIcon />,
+  shortcut,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.SubmenuTrigger> & {
+  iconBefore?: React.ReactNode;
+  iconAfter?: React.ReactNode;
+  shortcut?: React.ReactNode;
+}) {
+  return (
+    <DropdownMenuPrimitive.SubmenuTrigger
+      className={cn(itemClassName, className)}
+      {...props}
+    >
+      {iconBefore ? <Icon className="opacity-75">{iconBefore}</Icon> : null}
+      {children}
+      {shortcut ? (
+        <span className="ml-auto pl-2 text-xs text-white/45">{shortcut}</span>
+      ) : null}
+      {iconAfter ? <Icon className="ml-auto">{iconAfter}</Icon> : null}
+    </DropdownMenuPrimitive.SubmenuTrigger>
+  );
+}
+
 const contentClassName = cn(
   "max-h-[var(--available-height)] min-w-[8rem] overflow-x-hidden overflow-y-auto overscroll-contain rounded-md border border-default bg-screen p-1 shadow-md",
 );
@@ -79,6 +108,47 @@ export function DropdownMenuContent({
       <DropdownMenuPrimitive.Positioner
         className="z-60"
         align={align}
+        sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
+        {...props}
+      >
+        <DropdownMenuPrimitive.Popup
+          finalFocus={finalFocus}
+          className={cn(contentClassName, contentAnimationClassName, className)}
+        >
+          {children}
+        </DropdownMenuPrimitive.Popup>
+      </DropdownMenuPrimitive.Positioner>
+    </DropdownMenuPrimitive.Portal>
+  );
+}
+
+export function DropdownMenuSubContent({
+  className,
+  align = "start",
+  side = "right",
+  sideOffset = 12,
+  collisionPadding = 8,
+  children,
+  finalFocus,
+  ...props
+}: Omit<
+  React.ComponentProps<typeof DropdownMenuPrimitive.Positioner>,
+  "children" | "className"
+> &
+  Omit<
+    React.ComponentProps<typeof DropdownMenuPrimitive.Popup>,
+    "children" | "className"
+  > & {
+    children?: React.ReactNode;
+    className?: string;
+  }) {
+  return (
+    <DropdownMenuPrimitive.Portal>
+      <DropdownMenuPrimitive.Positioner
+        className="z-60"
+        align={align}
+        side={side}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         {...props}

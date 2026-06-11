@@ -55,6 +55,42 @@ export function appendRectVertices(
   );
 }
 
+export function appendRoundedRectVertices(
+  vertices: number[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const points = getRoundedRectPoints(x, y, width, height, radius);
+  if (points.length < 3) return;
+
+  const center = {
+    x: x + width / 2,
+    y: y + height / 2,
+  };
+
+  for (let index = 0; index < points.length; index += 1) {
+    const next = points[(index + 1) % points.length]!;
+    const point = points[index]!;
+    vertices.push(
+      center.x,
+      center.y,
+      0,
+      0,
+      point.x,
+      point.y,
+      0,
+      0,
+      next.x,
+      next.y,
+      0,
+      0,
+    );
+  }
+}
+
 export function appendLineVertices(
   vertices: number[],
   from: WorldPoint,
@@ -159,6 +195,30 @@ export function appendRectOutlineVertices(
     innerTopLeft,
     innerBottomLeft,
   );
+}
+
+export function appendRoundedRectOutlineVertices(
+  vertices: number[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  lineWidth: number,
+) {
+  if (lineWidth <= 0) return;
+
+  const points = getRoundedRectPoints(x, y, width, height, radius);
+  if (points.length < 2) return;
+
+  for (let index = 0; index < points.length; index += 1) {
+    appendLineVertices(
+      vertices,
+      points[index]!,
+      points[(index + 1) % points.length]!,
+      lineWidth,
+    );
+  }
 }
 
 export function appendCircleVertices(
@@ -441,6 +501,69 @@ function appendRingQuad(
     0,
     0,
   );
+}
+
+function getRoundedRectPoints(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): WorldPoint[] {
+  const clampedRadius = Math.max(
+    0,
+    Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2),
+  );
+  if (clampedRadius === 0) {
+    return [
+      { x, y },
+      { x: x + width, y },
+      { x: x + width, y: y + height },
+      { x, y: y + height },
+    ];
+  }
+
+  const segmentsPerCorner = 6;
+  const corners = [
+    {
+      center: { x: x + width - clampedRadius, y: y + clampedRadius },
+      start: -Math.PI / 2,
+      end: 0,
+    },
+    {
+      center: {
+        x: x + width - clampedRadius,
+        y: y + height - clampedRadius,
+      },
+      start: 0,
+      end: Math.PI / 2,
+    },
+    {
+      center: { x: x + clampedRadius, y: y + height - clampedRadius },
+      start: Math.PI / 2,
+      end: Math.PI,
+    },
+    {
+      center: { x: x + clampedRadius, y: y + clampedRadius },
+      start: Math.PI,
+      end: (Math.PI * 3) / 2,
+    },
+  ];
+
+  const points: WorldPoint[] = [];
+  for (const corner of corners) {
+    for (let index = 0; index <= segmentsPerCorner; index += 1) {
+      const angle =
+        corner.start +
+        ((corner.end - corner.start) * index) / segmentsPerCorner;
+      points.push({
+        x: corner.center.x + Math.cos(angle) * clampedRadius,
+        y: corner.center.y + Math.sin(angle) * clampedRadius,
+      });
+    }
+  }
+
+  return points;
 }
 
 function signedArea(vertices: WorldPoint[]) {

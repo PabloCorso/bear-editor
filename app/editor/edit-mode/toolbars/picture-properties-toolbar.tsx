@@ -24,10 +24,13 @@ import { cn } from "~/utils/misc";
 
 const MIN_DISTANCE = 0;
 const MAX_DISTANCE = 999;
+const MIXED_VALUE = "mixed";
+
+type PicturePropertyValue = number | typeof MIXED_VALUE;
 
 type PicturePropertiesToolbarProps = Omit<ToolbarProps, "children"> & {
-  distance: number;
-  clip: Clip;
+  distance: PicturePropertyValue;
+  clip: Clip | typeof MIXED_VALUE;
   defaultDistance?: number;
   defaultClip?: Clip;
   isSelected?: boolean;
@@ -52,7 +55,8 @@ export function PicturePropertiesToolbar({
   className,
   ...props
 }: PicturePropertiesToolbarProps) {
-  const normalizedDistance = normalizeDistance(distance);
+  const normalizedDistance =
+    distance === MIXED_VALUE ? MIXED_VALUE : normalizeDistance(distance);
   const normalizedDefaultDistance =
     defaultDistance === undefined
       ? undefined
@@ -69,6 +73,7 @@ export function PicturePropertiesToolbar({
           onCommit={onDistanceChange}
         />
         <ClipSelect
+          compact
           clip={clip}
           isSelected={isSelected}
           onActivate={onActivate}
@@ -81,9 +86,13 @@ export function PicturePropertiesToolbar({
   if (variant === "summary-popover") {
     const hasDefaults =
       normalizedDefaultDistance !== undefined && defaultClip !== undefined;
+    const distanceLabel = getDistanceLabel(distance);
+    const summaryLabel = `${distanceLabel} (${getClipCode(clip)})`;
     const isDefault =
       hasDefaults &&
+      normalizedDistance !== MIXED_VALUE &&
       normalizedDistance === normalizedDefaultDistance &&
+      clip !== MIXED_VALUE &&
       clip === defaultClip;
 
     return (
@@ -92,7 +101,7 @@ export function PicturePropertiesToolbar({
           <button
             type="button"
             className={cn(
-              "flex h-5 w-full cursor-pointer items-center justify-center gap-0.5 truncate rounded border-0 bg-transparent px-1 text-center text-[10px] leading-3 outline-hidden hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring aria-expanded:bg-primary-hover/50 aria-expanded:text-primary",
+              "flex h-8 w-full cursor-pointer items-center justify-center truncate rounded border-0 bg-transparent px-2 text-center text-xs leading-4 outline-hidden hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring aria-expanded:bg-primary-hover/50 aria-expanded:text-primary",
               isSelected ? "text-primary" : "text-secondary",
               className,
             )}
@@ -102,16 +111,14 @@ export function PicturePropertiesToolbar({
               onActivate?.();
             }}
           >
-            <span className="w-[3ch] text-right tabular-nums">
-              {normalizedDistance}
+            <span className="w-full truncate text-center tabular-nums">
+              {summaryLabel}
             </span>
-            <span className="w-[4ch] text-left">({getClipCode(clip)})</span>
           </button>
         </PopoverTrigger>
         <PopoverContent
-          side="right"
+          side="bottom"
           align="center"
-          sideOffset={10}
           collisionPadding={16}
           positionerClassName="z-60"
           className="relative z-50 rounded-lg border border-default bg-screen px-2.5 py-2 shadow-xl outline-hidden"
@@ -282,7 +289,7 @@ function DistanceInput({
   onActivate,
   onCommit,
 }: {
-  distance: number;
+  distance: PicturePropertyValue;
   isSelected: boolean;
   className?: string;
   compact?: boolean;
@@ -290,24 +297,34 @@ function DistanceInput({
   onCommit: (distance: number) => void;
 }) {
   const commitInput = (input: HTMLInputElement) => {
-    const nextDistance = parseDistance(input.value, distance);
+    const nextDistance = parseDistance(
+      input.value,
+      distance === MIXED_VALUE ? null : distance,
+    );
+
+    if (nextDistance === null) {
+      input.value = distance === MIXED_VALUE ? "" : String(distance);
+      return;
+    }
+
     input.value = String(nextDistance);
-    if (nextDistance !== distance) {
+    if (distance === MIXED_VALUE || nextDistance !== distance) {
       onCommit(nextDistance);
     }
   };
   return (
     <input
-      key={distance}
+      key={`${distance}`}
       aria-label="Picture distance"
       className={cn(
         compact
-          ? "h-6 w-[38px] rounded-md border border-default bg-screen px-0.5 text-center text-[10px] font-bold outline-hidden focus-visible:focus-ring"
+          ? "h-8 w-12 rounded-md border border-default bg-screen px-1 text-center text-xs font-bold outline-hidden focus-visible:focus-ring"
           : "h-7 w-16 rounded-md border border-default bg-screen px-1 text-center text-xs font-bold outline-hidden focus-visible:focus-ring",
         isSelected ? "text-primary" : "text-secondary",
         className,
       )}
-      defaultValue={distance}
+      defaultValue={distance === MIXED_VALUE ? "" : distance}
+      placeholder={distance === MIXED_VALUE ? "Mixed" : undefined}
       inputMode="numeric"
       type="number"
       min={MIN_DISTANCE}
@@ -385,12 +402,14 @@ function ClipSelect({
   clip,
   isSelected,
   className,
+  compact = false,
   onActivate,
   onChange,
 }: {
-  clip: Clip;
+  clip: Clip | typeof MIXED_VALUE;
   isSelected: boolean;
   className?: string;
+  compact?: boolean;
   onActivate?: () => void;
   onChange: (clip: Clip) => void;
 }) {
@@ -398,7 +417,9 @@ function ClipSelect({
     <select
       aria-label="Picture clipping"
       className={cn(
-        "[field-sizing:content] h-6 w-fit rounded-md border border-default bg-screen py-0 pr-4 pl-1.5 text-right text-xs font-bold outline-hidden [text-align-last:right] focus-visible:focus-ring",
+        compact
+          ? "[field-sizing:content] h-8 w-fit rounded-md border border-default bg-screen py-0 pr-5 pl-2 text-right text-xs font-bold outline-hidden [text-align-last:right] focus-visible:focus-ring"
+          : "[field-sizing:content] h-6 w-fit rounded-md border border-default bg-screen py-0 pr-4 pl-1.5 text-right text-xs font-bold outline-hidden [text-align-last:right] focus-visible:focus-ring",
         isSelected ? "text-primary" : "text-secondary",
         className,
       )}
@@ -413,6 +434,9 @@ function ClipSelect({
         onChange(parseClip(event.currentTarget.value, clip));
       }}
     >
+      <option value={MIXED_VALUE} disabled>
+        Mixed
+      </option>
       <option value={Clip.Sky}>Sky</option>
       <option value={Clip.Ground}>Ground</option>
       <option value={Clip.Unclipped}>Unclipped</option>
@@ -425,7 +449,7 @@ export function normalizeDistance(distance: number) {
   return Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, Math.round(distance)));
 }
 
-function parseDistance(value: string, fallback: number) {
+function parseDistance(value: string, fallback: number | null): number | null {
   if (value.trim() === "") return fallback;
 
   const parsed = Number(value);
@@ -434,7 +458,7 @@ function parseDistance(value: string, fallback: number) {
   return normalizeDistance(parsed);
 }
 
-function parseClip(value: string, fallback: Clip) {
+function parseClip(value: string, fallback: Clip | typeof MIXED_VALUE) {
   const parsed = Number(value);
   if (
     parsed === Clip.Unclipped ||
@@ -444,17 +468,23 @@ function parseClip(value: string, fallback: Clip) {
     return parsed;
   }
 
-  return fallback;
+  return fallback === MIXED_VALUE ? Clip.Unclipped : fallback;
 }
 
-function getClipCode(clip: Clip) {
+function getClipCode(clip: Clip | typeof MIXED_VALUE) {
+  if (clip === MIXED_VALUE) return "M";
   if (clip === Clip.Unclipped) return "U";
   if (clip === Clip.Ground) return "G";
   return "S";
 }
 
-function getClipLabel(clip: Clip) {
+function getClipLabel(clip: Clip | typeof MIXED_VALUE) {
+  if (clip === MIXED_VALUE) return "Mixed";
   if (clip === Clip.Unclipped) return "Unclipped";
   if (clip === Clip.Ground) return "Ground";
   return "Sky";
+}
+
+function getDistanceLabel(distance: PicturePropertyValue) {
+  return distance === MIXED_VALUE ? "Mixed" : String(distance);
 }

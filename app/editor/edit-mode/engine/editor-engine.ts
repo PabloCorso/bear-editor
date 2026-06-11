@@ -83,6 +83,8 @@ type EditorEngineOptions = {
 const KEYBOARD_PAN_STEP = 200;
 const KEYBOARD_ZOOM_STEP_DIVISOR = 100;
 const WHEEL_PAN_MULTIPLIER = 0.5;
+const TOUCH_CONTEXT_MENU_DELAY_MS = 500;
+const TOUCH_CONTEXT_MENU_MOVE_TOLERANCE_PX = 8;
 
 type CachedLongestGrassEdge = {
   vertices: Polygon["vertices"];
@@ -151,9 +153,13 @@ export class EditorEngine {
   private pinchCenter: { x: number; y: number } | null = null;
   private activeTouchToolPointerId: number | null = null;
   private touchPointers = new Map<number, { x: number; y: number }>();
+  private touchContextMenuTimer: number | null = null;
+  private touchContextMenuPointerId: number | null = null;
+  private touchContextMenuStart: { x: number; y: number } | null = null;
   private pressedKeys = new Set<string>();
   private handleWindowBlur = () => {
     this.pressedKeys.clear();
+    this.cancelTouchContextMenuTimer();
   };
 
   constructor(
@@ -210,7 +216,15 @@ export class EditorEngine {
       hasExternalHandle: false,
     };
 
-    tools.forEach((tool) => state.actions.registerTool(new tool(this.store)));
+    tools.forEach((ToolConstructor) => {
+      const tool = new ToolConstructor(this.store);
+      if (tool instanceof SelectTool) {
+        tool.setPictureDimensionsResolver((picture) =>
+          getPictureWorldDimensions(picture, this.lgrAssets),
+        );
+      }
+      state.actions.registerTool(tool);
+    });
     if (tools.length > 0) {
       state.actions.activateTool(initialToolId);
     }
@@ -408,6 +422,58 @@ export class EditorEngine {
     this.activeTouchToolPointerId = null;
   }
 
+  private cancelTouchContextMenuTimer() {
+    if (this.touchContextMenuTimer !== null) {
+      window.clearTimeout(this.touchContextMenuTimer);
+    }
+    this.touchContextMenuTimer = null;
+    this.touchContextMenuPointerId = null;
+    this.touchContextMenuStart = null;
+  }
+
+  private scheduleTouchContextMenu(event: PointerEvent) {
+    this.cancelTouchContextMenuTimer();
+
+    this.touchContextMenuPointerId = event.pointerId;
+    this.touchContextMenuStart = { x: event.clientX, y: event.clientY };
+    this.touchContextMenuTimer = window.setTimeout(() => {
+      if (this.touchContextMenuPointerId !== event.pointerId) return;
+      if (!this.touchPointers.has(event.pointerId)) return;
+
+      this.endActiveTouchToolInteraction();
+      this.cancelTouchContextMenuTimer();
+
+      const contextMenuEvent = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        screenX: event.screenX,
+        screenY: event.screenY,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
+      });
+      this.openActiveToolContextMenu(contextMenuEvent);
+    }, TOUCH_CONTEXT_MENU_DELAY_MS);
+  }
+
+  private cancelTouchContextMenuIfMoved(event: PointerEvent) {
+    if (
+      this.touchContextMenuPointerId !== event.pointerId ||
+      !this.touchContextMenuStart
+    ) {
+      return;
+    }
+
+    const deltaX = event.clientX - this.touchContextMenuStart.x;
+    const deltaY = event.clientY - this.touchContextMenuStart.y;
+    if (Math.hypot(deltaX, deltaY) > TOUCH_CONTEXT_MENU_MOVE_TOLERANCE_PX) {
+      this.cancelTouchContextMenuTimer();
+    }
+  }
+
   private handlePointerDown = (event: PointerEvent) => {
     if (event.pointerType === "touch") {
       event.preventDefault();
@@ -419,6 +485,7 @@ export class EditorEngine {
 
       const pinch = this.getTouchPinchState();
       if (pinch) {
+        this.cancelTouchContextMenuTimer();
         this.endActiveTouchToolInteraction();
         this.pinchDistance = pinch.distance;
         this.pinchCenter = pinch.center;
@@ -428,6 +495,7 @@ export class EditorEngine {
       this.resetPinchState();
       this.activeTouchToolPointerId = event.pointerId;
       this.dispatchToolPointerEvent("down", event);
+      this.scheduleTouchContextMenu(event);
       return;
     }
 
@@ -455,9 +523,11 @@ export class EditorEngine {
         x: event.clientX,
         y: event.clientY,
       });
+      this.cancelTouchContextMenuIfMoved(event);
 
       const pinch = this.getTouchPinchState();
       if (pinch) {
+        this.cancelTouchContextMenuTimer();
         this.endActiveTouchToolInteraction();
         const previousCenter = this.pinchCenter;
         const previousDistance = this.pinchDistance;
@@ -515,6 +585,7 @@ export class EditorEngine {
   private handlePointerUp = (event: PointerEvent) => {
     if (event.pointerType === "touch") {
       event.preventDefault();
+      this.cancelTouchContextMenuTimer();
       this.touchPointers.delete(event.pointerId);
 
       if (this.activeTouchToolPointerId === event.pointerId) {
@@ -549,6 +620,7 @@ export class EditorEngine {
 
   private handlePointerCancel = (event: PointerEvent) => {
     if (event.pointerType === "touch") {
+      this.cancelTouchContextMenuTimer();
       this.touchPointers.delete(event.pointerId);
 
       if (this.activeTouchToolPointerId === event.pointerId) {
@@ -571,6 +643,7 @@ export class EditorEngine {
   };
 
   private handlePointerLeave = () => {
+    this.cancelTouchContextMenuTimer();
     const state = this.store.getState();
     state.actions.setMouseOnCanvas(false);
     this.clearSelectHoverState(state);
@@ -579,6 +652,10 @@ export class EditorEngine {
 
   private handleRightClick = (event: MouseEvent) => {
     event.preventDefault();
+    this.openActiveToolContextMenu(event);
+  };
+
+  private openActiveToolContextMenu(event: MouseEvent) {
     const state = this.store.getState();
     const context = getEventContext(
       event,
@@ -593,7 +670,7 @@ export class EditorEngine {
       const consumed = activeTool.onRightClick(event, context);
       if (consumed) return;
     }
-  };
+  }
 
   private getCanvasPoint(clientX: number, clientY: number) {
     const rect = this.canvas.getBoundingClientRect();
@@ -819,6 +896,11 @@ export class EditorEngine {
       return;
     }
 
+    if (event.key === "0" && checkModifierKey(event)) {
+      this.fitToView();
+      return;
+    }
+
     // Handle other shortcuts
     const shortcuts: Record<string, () => void> = {
       Enter: () =>
@@ -830,7 +912,6 @@ export class EditorEngine {
       "=": () => this.zoomInOut(this.zoomStep),
       "-": () => this.zoomInOut(-this.zoomStep),
       _: () => this.zoomInOut(-this.zoomStep),
-      "1": () => this.fitToView(),
     };
     shortcuts[event.key]?.();
   };
@@ -1547,8 +1628,8 @@ export class EditorEngine {
               (uiSelectionHandle.cornerRadiusPx /
                 uiSelectionHandle.halfWidthPx) *
               size,
-            fillColor: "#ffffff",
-            strokeColor: "#1b3b5c",
+            fillColor: uiColors.selectionHandleFill,
+            strokeColor: uiColors.selectionHandleStroke,
             lineWidth,
             layer: "top" as const,
           })),
@@ -1562,6 +1643,7 @@ export class EditorEngine {
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
     }
+    this.cancelTouchContextMenuTimer();
 
     this.unsubscribeStore?.();
 

@@ -30,7 +30,7 @@ export type TooltipContentProps = Omit<
 export function TooltipContent({
   children,
   className,
-  sideOffset = 4,
+  sideOffset = 12,
   ...props
 }: TooltipContentProps) {
   return (

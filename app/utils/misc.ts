@@ -18,8 +18,19 @@ export function getModifier() {
   return isMac ? "⌘" : "Ctrl";
 }
 
+export function getAlternateModifier() {
+  const isMac = window.navigator.platform.toUpperCase().includes("MAC");
+  return isMac ? "Option" : "Alt";
+}
+
 export function useModifier() {
   const mounted = useMounted();
   if (!mounted) return "";
   return getModifier();
+}
+
+export function useAlternateModifier() {
+  const mounted = useMounted();
+  if (!mounted) return "";
+  return getAlternateModifier();
 }

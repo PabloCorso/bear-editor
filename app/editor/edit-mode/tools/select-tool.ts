@@ -25,18 +25,27 @@ import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
 import type { EditorStore, PartialEditorState } from "~/editor/editor-store";
 import { defaultTools } from "./default-tools";
-import type { WorldRect } from "~/editor/render/world-geometry";
+import { rectsIntersect, type WorldRect } from "~/editor/render/world-geometry";
 import {
   isPointVisible,
   isPolygonVisible,
 } from "~/editor/render/world-derived-data-cache";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
+import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
 import { checkModifierKey } from "~/utils/misc";
 import fastDeepEqual from "fast-deep-equal";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import { getObjectBoundsRadius } from "~/editor/render/object-assets";
 
 const DUPLICATE_OFFSET_STEP = 1;
+const MIN_PICTURE_DISTANCE = 0;
+const MAX_PICTURE_DISTANCE = 999;
+
+export type ArrangeSelectionDirection =
+  | "forward"
+  | "front"
+  | "backward"
+  | "back";
 
 export type SelectToolState = {
   selectedVertices: Array<{ polygon: Polygon; vertex: Position }>;
@@ -51,12 +60,32 @@ export type SelectToolState = {
     height: number;
     distance: number;
   };
-  contextMenuType?: "apple" | "killer" | "flower" | "picture" | "vertex";
+  contextMenuType?: "selection";
   contextMenuPosition?: Position;
 };
 
+export type SelectSelectionKind =
+  | "groundVertices"
+  | "grassVertices"
+  | "apples"
+  | "killers"
+  | "flowers"
+  | "start"
+  | "pictures"
+  | "textures";
+
 type VertexSelection = { polygon: Polygon; vertex: Position };
 type ObjectSelection = Position;
+type PictureDimensionsResolver = (picture: {
+  name?: string;
+  texture?: string;
+  mask?: string;
+}) => { width: number; height: number } | null;
+type ContextMenuSelectionTarget =
+  | { type: "object"; object: Position }
+  | { type: "vertex"; polygon: Polygon; vertex: Position }
+  | { type: "polygon"; polygon: Polygon }
+  | { type: "picture"; picture: Position };
 type SelectionClipboard = {
   polygons: Polygon[];
   apples: Apple[];
@@ -79,9 +108,16 @@ export class SelectTool extends Tool<SelectToolState> {
   readonly meta = defaultTools.select;
   private clipboard: SelectionClipboard | null = null;
   private clipboardPasteCount = 0;
+  private pictureDimensionsResolver: PictureDimensionsResolver = () => null;
 
   constructor(store: EditorStore) {
     super(store);
+  }
+
+  public setPictureDimensionsResolver(
+    resolver: PictureDimensionsResolver,
+  ): void {
+    this.pictureDimensionsResolver = resolver;
   }
 
   private isDragging = false;
@@ -120,60 +156,66 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   onRightClick(event: MouseEvent, context: EventContext) {
-    const { state, toolState, setToolState } = this.getState();
-    const forceObjectSelection = event.altKey || event.shiftKey;
     this.pruneHiddenSelection();
-
+    const { state, toolState, setToolState } = this.getState();
     const hoveredPicture = this.resolveHoveredPictureFromState(
       state,
       toolState?.hoveredPictureBounds,
     );
-    const object =
-      this.isObjectSelectable() && (forceObjectSelection || !hoveredPicture)
-        ? this.findObjectNearPosition(context.worldPos)
-        : null;
-    const isApple = object
-      ? state.apples.some((a) => a.position === object)
-      : false;
-    if (object && isApple) {
-      this.clear();
-      this.selectObject(object);
-      setToolState({
-        contextMenuType: "apple",
-        contextMenuPosition: { x: context.screenX, y: context.screenY },
-      });
+
+    if (this.hasSelection()) {
+      if (this.isExistingSelectionHit(context.worldPos, hoveredPicture)) {
+        this.openContextMenu(context);
+        return true;
+      }
+
+      const target = this.resolveContextMenuSelectionTarget(
+        context,
+        hoveredPicture,
+      );
+      if (target) {
+        if (checkModifierKey(event)) {
+          this.addContextMenuSelectionTarget(target);
+        } else {
+          this.replaceSelectionWithContextMenuTarget(target);
+        }
+      }
+
+      this.openContextMenu(context);
       return true;
     }
 
-    if (hoveredPicture) {
-      this.clear();
-      this.selectPicture(hoveredPicture.position);
-      setToolState({
-        contextMenuType: "picture",
-        contextMenuPosition: { x: context.screenX, y: context.screenY },
-      });
+    const target = this.resolveContextMenuSelectionTarget(
+      context,
+      hoveredPicture,
+    );
+    if (target) {
+      this.replaceSelectionWithContextMenuTarget(target);
+      this.openContextMenu(context);
       return true;
     }
 
-    const polygon = this.isPolygonSelectable()
-      ? findPolygonEdgeNearPosition(
-          context.worldPos,
-          state.polygons,
-          selectionThresholds.polygonEdge / state.zoom,
-          this.isSelectablePolygonEdge,
-        )
-      : null;
-    if (polygon) {
-      this.clear();
-      this.selectPolygon(polygon);
-      setToolState({
-        contextMenuType: "vertex",
-        contextMenuPosition: { x: context.screenX, y: context.screenY },
-      });
-      return true;
-    }
-
+    setToolState({
+      contextMenuType: undefined,
+      contextMenuPosition: undefined,
+    });
     return false;
+  }
+
+  public closeContextMenu(): void {
+    const { setToolState } = this.getState();
+    setToolState({
+      contextMenuType: undefined,
+      contextMenuPosition: undefined,
+    });
+  }
+
+  private openContextMenu(context: EventContext): void {
+    const { setToolState } = this.getState();
+    setToolState({
+      contextMenuType: "selection",
+      contextMenuPosition: { x: context.screenX, y: context.screenY },
+    });
   }
 
   private resolveHoveredPictureFromState(
@@ -198,6 +240,124 @@ export class SelectTool extends Tool<SelectToolState> {
     if (fallback) return fallback;
 
     return null;
+  }
+
+  private resolveContextMenuSelectionTarget(
+    context: EventContext,
+    hoveredPicture: Picture | null,
+  ): ContextMenuSelectionTarget | null {
+    const { state, toolState } = this.getState();
+    const hoveredObject = toolState?.hoveredObject;
+
+    if (
+      hoveredObject &&
+      this.isObjectSelectable() &&
+      this.isObjectPresent(hoveredObject)
+    ) {
+      return { type: "object", object: hoveredObject };
+    }
+
+    const object =
+      this.isObjectSelectable() && !hoveredPicture
+        ? this.findObjectNearPosition(context.worldPos)
+        : null;
+    if (object) {
+      return { type: "object", object };
+    }
+
+    const vertex = this.isPolygonSelectable()
+      ? findVertexNearPosition(
+          context.worldPos,
+          state.polygons,
+          selectionThresholds.vertex / state.zoom,
+        )
+      : null;
+    if (vertex) {
+      return {
+        type: "vertex",
+        polygon: vertex.polygon,
+        vertex: vertex.vertex,
+      };
+    }
+
+    const polygon = this.isPolygonSelectable()
+      ? findPolygonEdgeNearPosition(
+          context.worldPos,
+          state.polygons,
+          selectionThresholds.polygonEdge / state.zoom,
+          this.isSelectablePolygonEdge,
+        )
+      : null;
+    if (polygon) {
+      return { type: "polygon", polygon };
+    }
+
+    if (hoveredPicture && this.isPictureSelectable(hoveredPicture)) {
+      return { type: "picture", picture: hoveredPicture.position };
+    }
+
+    return null;
+  }
+
+  private addContextMenuSelectionTarget(
+    target: ContextMenuSelectionTarget,
+  ): void {
+    switch (target.type) {
+      case "object":
+        this.selectObject(target.object);
+        return;
+      case "vertex":
+        this.selectVertex(target.polygon, target.vertex);
+        return;
+      case "polygon":
+        this.selectPolygon(target.polygon);
+        return;
+      case "picture":
+        this.selectPicture(target.picture);
+        return;
+    }
+  }
+
+  private replaceSelectionWithContextMenuTarget(
+    target: ContextMenuSelectionTarget,
+  ): void {
+    const { setToolState } = this.getState();
+
+    switch (target.type) {
+      case "object":
+        setToolState({
+          selectedVertices: [],
+          selectedObjects: [target.object],
+          selectedPictures: [],
+        });
+        return;
+      case "vertex":
+        setToolState({
+          selectedVertices: [
+            { polygon: target.polygon, vertex: target.vertex },
+          ],
+          selectedObjects: [],
+          selectedPictures: [],
+        });
+        return;
+      case "polygon":
+        setToolState({
+          selectedVertices: target.polygon.vertices.map((vertex) => ({
+            polygon: target.polygon,
+            vertex,
+          })),
+          selectedObjects: [],
+          selectedPictures: [],
+        });
+        return;
+      case "picture":
+        setToolState({
+          selectedVertices: [],
+          selectedObjects: [],
+          selectedPictures: [target.picture],
+        });
+        return;
+    }
   }
 
   onPointerDown(event: PointerEvent, context: EventContext): boolean {
@@ -379,6 +539,29 @@ export class SelectTool extends Tool<SelectToolState> {
     this.pruneHiddenSelection();
     const modifier = checkModifierKey(event);
 
+    if (modifier && (event.key === "]" || event.key === "[")) {
+      const arranged = this.arrangeSelectedPictures(
+        event.key === "]"
+          ? event.shiftKey
+            ? "front"
+            : "forward"
+          : event.shiftKey
+            ? "back"
+            : "backward",
+      );
+      if (arranged) {
+        event.preventDefault();
+        return true;
+      }
+    }
+
+    if (modifier && event.key.toLowerCase() === "d") {
+      if (this.duplicateSelectionWithOffset()) {
+        event.preventDefault();
+        return true;
+      }
+    }
+
     if (modifier && event.key.toLowerCase() === "c") {
       if (this.copySelection()) {
         void this.copySelectionToSystemClipboard();
@@ -400,6 +583,12 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
     if (event.key === "Escape") {
+      const { toolState } = this.getState();
+      if (toolState?.contextMenuType) {
+        this.closeContextMenu();
+        return true;
+      }
+
       this.clear();
       return true;
     }
@@ -427,6 +616,64 @@ export class SelectTool extends Tool<SelectToolState> {
     return Boolean(this.buildClipboardFromSelection());
   }
 
+  public copyCurrentSelection(): boolean {
+    if (!this.copySelection()) return false;
+    void this.copySelectionToSystemClipboard();
+    return true;
+  }
+
+  public canArrangeSelection(): boolean {
+    const { toolState } = this.getState();
+    return Boolean(toolState && toolState.selectedPictures.length > 0);
+  }
+
+  public arrangeSelectedPictures(
+    direction: ArrangeSelectionDirection,
+  ): boolean {
+    const { state, toolState } = this.getState();
+    if (!toolState || toolState.selectedPictures.length === 0) return false;
+
+    const selectedPictureIndexes = getSelectedPictureIndexes(
+      state.pictures,
+      toolState.selectedPictures,
+    );
+    if (selectedPictureIndexes.length === 0) return false;
+
+    const selectedDistances = selectedPictureIndexes.map(
+      (index) => state.pictures[index]!.distance,
+    );
+    const minSelectedDistance = Math.min(...selectedDistances);
+    const maxSelectedDistance = Math.max(...selectedDistances);
+    const unselectedDistances = state.pictures
+      .filter((_picture, index) => !selectedPictureIndexes.includes(index))
+      .map((picture) => picture.distance);
+    if (this.hasObjects()) {
+      unselectedDistances.push(DEFAULT_OBJECT_RENDER_DISTANCE);
+    }
+
+    const distanceDelta = getArrangeDistanceDelta(direction, {
+      minSelectedDistance,
+      maxSelectedDistance,
+      unselectedDistances,
+    });
+    if (distanceDelta === 0) return false;
+
+    const nextPictures = state.pictures.map((picture, index) =>
+      selectedPictureIndexes.includes(index)
+        ? {
+            ...picture,
+            distance: clampPictureDistance(picture.distance + distanceDelta),
+          }
+        : picture,
+    );
+
+    this.runHistoryBatch(() => {
+      state.actions.setPictures(nextPictures);
+    });
+    this.closeContextMenu();
+    return true;
+  }
+
   public canPasteSelection(): boolean {
     return this.clipboard !== null || this.canAccessSystemClipboard();
   }
@@ -434,6 +681,81 @@ export class SelectTool extends Tool<SelectToolState> {
   public duplicateSelectionWithOffset(): boolean {
     if (!this.copySelection()) return false;
     return this.pasteClipboardWithMargin();
+  }
+
+  public selectOnlySelectionKind(kind: SelectSelectionKind): boolean {
+    return this.selectSelectionKinds(new Set([kind]));
+  }
+
+  public selectSelectionKinds(
+    kinds: ReadonlySet<SelectSelectionKind>,
+    sourceSelection?: Pick<
+      SelectToolState,
+      "selectedVertices" | "selectedObjects" | "selectedPictures"
+    >,
+    options: { closeContextMenu?: boolean } = {},
+  ): boolean {
+    const { state, toolState, setToolState } = this.getState();
+    if (!toolState) return false;
+
+    const selectionSource = sourceSelection ?? toolState;
+    const selectedVertices = selectionSource.selectedVertices.filter(
+      ({ polygon }) =>
+        kinds.has(polygon.grass ? "grassVertices" : "groundVertices"),
+    );
+    const selectedObjects = selectionSource.selectedObjects.filter((object) => {
+      if (kinds.has("start") && object === state.start) return true;
+      if (
+        kinds.has("apples") &&
+        state.apples.some((apple) => apple.position === object)
+      ) {
+        return true;
+      }
+      if (kinds.has("killers") && state.killers.includes(object)) return true;
+      if (kinds.has("flowers") && state.flowers.includes(object)) return true;
+      return false;
+    });
+    const selectedPictures = selectionSource.selectedPictures.filter(
+      (position) => {
+        if (!kinds.has("pictures") && !kinds.has("textures")) return false;
+
+        const picture =
+          state.pictures.find((entry) => entry.position === position) ??
+          state.pictures.find(
+            (entry) =>
+              entry.position.x === position.x &&
+              entry.position.y === position.y,
+          );
+        if (!picture) return false;
+
+        return (
+          (kinds.has("pictures") && Boolean(picture.name)) ||
+          (kinds.has("textures") && Boolean(picture.texture))
+        );
+      },
+    );
+
+    const hasSelection =
+      selectedVertices.length > 0 ||
+      selectedObjects.length > 0 ||
+      selectedPictures.length > 0;
+    if (!hasSelection) return false;
+
+    setToolState({
+      selectedVertices,
+      selectedObjects,
+      selectedPictures,
+      contextMenuType:
+        options.closeContextMenu === false
+          ? toolState.contextMenuType
+          : undefined,
+      contextMenuPosition:
+        options.closeContextMenu === false
+          ? toolState.contextMenuPosition
+          : undefined,
+    });
+
+    return true;
   }
 
   public selectAllVisible(
@@ -512,6 +834,7 @@ export class SelectTool extends Tool<SelectToolState> {
               radius: circle.radius,
               strokeColor: uiColors.boundsHover,
               lineWidth: hoverLineWidth,
+              layer: "top" as const,
             })),
           );
         } else if (isPointVisible(hoveredObject, viewportRect)) {
@@ -521,6 +844,7 @@ export class SelectTool extends Tool<SelectToolState> {
             radius: OBJECT_DIAMETER / 2,
             strokeColor: uiColors.boundsHover,
             lineWidth: hoverLineWidth,
+            layer: "top",
           });
         }
       }
@@ -570,6 +894,7 @@ export class SelectTool extends Tool<SelectToolState> {
                 closed: true,
                 color: hoveredPolygonBoundsColor,
                 width: hoverLineWidth,
+                layer: "top" as const,
               });
             }
           }
@@ -597,6 +922,7 @@ export class SelectTool extends Tool<SelectToolState> {
             closed: true,
             color: selectedPolygonBoundsColor,
             width: selectedLineWidth,
+            layer: "top" as const,
           };
         }),
     );
@@ -622,6 +948,7 @@ export class SelectTool extends Tool<SelectToolState> {
               radius: circle.radius,
               strokeColor: uiColors.boundsSelected,
               lineWidth: selectedLineWidth,
+              layer: "top" as const,
             }));
         }
 
@@ -633,6 +960,7 @@ export class SelectTool extends Tool<SelectToolState> {
             radius: getObjectBoundsRadius(),
             strokeColor: uiColors.boundsSelected,
             lineWidth: selectedLineWidth,
+            layer: "top" as const,
           },
         ];
       }),
@@ -985,7 +1313,7 @@ export class SelectTool extends Tool<SelectToolState> {
       });
     }
 
-    // Select objects within the marquee
+    // Select objects touched by the marquee
     if (this.isObjectSelectable()) {
       const allObjects = getAllObjects(
         state.apples.map((a) => a.position),
@@ -994,17 +1322,17 @@ export class SelectTool extends Tool<SelectToolState> {
         state.start,
       );
       allObjects.forEach(({ obj }: { obj: Position }) => {
-        if (isPointInRect(obj, bounds)) {
+        if (this.objectIntersectsMarquee(obj, bounds)) {
           this.selectObject(obj);
         }
       });
     }
 
-    // Select pictures within the marquee
+    // Select pictures touched by the marquee
     state.pictures
       .filter((picture) => this.isPictureSelectable(picture))
       .forEach((picture) => {
-        if (isPointInRect(picture.position, bounds)) {
+        if (this.pictureIntersectsMarquee(picture, bounds)) {
           const isSelected = toolState.selectedPictures.includes(
             picture.position,
           );
@@ -1013,6 +1341,47 @@ export class SelectTool extends Tool<SelectToolState> {
           }
         }
       });
+  }
+
+  private objectIntersectsMarquee(
+    object: Position,
+    bounds: WorldRect,
+  ): boolean {
+    const { state } = this.getState();
+
+    if (object === state.start) {
+      return getKuskiSelectionCircles({ start: state.start }).some((circle) =>
+        circleIntersectsRect(
+          { x: circle.x, y: circle.y },
+          circle.radius,
+          bounds,
+        ),
+      );
+    }
+
+    return circleIntersectsRect(object, getObjectBoundsRadius(), bounds);
+  }
+
+  private pictureIntersectsMarquee(
+    picture: Picture,
+    bounds: WorldRect,
+  ): boolean {
+    const dimensions = this.pictureDimensionsResolver({
+      name: picture.name || undefined,
+      texture: picture.texture || undefined,
+      mask: picture.mask || undefined,
+    });
+    if (!dimensions) return isPointInRect(picture.position, bounds);
+
+    return rectsIntersect(
+      {
+        minX: picture.position.x,
+        minY: picture.position.y,
+        maxX: picture.position.x + dimensions.width,
+        maxY: picture.position.y + dimensions.height,
+      },
+      bounds,
+    );
   }
 
   private isPolygonSelectable(): boolean {
@@ -1054,6 +1423,16 @@ export class SelectTool extends Tool<SelectToolState> {
       state.killers.includes(object) ||
       state.flowers.includes(object) ||
       state.apples.some((apple) => apple.position === object)
+    );
+  }
+
+  private hasObjects(): boolean {
+    const { state } = this.getState();
+    return (
+      state.apples.length > 0 ||
+      state.killers.length > 0 ||
+      state.flowers.length > 0 ||
+      Boolean(state.start)
     );
   }
 
@@ -1266,6 +1645,7 @@ export class SelectTool extends Tool<SelectToolState> {
     let nextKillers: Position[] | undefined;
     let nextFlowers: Position[] | undefined;
     let nextStart: Position | undefined;
+    let nextHoveredObject: Position | undefined = toolState.hoveredObject;
     const updatedSelectedObjects = [...toolState.selectedObjects];
 
     // Update each selected object with its new position
@@ -1303,6 +1683,9 @@ export class SelectTool extends Tool<SelectToolState> {
       if (object === state.start) {
         nextStart = newPos;
         updatedSelectedObjects[index] = newPos;
+        if (toolState.hoveredObject === object) {
+          nextHoveredObject = newPos;
+        }
       }
     });
 
@@ -1311,7 +1694,10 @@ export class SelectTool extends Tool<SelectToolState> {
     if (nextFlowers) state.actions.setFlowers(nextFlowers);
     if (nextStart) state.actions.setStart(nextStart);
 
-    setToolState({ selectedObjects: updatedSelectedObjects });
+    setToolState({
+      selectedObjects: updatedSelectedObjects,
+      hoveredObject: nextHoveredObject,
+    });
   }
 
   private updateSelectedPictures(newPositions: Position[]): void {
@@ -1782,6 +2168,86 @@ function clonePosition(position: Position): Position {
   return { x: position.x, y: position.y };
 }
 
+function circleIntersectsRect(
+  center: Position,
+  radius: number,
+  rect: WorldRect,
+): boolean {
+  const closestX = Math.max(rect.minX, Math.min(center.x, rect.maxX));
+  const closestY = Math.max(rect.minY, Math.min(center.y, rect.maxY));
+  const dx = center.x - closestX;
+  const dy = center.y - closestY;
+
+  return dx * dx + dy * dy <= radius * radius;
+}
+
+function getSelectedPictureIndexes(
+  pictures: Picture[],
+  selectedPictures: Position[],
+): number[] {
+  const handledIndexes = new Set<number>();
+
+  return selectedPictures
+    .map((position) => {
+      const index = pictures.findIndex(
+        (picture, candidateIndex) =>
+          !handledIndexes.has(candidateIndex) && picture.position === position,
+      );
+      if (index === -1) return null;
+      handledIndexes.add(index);
+      return index;
+    })
+    .filter((index): index is number => index !== null);
+}
+
+function getArrangeDistanceDelta(
+  direction: ArrangeSelectionDirection,
+  {
+    minSelectedDistance,
+    maxSelectedDistance,
+    unselectedDistances,
+  }: {
+    minSelectedDistance: number;
+    maxSelectedDistance: number;
+    unselectedDistances: number[];
+  },
+) {
+  if (direction === "front") {
+    return MIN_PICTURE_DISTANCE - minSelectedDistance;
+  }
+
+  if (direction === "back") {
+    return MAX_PICTURE_DISTANCE - maxSelectedDistance;
+  }
+
+  if (direction === "forward") {
+    const nearestFrontDistance = Math.max(
+      ...unselectedDistances.filter(
+        (distance) => distance < minSelectedDistance,
+      ),
+    );
+    if (!Number.isFinite(nearestFrontDistance)) {
+      return MIN_PICTURE_DISTANCE - minSelectedDistance;
+    }
+    return nearestFrontDistance - minSelectedDistance - 1;
+  }
+
+  const nearestBackDistance = Math.min(
+    ...unselectedDistances.filter((distance) => distance > maxSelectedDistance),
+  );
+  if (!Number.isFinite(nearestBackDistance)) {
+    return MAX_PICTURE_DISTANCE - maxSelectedDistance;
+  }
+  return nearestBackDistance - maxSelectedDistance + 1;
+}
+
+function clampPictureDistance(distance: number) {
+  return Math.min(
+    MAX_PICTURE_DISTANCE,
+    Math.max(MIN_PICTURE_DISTANCE, Math.round(distance)),
+  );
+}
+
 function getClipboardCenter(clipboard: SelectionClipboard): Position | null {
   const positions: Position[] = [
     ...clipboard.polygons.flatMap((polygon) => polygon.vertices),
@@ -2004,7 +2470,7 @@ function createSelectionHandleOverlay(
     fillColor: uiColors.selectionHandleFill,
     strokeColor: uiColors.selectionHandleStroke,
     lineWidth,
-    layer: "top",
+    layer: "top" as const,
   };
 }
 

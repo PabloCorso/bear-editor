@@ -49,7 +49,9 @@ export function AppleToolControl(props: ToolControlButtonProps) {
     2: apple2,
   };
   const apple =
-    appleSprites.find(({ animation }) => animation === currentAnimation) ??
+    appleSprites.find(
+      ({ animation, src }) => animation === currentAnimation && src,
+    ) ??
     (fallbackApples[currentAnimation] || apple1);
 
   return (
@@ -77,12 +79,16 @@ export function AppleToolControl(props: ToolControlButtonProps) {
 
 type AppleToolbarProps = ToolbarProps & {
   withShortcuts?: boolean;
+  currentAnimation?: AppleAnimation | null;
+  currentGravity?: Gravity | null;
   onAnimationChange: (animation: AppleAnimation) => void;
   onGravityChange: (gravity: Gravity) => void;
 };
 
 export function AppleToolbar({
   withShortcuts = true,
+  currentAnimation: controlledAnimation,
+  currentGravity: controlledGravity,
   onAnimationChange,
   onGravityChange,
   ...props
@@ -93,8 +99,13 @@ export function AppleToolbar({
   const appleSprites = useAppleSprites();
   const apple = useLgrSprite("qfood1");
   const currentAnimation =
-    appleToolState?.animation ?? defaultAppleState.animation;
-  const currentGravity = appleToolState?.gravity ?? defaultAppleState.gravity;
+    controlledAnimation === undefined
+      ? (appleToolState?.animation ?? defaultAppleState.animation)
+      : controlledAnimation;
+  const currentGravity =
+    controlledGravity === undefined
+      ? (appleToolState?.gravity ?? defaultAppleState.gravity)
+      : controlledGravity;
 
   return (
     <Toolbar orientation="vertical" {...props}>
@@ -181,7 +192,7 @@ function AppleButton({
   );
 }
 
-function AppleArrowIcon({
+export function AppleArrowIcon({
   gravity,
   className,
   style,

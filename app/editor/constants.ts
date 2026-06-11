@@ -17,7 +17,7 @@ export const selectionThresholds = {
 export const uiSelectionHandle = {
   halfWidthPx: 3,
   strokeWidthPx: 0.75,
-  cornerRadiusPx: 1.5,
+  cornerRadiusPx: 2,
 } as const;
 
 export const selectionRenderLimits = {
@@ -42,7 +42,7 @@ export const colors = {
 
 export const uiColors = {
   selectionHandleFill: "#ffffff",
-  selectionHandleStroke: "#1b3b5c",
+  selectionHandleStroke: "#5ec8ff",
   boundsIdle: "#5ec8ff",
   boundsHover: "#ffffff",
   boundsSelected: "#5ec8ff",

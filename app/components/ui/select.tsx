@@ -60,7 +60,7 @@ export function SelectContent({
   className,
   positionerClassName,
   align = "start",
-  sideOffset = 4,
+  sideOffset = 12,
   collisionPadding = 8,
   children,
   ...props

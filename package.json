@@ -9,10 +9,11 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "format": "prettier . --write",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "validate": "run-p lint typecheck"
+    "validate": "run-p lint typecheck test"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.11",
