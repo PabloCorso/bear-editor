@@ -15,8 +15,8 @@ import {
   AppleToolbar,
 } from "~/editor/edit-mode/toolbars/apple-tool-control";
 import { PicturePropertiesToolbar } from "~/editor/edit-mode/toolbars/picture-properties-toolbar";
-import { VertexContextMenuToolbar } from "~/editor/edit-mode/toolbars/vertex-tool-control";
 import {
+  VertexContextMenuToolbar,
   VertexIcon,
   getVertexIconProps,
 } from "~/editor/edit-mode/toolbars/vertex-tool-control";
@@ -35,6 +35,7 @@ import {
   type Position,
 } from "~/editor/elma-types";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Icon } from "~/components/ui/icon";
 import { PictureIcon, SpriteIcon } from "~/components/sprite-icon";
 import {
@@ -45,6 +46,7 @@ import {
 import { defaultAppleState } from "~/editor/edit-mode/tools/apple-tools";
 import { defaultPictureState } from "~/editor/edit-mode/tools/picture-tool";
 import { defaultTextureState } from "~/editor/edit-mode/tools/texture-tool";
+import { colors } from "~/editor/constants";
 import {
   Toolbar,
   ToolbarButton,
@@ -52,8 +54,8 @@ import {
 } from "~/components/ui/toolbar";
 import {
   CaretDownIcon,
-  CheckIcon,
   DotsThreeVerticalIcon,
+  ArrowRightIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { useState } from "react";
 import {
@@ -67,7 +69,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { useAlternateModifier, useModifier } from "~/utils/misc";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import { cn, useModifier } from "~/utils/misc";
 import kuskiSrc from "~/assets/kuski.png";
 
 const TOOLBAR_COLLISION_PADDING_PX = 8;
@@ -383,14 +390,9 @@ function SelectionGroupsMenu({
     0,
   );
   const icons = useSelectionGroupIcons();
-  const alternateModifier = useAlternateModifier();
   const [onlyPreviewKind, setOnlyPreviewKind] =
     useState<SelectSelectionKind | null>(null);
   const onlyGroup = sourceGroups.length === 1 ? sourceGroups[0] : null;
-  const onlyShortcut = alternateModifier
-    ? `${alternateModifier} + click`
-    : "Alt + click";
-  const onlyHint = `${onlyShortcut} for quick filter`;
 
   if (onlyGroup) {
     return (
@@ -427,49 +429,76 @@ function SelectionGroupsMenu({
         align="start"
         side="bottom"
         onPointerLeave={() => setOnlyPreviewKind(null)}
-        onKeyUp={(event) => {
-          if (event.key === "Alt") setOnlyPreviewKind(null);
-        }}
       >
-        <DropdownMenuGroup>
+        <DropdownMenuGroup className="w-56">
           {sourceGroups.map((group) => {
             const isActive = activeKinds.has(group.kind);
             const canToggle = isActive ? activeKinds.size > 1 : true;
             const isPreviewingOnly = onlyPreviewKind === group.kind;
             const showCheck = onlyPreviewKind ? isPreviewingOnly : isActive;
+            const checkboxLabel = `${
+              isActive ? "Exclude" : "Include"
+            } ${group.label.toLowerCase()} ${isActive ? "from" : "in"} selection`;
+            const quickFilterLabel = `Filter only ${group.label.toLowerCase()}`;
 
             return (
-              <DropdownMenuItem
+              <div
                 key={group.kind}
-                closeOnClick={false}
-                onPointerMove={(event) => {
-                  setOnlyPreviewKind(event.altKey ? group.kind : null);
-                }}
-                onClick={(event) => {
-                  if (event.altKey) {
-                    onSelect(group.kind);
-                    return;
-                  }
-                  if (!canToggle) return;
-                  onToggle(group.kind);
-                }}
-                className="min-w-56 gap-2 py-1 pr-1.5 pl-1.5"
-                aria-label={`${group.label}, ${group.count} selected. ${onlyHint}.`}
+                className="flex items-center gap-0.5 rounded-xs p-0.5"
               >
-                <Icon className="opacity-75">{icons[group.kind]}</Icon>
-                {group.label}
-                <span className="ml-auto pl-4 text-xs font-medium text-secondary">
-                  {group.count}
-                </span>
-                <span className="ml-2 flex h-5 w-5 shrink-0 items-center justify-center text-[11px] text-primary">
-                  {showCheck ? <CheckIcon weight="bold" /> : null}
-                </span>
-              </DropdownMenuItem>
+                <Checkbox
+                  checked={isActive}
+                  accentColor={colors.sky}
+                  visualChecked={showCheck}
+                  disabled={!canToggle}
+                  onCheckedChange={() => onToggle(group.kind)}
+                  className={cn(
+                    "flex h-8 min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-xs px-1.5 text-left text-sm leading-none transition-colors hover:bg-primary-hover active:bg-primary-active data-disabled:pointer-events-none data-disabled:opacity-55",
+                    isActive && "text-primary",
+                  )}
+                  aria-label={checkboxLabel}
+                >
+                  <Icon
+                    size="sm"
+                    className="flex items-center justify-center opacity-75"
+                  >
+                    {icons[group.kind]}
+                  </Icon>
+                  <span className="min-w-0 flex-1 truncate leading-4">
+                    {group.label}
+                  </span>
+                  <span className="pl-1.5 text-xs leading-4 font-medium text-secondary">
+                    {group.count}
+                  </span>
+                </Checkbox>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <button
+                      type="button"
+                      onPointerEnter={() => setOnlyPreviewKind(group.kind)}
+                      onFocus={() => setOnlyPreviewKind(group.kind)}
+                      onPointerLeave={() => setOnlyPreviewKind(null)}
+                      onBlur={() => setOnlyPreviewKind(null)}
+                      onClick={() => onSelect(group.kind)}
+                      className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-xs text-secondary transition-colors hover:bg-primary-hover hover:text-primary focus-visible:focus-ring active:bg-primary-active"
+                      aria-label={quickFilterLabel}
+                    >
+                      <Icon size="sm">
+                        <ArrowRightIcon weight="bold" />
+                      </Icon>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side="right"
+                    className="z-[70] px-2 py-1 text-xs"
+                  >
+                    {quickFilterLabel}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             );
           })}
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <div className="px-2 py-1 text-xs text-secondary">{onlyHint}</div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

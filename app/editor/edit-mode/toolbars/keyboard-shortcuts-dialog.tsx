@@ -20,7 +20,7 @@ import {
   usePlaySettings,
   useVertexEdgeClickPreference,
 } from "~/editor/use-editor-store";
-import { cn, useAlternateModifier, useModifier } from "~/utils/misc";
+import { cn, useModifier } from "~/utils/misc";
 import { VertexIcon, getVertexIconProps } from "./vertex-tool-control";
 import { OPEN_KEYBOARD_SHORTCUTS_SHORTCUT } from "./keyboard-shortcuts";
 
@@ -46,7 +46,6 @@ type Shortcut = string | string[];
 
 export function KeyboardShortcutsDialog(props: DialogProps) {
   const modifier = useModifier();
-  const alternateModifier = useAlternateModifier();
   const appleDefaultSprite = useLgrSprite("qfood1");
   const killerSprite = useLgrSprite("qkiller");
   const flowerSprite = useLgrSprite("qexit");
@@ -60,7 +59,7 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
   const textureSprite =
     textureMaskSprites[0]?.maskedSrc ?? textureMaskSprites[0]?.src;
   const shortcutGroups = getShortcutGroups(
-    { modifier, alternateModifier },
+    { modifier },
     {
       appleSprite,
       killerSprite: killerSprite.src,
@@ -182,10 +181,8 @@ function ShortcutKeys({ shortcut }: { shortcut: Shortcut }) {
 function getShortcutGroups(
   {
     modifier,
-    alternateModifier,
   }: {
     modifier: string;
-    alternateModifier: string;
   },
   toolIcons: {
     appleSprite?: string;
@@ -221,10 +218,6 @@ function getShortcutGroups(
             {
               shortcut: ["Right click", "Long press"],
               label: "Open selection context menu",
-            },
-            {
-              shortcut: `${alternateModifier || "Alt"} + Click`,
-              label: "Quick filter",
             },
             {
               shortcut: "Delete",
