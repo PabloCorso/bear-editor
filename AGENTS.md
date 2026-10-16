@@ -40,6 +40,8 @@ useEffect(function handleEscapeKeyListener() {
 }, []);
 ```
 
+Never create test files unless explicitly requested by a human.
+
 ## Agent skills
 
 ### Issue tracker
