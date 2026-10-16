@@ -10,6 +10,9 @@ import {
   ArrowArcLeftIcon,
   ArrowArcRightIcon,
   CornersOutIcon,
+  ChatsCircleIcon,
+  ClockCounterClockwiseIcon,
+  ArrowUpRightIcon,
   MinusIcon,
   PlusIcon,
   QuestionIcon,
@@ -25,6 +28,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { KeyboardShortcutsDialog } from "./keyboard-shortcuts-dialog";
@@ -126,6 +130,33 @@ function CanvasHelpMenu({ onOpenShortcuts }: { onOpenShortcuts: () => void }) {
           onClick={onOpenShortcuts}
         >
           Keyboard shortcuts
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          iconBefore={<ClockCounterClockwiseIcon />}
+          shortcut={<ArrowUpRightIcon aria-hidden className="size-3" />}
+          render={
+            <a
+              href="https://github.com/PabloCorso/bear-editor/blob/main/CHANGELOG.md"
+              target="_blank"
+              rel="noreferrer"
+            />
+          }
+        >
+          Latest updates
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          iconBefore={<ChatsCircleIcon />}
+          shortcut={<ArrowUpRightIcon aria-hidden className="size-3" />}
+          render={
+            <a
+              href="https://discord.com/channels/207629806513160192/531257164451414018"
+              target="_blank"
+              rel="noreferrer"
+            />
+          }
+        >
+          Help & feedback
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

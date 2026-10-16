@@ -48,7 +48,7 @@ import { supportsFilePickers } from "~/editor/helpers/file-session";
 import { SettingsDialog } from "~/editor/edit-mode/edit-settings";
 import { IconButton } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
-import { checkModifierKey, cn, useModifier } from "~/utils/misc";
+import { checkModifierKey, cn, getModifier, useModifier } from "~/utils/misc";
 import { LevelVisibilityControl } from "./level-visibility-control";
 import { LevelPropertiesControl } from "./level-properties-control";
 import type { EditorDocumentOrigin } from "~/editor/editor-state";
@@ -68,6 +68,9 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip.js";
 
+import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
+import { LevelFolderTip } from "./level-folder-tip";
+
 const ISSUE_FOCUS_MIN_ZOOM = 0.2;
 const ISSUE_FOCUS_MAX_ZOOM = 10000;
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
@@ -80,9 +83,11 @@ export function HeaderToolbar({
   ...props
 }: HeaderToolbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [highlightLevelFolder, setHighlightLevelFolder] = useState(false);
   const [topologyResult, setTopologyResult] =
     useState<TopologyCheckResult | null>(null);
-  const { handleOpenFile, handleSave } = useMainMenuActions();
+  const menuActions = useMainMenuActions();
+  const { handleNew, handleOpenFile, handleSave } = menuActions;
 
   useEffect(
     function registerMainMenuHotkeys() {
@@ -115,10 +120,29 @@ export function HeaderToolbar({
         }
       };
 
+      const handleNewLevelKeyDown = (event: KeyboardEvent) => {
+        if (!isNewLevelShortcut(event, getModifier() === "⌘")) return;
+        if (
+          event.target instanceof Element &&
+          event.target.closest('[role="dialog"]')
+        )
+          return;
+        if (event.repeat) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        void handleNew();
+      };
+
+      // Claim New before canvas tools can interpret N as a tool action.
+      window.addEventListener("keydown", handleNewLevelKeyDown, true);
       window.addEventListener("keydown", handleKeyDown);
-      return () => window.removeEventListener("keydown", handleKeyDown);
+      return () => {
+        window.removeEventListener("keydown", handleNewLevelKeyDown, true);
+        window.removeEventListener("keydown", handleKeyDown);
+      };
     },
-    [handleOpenFile, handleSave, topologyResult],
+    [handleNew, handleOpenFile, handleSave, topologyResult],
   );
 
   return (
@@ -131,7 +155,10 @@ export function HeaderToolbar({
         {...props}
       >
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
-          <MainDropdownMenu onOpenSettings={() => setSettingsOpen(true)} />
+          <MainDropdownMenu
+            actions={menuActions}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
           <LevelVisibilityControl />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
@@ -145,7 +172,10 @@ export function HeaderToolbar({
 
         <div className="hidden grid-cols-[120px_minmax(0,1fr)_120px] gap-4 sm:grid">
           <Toolbar className="pointer-events-auto w-fit gap-2">
-            <MainDropdownMenu onOpenSettings={() => setSettingsOpen(true)} />
+            <MainDropdownMenu
+              actions={menuActions}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
             <LevelVisibilityControl />
           </Toolbar>
 
@@ -172,7 +202,20 @@ export function HeaderToolbar({
           />
         </div>
       </div>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <LevelFolderTip
+        onOpenSettings={() => {
+          setHighlightLevelFolder(true);
+          setSettingsOpen(true);
+        }}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        highlightLevelFolder={highlightLevelFolder}
+        onOpenChange={(open) => {
+          setSettingsOpen(open);
+          if (!open) setHighlightLevelFolder(false);
+        }}
+      />
     </>
   );
 }
@@ -224,6 +267,7 @@ function useMainMenuActions() {
   );
 
   const handleOpenFile = useCallback(async () => {
+    if (store.getState().documentSession.saveState === "saving") return;
     await runWithPickerGuard(async () => {
       const shouldContinue = await confirmDiscardChanges();
       if (!shouldContinue) return;
@@ -266,11 +310,12 @@ function useMainMenuActions() {
   ]);
 
   const handleNew = useCallback(async () => {
+    if (store.getState().documentSession.saveState === "saving") return;
     const shouldContinue = await confirmDiscardChanges();
     if (!shouldContinue) return;
 
     activeTool?.clear?.();
-    store.getState().fileSession.clear();
+    await store.getState().fileSession.clear();
     const defaultLevel = getDefaultLevel(
       defaultLevelPreset,
       customDefaultLevelTemplate,
@@ -303,6 +348,7 @@ function useMainMenuActions() {
   }, [setDocumentSaveState, store]);
 
   const handleSaveAs = useCallback(async () => {
+    if (store.getState().documentSession.saveState === "saving") return;
     await runWithPickerGuard(async () => {
       try {
         const state = store.getState();
@@ -342,15 +388,15 @@ function useMainMenuActions() {
   ]);
 
   const handleSave = useCallback(async () => {
+    if (store.getState().documentSession.saveState === "saving") return;
     try {
       const state = store.getState();
       const fileSession = state.fileSession;
       const baselineLevel = getLevelSnapshot(state);
-      setDocumentSaveState("saving");
-
       if (!fileSession.hasFile) {
         return handleSaveAs();
       }
+      setDocumentSaveState("saving");
 
       const result = await fileSession.save();
       if (!result) {
@@ -384,9 +430,14 @@ function useMainMenuActions() {
   return { handleNew, handleOpenFile, handleSave, handleSaveAs };
 }
 
-function MainDropdownMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { handleNew, handleOpenFile, handleSave, handleSaveAs } =
-    useMainMenuActions();
+function MainDropdownMenu({
+  onOpenSettings,
+  actions,
+}: {
+  onOpenSettings: () => void;
+  actions: ReturnType<typeof useMainMenuActions>;
+}) {
+  const { handleNew, handleOpenFile, handleSave, handleSaveAs } = actions;
   const modifier = useModifier();
 
   return (
@@ -414,12 +465,12 @@ function MainDropdownMenu({ onOpenSettings }: { onOpenSettings: () => void }) {
           <DropdownMenuGroup>
             <DropdownMenuItem
               iconBefore={<FilePlusIcon />}
-              shortcut={`${modifier} + R`}
+              shortcut={getNewLevelShortcut(modifier === "⌘")}
               onClick={() => {
                 void handleNew();
               }}
             >
-              New
+              New level
             </DropdownMenuItem>
             <DropdownMenuItem
               iconBefore={<FolderOpenIcon />}

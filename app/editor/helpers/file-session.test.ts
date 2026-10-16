@@ -22,6 +22,63 @@ describe("FileSession.openLast", () => {
     }
   });
 
+  it("keeps a new blank level on reopen instead of restoring the previous file", async () => {
+    globalThis.window = {} as Window & typeof globalThis;
+    globalThis.indexedDB = {} as IDBFactory;
+
+    const contents = new Uint8Array([1, 2, 3]).buffer;
+    const fileHandle = {
+      queryPermission: vi.fn(async () => "granted"),
+      getFile: vi.fn(async () => ({
+        name: "previous.lev",
+        arrayBuffer: async () => contents,
+      })),
+    } as unknown as FileSystemFileHandle;
+    const handles = new Map<string, FileSystemFileHandle>();
+    const names = new Map<string, string>();
+    const storage = {
+      loadFileHandle: async (key: string) => handles.get(key) ?? null,
+      loadFileName: async (key: string) => names.get(key) ?? null,
+      persistFileHandle: async (key: string, handle: FileSystemFileHandle) => {
+        handles.set(key, handle);
+      },
+      persistFileName: async (key: string, name: string) => {
+        names.set(key, name);
+      },
+      clearLastFile: async () => {
+        handles.clear();
+        names.clear();
+      },
+    };
+    const levelFolder = {
+      hasAccess: vi.fn(async () => true),
+      getLevelFileHandle: vi.fn(async () => fileHandle),
+    };
+    const store = {
+      getState: () => ({ levelFolder }),
+    } as unknown as EditorStore;
+    const session = new FileSession(store, storage);
+    await session.open(fileHandle);
+    expect(await new FileSession(store, storage).openLast()).toEqual({
+      contents,
+      fileName: "previous.lev",
+    });
+
+    // New level clears the active file before the editor is reopened.
+    await session.clear();
+    expect(session.hasFile).toBe(false);
+    expect(session.fileName).toBeUndefined();
+    expect(await new FileSession(store, storage).openLast()).toBe(false);
+    expect(levelFolder.getLevelFileHandle).not.toHaveBeenCalled();
+
+    // Opening a file again should resume remembering it.
+    await session.open(fileHandle);
+    expect(await new FileSession(store, storage).openLast()).toEqual({
+      contents,
+      fileName: "previous.lev",
+    });
+  });
+
   it("restores the last file from the level folder without requiring picker support", async () => {
     globalThis.window = {} as Window & typeof globalThis;
     globalThis.indexedDB = {} as IDBFactory;
@@ -42,6 +99,7 @@ describe("FileSession.openLast", () => {
       getLevelFileHandle: vi.fn(async () => fileHandle),
     };
     const storage = {
+      clearLastFile: vi.fn(async () => undefined),
       loadFileHandle: vi.fn(async () => null),
       loadFileName: vi.fn(async () => "last.lev"),
       persistFileHandle: vi.fn(async () => undefined),
@@ -88,6 +146,7 @@ describe("FileSession.openLast", () => {
       getLevelFileHandle: vi.fn(),
     };
     const storage = {
+      clearLastFile: vi.fn(async () => undefined),
       loadFileHandle: vi.fn(async () => fileHandle),
       loadFileName: vi.fn(async () => null),
       persistFileHandle: vi.fn(async () => undefined),

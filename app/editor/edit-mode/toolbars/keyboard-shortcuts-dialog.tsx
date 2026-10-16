@@ -27,7 +27,10 @@ import {
   VertexIcon,
   getVertexIconProps,
 } from "./vertex-tool-control";
-import { OPEN_KEYBOARD_SHORTCUTS_SHORTCUT } from "./keyboard-shortcuts";
+import {
+  getNewLevelShortcut,
+  OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
+} from "./keyboard-shortcuts";
 
 type ShortcutGroup = {
   title: string;
@@ -221,7 +224,7 @@ function getShortcutGroups(
               label: "Move selected vertices along an edge",
             },
             {
-              shortcut: ["Right click", "Long press"],
+              shortcut: "Right click",
               label: "Open selection context menu",
             },
             {
@@ -388,8 +391,8 @@ function getShortcutGroups(
       title: "General",
       items: [
         {
-          shortcut: `${modifier} + R`,
-          label: "New",
+          shortcut: getNewLevelShortcut(modifier === "⌘"),
+          label: "New level",
         },
         {
           shortcut: `${modifier} + O`,

@@ -15,6 +15,7 @@ const LAST_FILE_KEY = "last-file";
 const LAST_FILE_NAME_KEY = "last-file-name";
 
 type FileSessionStorage = {
+  clearLastFile(): Promise<void>;
   loadFileHandle(key: string): Promise<FileSystemFileHandle | null>;
   persistFileHandle(key: string, handle: FileSystemFileHandle): Promise<void>;
   loadFileName(key: string): Promise<string | null>;
@@ -56,18 +57,30 @@ export class FileSession {
   clear() {
     this.handle = undefined;
     this.name = undefined;
+    return this.storage.clearLastFile().catch(() => {});
   }
 
   async openLast(): Promise<FileSessionOpenResult | false> {
     if (!canStoreFileSession()) return false;
 
-    const fileHandle = await this.storage.loadFileHandle(LAST_FILE_KEY);
-    if (!fileHandle) return this.openLastFromLevelFolder();
+    try {
+      const fileHandle = await this.storage.loadFileHandle(LAST_FILE_KEY);
+      if (fileHandle && (await hasReadPermission(fileHandle))) {
+        const result = await this.open(fileHandle).catch(() => false as const);
+        if (result) return result;
+      }
 
-    const hasPermission = await hasReadPermission(fileHandle);
-    if (!hasPermission) return this.openLastFromLevelFolder();
+      const fromFolder = await this.openLastFromLevelFolder().catch(
+        () => false as const,
+      );
+      if (fromFolder) return fromFolder;
 
-    return this.open(fileHandle);
+      // The browser may allow requesting access to a remembered file. If it
+      // requires a user gesture, startup simply falls back to a new level.
+      return fileHandle ? await this.open(fileHandle) : false;
+    } catch {
+      return false;
+    }
   }
 
   private async openLastFromLevelFolder(): Promise<
@@ -86,8 +99,12 @@ export class FileSession {
 
     this.handle = fileHandle;
     this.name = file.name;
-    await this.storage.persistFileHandle(LAST_FILE_KEY, fileHandle);
-    await this.storage.persistFileName(LAST_FILE_NAME_KEY, file.name);
+    await this.storage
+      .persistFileHandle(LAST_FILE_KEY, fileHandle)
+      .catch(() => {});
+    await this.storage
+      .persistFileName(LAST_FILE_NAME_KEY, file.name)
+      .catch(() => {});
 
     return { contents, fileName };
   }
@@ -112,8 +129,12 @@ export class FileSession {
 
     this.handle = fileHandle;
     this.name = file.name;
-    await this.storage.persistFileHandle(LAST_FILE_KEY, fileHandle);
-    await this.storage.persistFileName(LAST_FILE_NAME_KEY, file.name);
+    await this.storage
+      .persistFileHandle(LAST_FILE_KEY, fileHandle)
+      .catch(() => {});
+    await this.storage
+      .persistFileName(LAST_FILE_NAME_KEY, file.name)
+      .catch(() => {});
 
     return { contents, fileName: file.name };
   }
@@ -123,22 +144,26 @@ export class FileSession {
 
     const level = elmaLevelFromEditorState(this.store.getState());
     if (!this.handle) {
-      this.clear();
+      await this.clear();
       downloadLevel(level);
       return { mode: "download", fileName: `${level.name}.lev` };
     }
 
     const canWrite = await verifyPermission(this.handle, { withWrite: true });
     if (!canWrite) {
-      this.clear();
+      await this.clear();
       downloadLevel(level);
       return { mode: "download", fileName: `${level.name}.lev` };
     }
 
     await writeFile(this.handle, levelToBlob(level));
-    await this.storage.persistFileHandle(LAST_FILE_KEY, this.handle);
+    await this.storage
+      .persistFileHandle(LAST_FILE_KEY, this.handle)
+      .catch(() => {});
     if (this.name)
-      await this.storage.persistFileName(LAST_FILE_NAME_KEY, this.name);
+      await this.storage
+        .persistFileName(LAST_FILE_NAME_KEY, this.name)
+        .catch(() => {});
     return { mode: "file", fileName: this.name };
   }
 
@@ -147,7 +172,7 @@ export class FileSession {
 
     // No picker support: download instead.
     if (!supportsFilePickers()) {
-      this.clear();
+      await this.clear();
       downloadLevel(level);
       return { mode: "download", fileName: `${level.name}.lev` };
     }
@@ -157,7 +182,7 @@ export class FileSession {
 
     const canWrite = await verifyPermission(fileHandle, { withWrite: true });
     if (!canWrite) {
-      this.clear();
+      await this.clear();
       downloadLevel(level);
       return { mode: "download", fileName: `${level.name}.lev` };
     }
@@ -166,8 +191,12 @@ export class FileSession {
     await writeFile(fileHandle, blob);
     this.handle = fileHandle;
     this.name = fileHandle.name;
-    await this.storage.persistFileHandle(LAST_FILE_KEY, fileHandle);
-    await this.storage.persistFileName(LAST_FILE_NAME_KEY, fileHandle.name);
+    await this.storage
+      .persistFileHandle(LAST_FILE_KEY, fileHandle)
+      .catch(() => {});
+    await this.storage
+      .persistFileName(LAST_FILE_NAME_KEY, fileHandle.name)
+      .catch(() => {});
     return { mode: "file", fileName: fileHandle.name };
   }
 }
@@ -193,6 +222,7 @@ async function hasReadPermission(fileHandle: FileSystemFileHandle) {
 }
 
 const indexedDbStorage: FileSessionStorage = {
+  clearLastFile,
   loadFileHandle,
   persistFileHandle,
   loadFileName,
@@ -258,5 +288,17 @@ async function loadFileName(key: string): Promise<string | null> {
     request.onsuccess = () =>
       resolve(typeof request.result === "string" ? request.result : null);
     request.onerror = () => reject(request.error);
+  });
+}
+
+async function clearLastFile(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.onerror = () => reject(tx.error);
+    tx.oncomplete = () => resolve();
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(LAST_FILE_KEY);
+    store.delete(LAST_FILE_NAME_KEY);
   });
 }

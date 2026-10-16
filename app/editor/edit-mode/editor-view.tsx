@@ -241,9 +241,10 @@ export function useInitialLevel(levelName?: string): InitialDocument {
           console.error("Error loading initial level:", error);
           if (isCanceled) return;
 
+          if (!levelName) store.getState().fileSession.clear();
           setData(undefined);
           setFileName(undefined);
-          setStatus("error");
+          setStatus(levelName ? "error" : "done");
         }
       }
 

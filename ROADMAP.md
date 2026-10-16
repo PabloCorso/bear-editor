@@ -4,11 +4,6 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
-- Better save safety.
-  - Save state to local storage and show a recover message on init. One entry per tab and show a dialog with recover or clear up saved state.
-
-- Help section / keyboard shortcuts reference
-
 - AI Assistant
 
 - More vertex tool options or new polygon tools
@@ -33,6 +28,10 @@ Planned features and feedback for Bear Editor.
 
 - Faster loads
   - Investigate making `elmajs` tree-shakeable (it currently enters the client bundle through its CommonJS barrel, bringing unused package areas with it).
+
+## Known issues
+
+- **Chrome button hover flicker — investigate later.** Reproduced on Chrome 155 / macOS 26.6.2 (Apple M2), including Incognito; not reproduced in Safari. Continuous canvas redraws trigger it even in a standalone WebGL/Canvas 2D page; pausing redraws or hiding the canvas stops it. Frozen sprite frames still flicker. Button primitives, transitions, toolbar opacity, paint containment, WebGL alpha and antialiasing changes did not resolve it. Disabling Skia Graphite left Chrome's GPU unavailable after crashes, so it is not a confirmed fix. All editor experiments reverted; cause unresolved.
 
 ## Other
 

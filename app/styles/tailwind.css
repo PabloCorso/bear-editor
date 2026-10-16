@@ -45,6 +45,14 @@
   @theme {
     --font-sans: Inter, sans-serif;
     --font-sans--font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+
+    --animate-folder-highlight: folder-highlight 1.1s ease-in-out 2;
+
+    @keyframes folder-highlight {
+      50% {
+        opacity: 1;
+      }
+    }
   }
 
   @theme inline {
