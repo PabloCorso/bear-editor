@@ -1,3 +1,12 @@
+import { Input } from "~/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectTriggerIcon,
+  SelectValue,
+} from "~/components/ui/select";
 import {
   useEffect,
   useRef,
@@ -55,7 +64,6 @@ import {
 import { Button } from "../../components/ui/button";
 import {
   ArrowCounterClockwiseIcon,
-  CaretDownIcon,
   FolderIcon,
   InfoIcon,
   PlusIcon,
@@ -483,7 +491,7 @@ function PreferencesSettingsPanel({
                 </span>
               </button>
             )}
-            <input
+            <Input
               ref={customTemplateInputRef}
               type="file"
               accept=".lev"
@@ -610,28 +618,28 @@ export function PlaySettingsPanel() {
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
           <label className="flex items-center justify-between">
             <span className="min-w-24 text-sm">When run ends</span>
-            <span className="relative">
-              <select
-                value={playSettings.runEndBehavior}
-                onChange={(event) =>
-                  setPlaySettings({
-                    runEndBehavior: event.currentTarget
-                      .value as PlayRunEndBehavior,
-                  })
-                }
-                className="w-32 appearance-none rounded-md border border-separator bg-transparent py-2 pr-8 pl-3 text-sm"
-              >
+            <Select
+              value={playSettings.runEndBehavior}
+              items={playRunEndBehaviors.map((behavior) => ({
+                value: behavior.id,
+                label: behavior.label,
+              }))}
+              onValueChange={(value) => {
+                if (value) setPlaySettings({ runEndBehavior: value });
+              }}
+            >
+              <SelectTrigger className="h-9 w-32 min-w-0 px-3 font-normal">
+                <SelectValue />
+                <SelectTriggerIcon />
+              </SelectTrigger>
+              <SelectContent>
                 {playRunEndBehaviors.map((behavior) => (
-                  <option key={behavior.id} value={behavior.id}>
+                  <SelectItem key={behavior.id} value={behavior.id}>
                     {behavior.label}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-              <CaretDownIcon
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-primary/70"
-              />
-            </span>
+              </SelectContent>
+            </Select>
           </label>
         </div>
       </div>
@@ -653,7 +661,7 @@ function PlayKeyField({
   return (
     <label className="flex items-center justify-between">
       <span className="min-w-24 text-sm">{label}</span>
-      <input
+      <Input
         type="text"
         readOnly
         value={isCapturing ? "Press a key..." : formatPlayKeyCode(value)}
@@ -673,10 +681,7 @@ function PlayKeyField({
           setIsCapturing(false);
           event.currentTarget.blur();
         }}
-        className={cn(
-          "w-32 rounded-md border border-separator bg-transparent px-3 py-2 text-sm",
-          isCapturing && "border-blue-400 bg-blue-500/10",
-        )}
+        className={cn("w-32", isCapturing && "border-blue-400 bg-blue-500/10")}
       />
     </label>
   );

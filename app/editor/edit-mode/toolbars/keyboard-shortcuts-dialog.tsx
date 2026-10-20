@@ -23,7 +23,6 @@ import {
 import { cn, useModifier } from "~/utils/misc";
 import {
   AUTO_GRASS_ALL_SHORTCUT,
-  AUTO_GRASS_SELECTED_SHORTCUT,
   VertexIcon,
   getVertexIconProps,
 } from "./vertex-tool-control";
@@ -278,12 +277,18 @@ function getShortcutGroups(
               label: "Toggle grass mode",
             },
             {
-              shortcut: AUTO_GRASS_SELECTED_SHORTCUT,
-              label: "Auto grass selected",
+              shortcut: AUTO_GRASS_ALL_SHORTCUT,
+              label: "AutoGrass all polygons",
             },
             {
-              shortcut: AUTO_GRASS_ALL_SHORTCUT.replace("Mod", modifier),
-              label: "Auto grass all",
+              shortcut: ["-", "+", "="],
+              label:
+                "Adjust AutoGrass height (also while hovering All; overrides keyboard zoom)",
+            },
+            {
+              shortcut: ["[", "]"],
+              label:
+                "Decrease / increase AutoGrass end inset (also while hovering All)",
             },
             ...(toolIcons.showVertexInternalEdgeClickHint
               ? [
@@ -295,7 +300,7 @@ function getShortcutGroups(
               : []),
             {
               shortcut: "Space",
-              label: "Reverse drawing direction",
+              label: "Flip direction",
             },
             {
               shortcut: ["Enter", "Esc"],
@@ -425,11 +430,11 @@ function getShortcutGroups(
         },
         {
           shortcut: ["+", "="],
-          label: "Zoom in",
+          label: "Zoom in (outside AutoGrass)",
         },
         {
           shortcut: ["-", "_"],
-          label: "Zoom out",
+          label: "Zoom out (outside AutoGrass)",
         },
         {
           shortcut: `${modifier} + 0`,

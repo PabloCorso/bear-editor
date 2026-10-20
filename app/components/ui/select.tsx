@@ -15,7 +15,7 @@ export function SelectTrigger({
     <SelectPrimitive.Trigger
       className={cn(
         buttonVariants({ size: "md" }),
-        "min-w-36 justify-between text-left font-semibold",
+        "min-w-36 justify-between border border-gray-600 bg-gray-700 text-left font-semibold",
         "data-[placeholder]:text-white/45",
         className,
       )}

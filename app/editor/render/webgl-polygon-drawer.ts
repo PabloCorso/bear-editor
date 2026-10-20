@@ -16,6 +16,7 @@ import { WebGLShapeDrawer } from "~/editor/render/webgl-shape-drawer";
 import type { WorldRenderScene } from "~/editor/render/world-scene";
 
 const MIN_ZOOM_EPSILON = 0.0001;
+const GRASS_COVERAGE_STENCIL_BIT = 0x02;
 
 export class WebGLPolygonDrawer {
   private shapes: WebGLShapeDrawer;
@@ -110,7 +111,8 @@ export class WebGLPolygonDrawer {
     gl.clear(gl.STENCIL_BUFFER_BIT);
     gl.enable(gl.STENCIL_TEST);
     gl.colorMask(false, false, false, false);
-    gl.stencilMask(0xff);
+    // Reserve the other stencil bits for temporary grass coverage.
+    gl.stencilMask(0x01);
     gl.stencilFunc(gl.ALWAYS, 1, 0xff);
     gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT);
 
@@ -218,6 +220,14 @@ export class WebGLPolygonDrawer {
       return;
     }
 
+    const trackCoverage = (polygon.opacity ?? 1) < 1;
+    if (trackCoverage) {
+      // Blend overlapping segments only once within each translucent polygon.
+      gl.stencilMask(GRASS_COVERAGE_STENCIL_BIT);
+      gl.clear(gl.STENCIL_BUFFER_BIT);
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT);
+    }
+
     for (const [from, to, innerTo, innerFrom] of getSimpleGrassFillQuads({
       vertices: polygon.vertices,
       grassEdgeIndices: polygon.grassEdgeIndices,
@@ -241,6 +251,11 @@ export class WebGLPolygonDrawer {
       );
     }
 
+    if (trackCoverage) {
+      gl.clear(gl.STENCIL_BUFFER_BIT);
+      gl.stencilMask(0x00);
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+    }
     gl.disable(gl.STENCIL_TEST);
   }
 

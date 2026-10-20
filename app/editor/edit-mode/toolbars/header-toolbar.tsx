@@ -1,3 +1,4 @@
+import { Input } from "~/components/ui/input";
 import {
   useEditorIsPlayMode,
   useEditorActions,
@@ -61,7 +62,7 @@ import {
 import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
 import { focusPositionsInView } from "~/editor/helpers/camera-helpers";
 import { Logo } from "~/components/logo";
-import { ToolButton } from "./tool";
+import { ToolButton } from "~/components/tool-button";
 import {
   Tooltip,
   TooltipContent,
@@ -70,6 +71,7 @@ import {
 
 import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
 import { LevelFolderTip } from "./level-folder-tip";
+import { ToolInfo } from "./tool-info";
 
 const ISSUE_FOCUS_MIN_ZOOM = 0.2;
 const ISSUE_FOCUS_MAX_ZOOM = 10000;
@@ -202,12 +204,15 @@ export function HeaderToolbar({
           />
         </div>
       </div>
-      <LevelFolderTip
-        onOpenSettings={() => {
-          setHighlightLevelFolder(true);
-          setSettingsOpen(true);
-        }}
-      />
+      <div className="pointer-events-none absolute right-4 bottom-16 left-4 z-10 flex flex-col items-start gap-2 sm:right-auto sm:bottom-4">
+        <LevelFolderTip
+          onOpenSettings={() => {
+            setHighlightLevelFolder(true);
+            setSettingsOpen(true);
+          }}
+        />
+        <ToolInfo />
+      </div>
       <SettingsDialog
         open={settingsOpen}
         highlightLevelFolder={highlightLevelFolder}
@@ -714,17 +719,17 @@ function LevelTitleInput({
   className,
   isLoading,
   ...props
-}: React.ComponentPropsWithRef<"input"> & { isLoading?: boolean }) {
+}: React.ComponentProps<typeof Input> & { isLoading?: boolean }) {
   const { setLevelName } = useEditorActions();
   const levelName = useLevelName();
   return (
-    <input
+    <Input
       type="text"
       name="level-name"
       value={isLoading ? "" : levelName}
       onChange={(e) => setLevelName(e.target.value)}
       className={cn(
-        "min-w-[12rem] flex-1 rounded border border-gray-600 bg-gray-700 px-3 py-1 text-sm text-white focus-visible:focus-ring",
+        "min-w-[12rem] flex-1 px-3",
         { "animate-pulse": isLoading },
         className,
       )}

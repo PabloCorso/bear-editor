@@ -2,6 +2,15 @@ import {
   ArrowCounterClockwiseIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { Input } from "~/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectTriggerIcon,
+  SelectValue,
+} from "~/components/ui/select";
 import { Button, IconButton } from "~/components/ui/button";
 import {
   Popover,
@@ -66,14 +75,12 @@ export function PicturePropertiesToolbar({
     return (
       <Toolbar className={cn("gap-0.5 rounded-md p-0", className)} {...props}>
         <DistanceInput
-          compact
           distance={normalizedDistance}
           isSelected={isSelected}
           onActivate={onActivate}
           onCommit={onDistanceChange}
         />
         <ClipSelect
-          compact
           clip={clip}
           isSelected={isSelected}
           onActivate={onActivate}
@@ -178,7 +185,6 @@ export function PicturePropertiesToolbar({
             >
               <span className="text-xs font-bold text-secondary">Distance</span>
               <DistanceInput
-                compact
                 className="justify-self-end"
                 distance={normalizedDistance}
                 isSelected={isSelected}
@@ -189,7 +195,6 @@ export function PicturePropertiesToolbar({
             <div className="contents">
               <span className="text-xs font-bold text-secondary">Clip</span>
               <ClipSelect
-                compact
                 className="justify-self-end"
                 clip={clip}
                 isSelected={isSelected}
@@ -284,14 +289,12 @@ function DistanceInput({
   distance,
   isSelected,
   className,
-  compact = false,
   onActivate,
   onCommit,
 }: {
   distance: PicturePropertyValue;
   isSelected: boolean;
   className?: string;
-  compact?: boolean;
   onActivate?: () => void;
   onCommit: (distance: number) => void;
 }) {
@@ -312,14 +315,13 @@ function DistanceInput({
     }
   };
   return (
-    <input
+    <Input
+      size="sm"
       key={`${distance}`}
       aria-label="Picture distance"
       className={cn(
-        compact
-          ? "h-8 w-12 rounded-md border border-default bg-screen px-1 text-center text-xs font-bold outline-hidden focus-visible:focus-ring"
-          : "h-7 w-16 rounded-md border border-default bg-screen px-1 text-center text-xs font-bold outline-hidden focus-visible:focus-ring",
-        isSelected ? "text-primary" : "text-secondary",
+        "w-12 text-center",
+        isSelected ? "text-white" : "text-secondary",
         className,
       )}
       defaultValue={distance === MIXED_VALUE ? "" : distance}
@@ -399,45 +401,57 @@ function ClipSelect({
   clip,
   isSelected,
   className,
-  compact = false,
   onActivate,
   onChange,
 }: {
   clip: Clip | typeof MIXED_VALUE;
   isSelected: boolean;
   className?: string;
-  compact?: boolean;
   onActivate?: () => void;
   onChange: (clip: Clip) => void;
 }) {
   return (
-    <select
-      aria-label="Picture clipping"
-      className={cn(
-        compact
-          ? "[field-sizing:content] h-8 w-fit rounded-md border border-default bg-screen py-0 pr-5 pl-2 text-right text-xs font-bold outline-hidden [text-align-last:right] focus-visible:focus-ring"
-          : "[field-sizing:content] h-6 w-fit rounded-md border border-default bg-screen py-0 pr-4 pl-1.5 text-right text-xs font-bold outline-hidden [text-align-last:right] focus-visible:focus-ring",
-        isSelected ? "text-primary" : "text-secondary",
-        className,
-      )}
-      value={clip}
-      onClick={(event) => {
-        event.stopPropagation();
-        onActivate?.();
-      }}
-      onFocus={() => onActivate?.()}
-      onChange={(event) => {
-        event.stopPropagation();
-        onChange(parseClip(event.currentTarget.value, clip));
+    <Select
+      value={String(clip)}
+      items={[
+        { value: MIXED_VALUE, label: "Mixed" },
+        { value: String(Clip.Sky), label: "Sky" },
+        { value: String(Clip.Ground), label: "Ground" },
+        { value: String(Clip.Unclipped), label: "Unclipped" },
+      ]}
+      onValueChange={(value) => {
+        if (value !== null) onChange(parseClip(value, clip));
       }}
     >
-      <option value={MIXED_VALUE} disabled>
-        Mixed
-      </option>
-      <option value={Clip.Sky}>Sky</option>
-      <option value={Clip.Ground}>Ground</option>
-      <option value={Clip.Unclipped}>Unclipped</option>
-    </select>
+      <SelectTrigger
+        aria-label="Picture clipping"
+        className={cn(
+          "h-6 w-fit min-w-0 gap-1 justify-self-end px-1.5 py-0.5 text-xs font-normal",
+          isSelected ? "text-white" : "text-secondary",
+          className,
+        )}
+        onClick={(event) => {
+          event.stopPropagation();
+          onActivate?.();
+        }}
+        onFocus={() => onActivate?.()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <SelectValue />
+        <SelectTriggerIcon className="ml-0" />
+      </SelectTrigger>
+      <SelectContent
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <SelectItem value={MIXED_VALUE} disabled>
+          Mixed
+        </SelectItem>
+        <SelectItem value={String(Clip.Sky)}>Sky</SelectItem>
+        <SelectItem value={String(Clip.Ground)}>Ground</SelectItem>
+        <SelectItem value={String(Clip.Unclipped)}>Unclipped</SelectItem>
+      </SelectContent>
+    </Select>
   );
 }
 

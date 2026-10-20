@@ -64,7 +64,6 @@ import {
 import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
 import type { Polygon } from "~/editor/elma-types";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
-import { getAutoGrassablePolygonsFromSelection } from "~/editor/helpers/auto-grass";
 
 type EditorEngineOptions = {
   initialDocument?: EditorDocumentInput;
@@ -821,12 +820,8 @@ export class EditorEngine {
     const key = event.key.toUpperCase();
     const modifier = checkModifierKey(event);
 
-    if (key === "G" && event.shiftKey) {
-      if (modifier) {
-        this.autoGrassAll(state);
-      } else {
-        this.autoGrassSelected(state);
-      }
+    if (key === "G" && event.shiftKey && !modifier && !event.altKey) {
+      this.autoGrassAll(state);
       event.preventDefault();
       return;
     }
@@ -930,24 +925,6 @@ export class EditorEngine {
     };
     shortcuts[event.key]?.();
   };
-
-  private autoGrassSelected(state: EditorState): boolean {
-    const selectToolState = state.actions.getToolState<SelectToolState>(
-      defaultTools.select.id,
-    );
-    if (!selectToolState) return false;
-
-    const sourcePolygons = getAutoGrassablePolygonsFromSelection(
-      selectToolState.selectedVertices,
-    );
-    if (sourcePolygons.length === 0) return false;
-
-    return (
-      state.actions
-        .getTool<VertexTool>(defaultTools.vertex.id)
-        ?.autoGrassPolygons(sourcePolygons) ?? false
-    );
-  }
 
   private autoGrassAll(state: EditorState): boolean {
     return (

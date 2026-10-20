@@ -19,7 +19,7 @@ export const defaultLevelVisibility: LevelVisibilitySettings = {
   useGroundSkyTextures: false,
   useGrassTextures: false,
   zoomTextures: true,
-  showObjectAnimations: true,
+  showObjectAnimations: false,
   showPolygonHandles: false,
   showObjectBounds: false,
   showGroundBounds: true,

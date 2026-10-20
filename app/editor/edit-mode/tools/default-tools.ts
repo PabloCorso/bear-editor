@@ -16,7 +16,7 @@ export const defaultTools = {
     shortcut: "V",
     variants: {
       grass: { name: "Grass", shortcut: "G" },
-      autoGrass: { name: "Auto grass", shortcut: "" },
+      autoGrass: { name: "AutoGrass", shortcut: "" },
     },
   },
   apple: { id: "apple", name: "Apple", shortcut: "A" },

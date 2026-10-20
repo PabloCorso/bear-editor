@@ -1,4 +1,5 @@
 import {
+  useEditor,
   useEditorActions,
   useEditorCanRedo,
   useEditorCanUndo,
@@ -19,7 +20,7 @@ import {
   KeyboardIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
-import { ToolButton, type ToolButtonProps } from "./tool";
+import { ToolButton, type ToolButtonProps } from "~/components/tool-button";
 import { cn, useModifier } from "~/utils/misc";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import { useEffect, useState } from "react";
@@ -45,6 +46,11 @@ export function CanvasToolbar({
   ...props
 }: CanvasToolbarProps) {
   const { triggerFitToView } = useEditorActions();
+  const activeToolId = useEditor((state) => state.activeToolId);
+  const vertex = useEditorToolState<VertexToolState>("vertex");
+  const isAutoGrass =
+    activeToolId === "vertex" &&
+    (vertex?.variant === "autoGrass" || vertex?.previewAutoGrassAll);
   const modifier = useModifier();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -84,14 +90,14 @@ export function CanvasToolbar({
         <Toolbar className="w-fit gap-2">
           <ToolButton
             name="Zoom In"
-            shortcut="+"
+            shortcut={isAutoGrass ? undefined : "+"}
             onClick={() => engineRef.current?.zoomIn()}
           >
             <PlusIcon />
           </ToolButton>
           <ToolButton
             name="Zoom Out"
-            shortcut="-"
+            shortcut={isAutoGrass ? undefined : "-"}
             onClick={() => engineRef.current?.zoomOut()}
           >
             <MinusIcon />

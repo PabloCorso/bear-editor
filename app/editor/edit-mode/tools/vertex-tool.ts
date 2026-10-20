@@ -14,6 +14,7 @@ import {
 import { isPolygonClockwise } from "~/editor/helpers/polygon-helpers";
 import {
   colors,
+  ELMA_PIXELS_PER_WORLD_UNIT,
   selectionThresholds,
   uiColors,
   uiSelectionHandle,
@@ -40,6 +41,7 @@ export type VertexToolState = {
   editingPolygon?: Polygon;
   editPivot?: Position;
   variant?: VertexToolVariant;
+  previewAutoGrassAll?: boolean;
 };
 
 export function canToggleVertexToolDirection(
@@ -53,6 +55,15 @@ export function getToggledVertexToolState(
 ): Pick<VertexToolState, "drawingPolygon" | "editPivot"> | null {
   if (!canToggleVertexToolDirection(toolState)) {
     return null;
+  }
+
+  if (!toolState.editingPolygon) {
+    // New drawings extend from the last point, so swap the chain's endpoints.
+    const vertices = [...toolState.drawingPolygon.vertices].reverse();
+    return {
+      drawingPolygon: { ...toolState.drawingPolygon, vertices },
+      editPivot: vertices[vertices.length - 1],
+    };
   }
 
   const pivot =
@@ -93,6 +104,7 @@ export class VertexTool extends Tool<VertexToolState> {
       drawingPolygon: { vertices: [], grass: nextVariant === "grass" },
       editPivot: undefined,
       variant: nextVariant,
+      previewAutoGrassAll: false,
     });
   }
 
@@ -112,12 +124,35 @@ export class VertexTool extends Tool<VertexToolState> {
       editingPolygon: undefined,
       editPivot: undefined,
       variant: currentVariant,
+      previewAutoGrassAll: false,
+    });
+  }
+
+  adjustAutoGrassOption(field: "depth" | "endInset", delta: number): void {
+    const { state } = this.getState();
+    const value = Math.round(
+      state.autoGrassOptions[field] * ELMA_PIXELS_PER_WORLD_UNIT,
+    );
+    state.actions.setAutoGrassOptions({
+      [field]:
+        Math.max(field === "depth" ? 1 : 0, Math.min(200, value + delta)) /
+        ELMA_PIXELS_PER_WORLD_UNIT,
     });
   }
 
   getDrafts() {
     const { state, toolState } = this.getState();
     if (!toolState) return { polygons: [] };
+
+    if (toolState.previewAutoGrassAll) {
+      return {
+        polygons: generateAutoGrassPolygons({
+          polygons: state.polygons,
+          sourcePolygons: state.polygons.filter((polygon) => !polygon.grass),
+          options: state.autoGrassOptions,
+        }),
+      };
+    }
 
     if (
       state.mouseOnCanvas &&
@@ -239,6 +274,21 @@ export class VertexTool extends Tool<VertexToolState> {
     const { toolState, setToolState } = this.getState();
     if (!toolState) return false;
 
+    if (
+      (toolState.variant === "autoGrass" || toolState.previewAutoGrassAll) &&
+      ["+", "=", "-", "_", "[", "]"].includes(event.key) &&
+      !event.metaKey &&
+      // Option/AltGr may be required to type these characters on some layouts.
+      (!event.ctrlKey || event.getModifierState("AltGraph"))
+    ) {
+      this.adjustAutoGrassOption(
+        event.key === "[" || event.key === "]" ? "endInset" : "depth",
+        event.key === "]" || event.key === "+" || event.key === "=" ? 1 : -1,
+      );
+      event.preventDefault();
+      return true;
+    }
+
     if (event.key === "Escape") {
       const isDrawing = toolState.drawingPolygon.vertices.length > 0;
       const isEditing = !!toolState.editingPolygon;
@@ -256,8 +306,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (event.key === " " || event.key === "Space") {
-      // Reverse around the current edit pivot without changing the open-chain
-      // behavior used by polygon editing.
+      // Reverse the drawing, preserving the pivot when editing a polygon.
       const nextToolState = getToggledVertexToolState(toolState);
       if (nextToolState) {
         setToolState(nextToolState);
@@ -269,8 +318,10 @@ export class VertexTool extends Tool<VertexToolState> {
       const targetGrass = event.key.toUpperCase() === "G";
       const targetVariant = targetGrass ? "grass" : "normal";
 
-      // Only switch if not already in target mode
-      if (toolState.drawingPolygon.grass !== targetGrass) {
+      if (
+        (toolState.variant ?? DEFAULT_VARIANT) !== targetVariant ||
+        toolState.drawingPolygon.grass !== targetGrass
+      ) {
         setToolState({
           drawingPolygon: { ...toolState.drawingPolygon, grass: targetGrass },
           variant: targetVariant,
@@ -404,14 +455,13 @@ export class VertexTool extends Tool<VertexToolState> {
 
     if (toolState.drawingPolygon.vertices.length >= 3) {
       overlays.push(
-        ...createDashedLineOverlays({
+        ...createDottedLineOverlays({
           from: isEditingExistingPolygon ? lastPoint : startPoint,
           to: state.mousePosition,
           color: strokeColor,
-          width: draftPolygonLineWidth,
           opacity: draftPolygonLineOpacity,
-          dashLength: 8 / state.zoom,
-          gapLength: 6 / state.zoom,
+          radius: 1.25 / state.zoom,
+          spacing: 6 / state.zoom,
         }),
       );
     }
@@ -617,22 +667,20 @@ function createDraftHandleOverlay(
   };
 }
 
-function createDashedLineOverlays({
+function createDottedLineOverlays({
   from,
   to,
   color,
-  width,
   opacity,
-  dashLength,
-  gapLength,
+  radius,
+  spacing,
 }: {
   from: Position;
   to: Position;
   color: string;
-  width: number;
   opacity?: number;
-  dashLength: number;
-  gapLength: number;
+  radius: number;
+  spacing: number;
 }): WorldRenderOverlayItem[] {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
@@ -642,26 +690,17 @@ function createDashedLineOverlays({
   const ux = dx / length;
   const uy = dy / length;
   const overlays: WorldRenderOverlayItem[] = [];
-  let offset = 0;
-
-  while (offset < length) {
-    const segmentStart = offset;
-    const segmentEnd = Math.min(length, offset + dashLength);
+  for (let offset = 0; offset < length; offset += spacing) {
     overlays.push({
-      type: "line",
-      from: {
-        x: from.x + ux * segmentStart,
-        y: from.y + uy * segmentStart,
+      type: "circle",
+      center: {
+        x: from.x + ux * offset,
+        y: from.y + uy * offset,
       },
-      to: {
-        x: from.x + ux * segmentEnd,
-        y: from.y + uy * segmentEnd,
-      },
-      color,
-      width,
+      radius,
+      fillColor: color,
       opacity,
     });
-    offset += dashLength + gapLength;
   }
 
   return overlays;

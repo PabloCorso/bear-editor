@@ -1,5 +1,6 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import { useRef } from "react";
+import { Input } from "~/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -31,11 +32,16 @@ export function LgrSelect({
     value,
     options: lgrAssets.lgrOptions,
   });
+  const selectedValue =
+    options.find((option) =>
+      isSameOptionValue(option.levelName, value || "default"),
+    )?.levelName ??
+    (value || "default");
 
   return (
     <>
       <Select
-        value={value || "default"}
+        value={selectedValue}
         onValueChange={(nextValue) => {
           if (!nextValue) return;
           if (nextValue === ADD_NEW_LGR_VALUE) {
@@ -51,9 +57,8 @@ export function LgrSelect({
       >
         <SelectTrigger className={className} aria-label={ariaLabel}>
           <SelectValue>
-            {(selectedValue: string | null) =>
-              getOptionLabel(options, selectedValue ?? "default")
-            }
+            {options.find((option) => option.levelName === selectedValue)
+              ?.name ?? `${selectedValue}.lgr`}
           </SelectValue>
           <SelectTriggerIcon />
         </SelectTrigger>
@@ -68,7 +73,7 @@ export function LgrSelect({
           </SelectItem>
         </SelectContent>
       </Select>
-      <input
+      <Input
         ref={fileInputRef}
         type="file"
         accept=".lgr"
@@ -107,16 +112,6 @@ function getVisibleOptions({
       levelName: value,
     },
   ];
-}
-
-function getOptionLabel(
-  options: Array<{ name: string; levelName: string }>,
-  value: string,
-) {
-  return (
-    options.find((option) => isSameOptionValue(option.levelName, value))
-      ?.name ?? `${value}.lgr`
-  );
 }
 
 function isSameOptionValue(left: string, right: string) {

@@ -3,6 +3,7 @@ import { XIcon } from "@phosphor-icons/react/dist/ssr";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { supportsFilePickers } from "~/editor/helpers/file-session";
+import { CanvasTip } from "./canvas-tip";
 import {
   useEditorIsPlayMode,
   useEditorLevelFolderName,
@@ -54,10 +55,10 @@ export function LevelFolderTip({
   }
 
   return (
-    <div className="text-muted absolute bottom-16 left-4 z-10 flex h-8 items-center rounded-full border border-default bg-screen/80 pr-1.5 text-[11px] font-medium shadow-sm backdrop-blur-[1px] transition-colors hover:bg-screen hover:text-primary sm:bottom-4 sm:text-xs">
+    <CanvasTip>
       <button
         type="button"
-        className="flex h-full cursor-pointer items-center gap-1.5 rounded-full pr-2 pl-2.5 focus-visible:focus-ring"
+        className="flex h-full cursor-pointer items-center gap-1.5 rounded-full pr-2 pl-2.5 transition-colors hover:bg-primary-hover/80 hover:text-primary focus-visible:focus-ring active:bg-primary-active/80"
         aria-haspopup="dialog"
         onClick={onOpenSettings}
       >
@@ -70,11 +71,11 @@ export function LevelFolderTip({
         iconOnly
         aria-label="Dismiss lev folder tip"
         title="Dismiss tip"
-        className="h-6 w-6 rounded-full bg-transparent hover:bg-transparent active:bg-transparent"
+        className="h-6 w-6 -mr-1 rounded-full bg-transparent hover:text-primary"
         onClick={() => setIsDismissed(true)}
       >
         <XIcon />
       </Button>
-    </div>
+    </CanvasTip>
   );
 }

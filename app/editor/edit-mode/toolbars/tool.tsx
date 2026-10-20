@@ -5,15 +5,9 @@ import {
 import { cn } from "~/utils/misc";
 import { FloatingViewportToolbar } from "./floating-toolbar";
 import {
-  ToolButton as SharedToolButton,
+  ToolButton,
   type ToolButtonProps,
 } from "~/components/tool-button";
-
-export { type ToolButtonProps } from "~/components/tool-button";
-
-export function ToolButton(props: ToolButtonProps) {
-  return <SharedToolButton {...props} />;
-}
 
 export type ToolControlButtonProps = ToolButtonProps & {
   id?: string;
@@ -34,7 +28,8 @@ export function ToolControlButton({
   const { activateTool } = useEditorActions();
   const isActive = isActiveProp ?? (id ? activeTool?.meta.id === id : false);
   return (
-    <SharedToolButton
+    <ToolButton
+      aria-pressed={isActive}
       className={cn(
         {
           "bg-primary-hover/50": isActive,
@@ -49,7 +44,7 @@ export function ToolControlButton({
       {...props}
     >
       {children}
-    </SharedToolButton>
+    </ToolButton>
   );
 }
 
