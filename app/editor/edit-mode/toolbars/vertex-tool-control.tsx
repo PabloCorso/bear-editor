@@ -155,7 +155,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         aria-orientation="horizontal"
         className="my-1 h-px self-stretch bg-separator"
       />
-      <div className="flex items-center justify-between gap-3 pl-2">
+      <div className="-my-0.5 flex items-center justify-between gap-3 pl-1">
         <span className="text-[10px] font-medium text-secondary">
           AutoGrass
         </span>
