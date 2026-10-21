@@ -41,6 +41,12 @@ import {
 import { Input } from "~/components/ui/input";
 import { IconButton } from "~/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -379,14 +385,29 @@ export function VertexContextMenuToolbar({
 }: PolygonToolbarProps) {
   return (
     <Toolbar orientation="vertical" {...props}>
-      {onAutoGrass ? (
-        <ToolButton name="AutoGrass selected" onClick={onAutoGrass}>
-          <VertexIcon {...getVertexIconProps("autoGrass")} />
-        </ToolButton>
-      ) : null}
-      <ToolButton name="Toggle grass" onClick={onGrassToggle}>
-        <VertexIcon {...getVertexIconProps("both")} />
-      </ToolButton>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger>
+          <ToolButton name="Polygon actions">
+            <VertexIcon {...getVertexIconProps("normal")} />
+          </ToolButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="start">
+          <DropdownMenuItem
+            iconBefore={<VertexIcon {...getVertexIconProps("both")} />}
+            onClick={onGrassToggle}
+          >
+            Toggle grass
+          </DropdownMenuItem>
+          {onAutoGrass ? (
+            <DropdownMenuItem
+              iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
+              onClick={onAutoGrass}
+            >
+              AutoGrass
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </Toolbar>
   );
 }

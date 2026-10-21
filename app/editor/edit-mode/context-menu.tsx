@@ -198,6 +198,7 @@ export function EditorContextMenu() {
     );
   }
 
+  const propertyControlsStartIndex = toolbarSections.length;
   if (selectedApples.length > 0) {
     toolbarSections.push(
       <SelectedApplesMenu
@@ -288,6 +289,7 @@ export function EditorContextMenu() {
     );
   }
 
+  const selectionActionsIndex = toolbarSections.length;
   toolbarSections.push(
     <SelectionActionsMenu
       canTransform={selectTool?.canTransformSelection() ?? false}
@@ -360,7 +362,14 @@ export function EditorContextMenu() {
           className="max-w-[calc(100vw-1rem)] overflow-auto"
         >
           {toolbarSections.map((section, index) => (
-            <ToolbarSection key={index} separated={index > 0}>
+            <ToolbarSection
+              key={index}
+              separated={
+                index > 0 &&
+                (index === propertyControlsStartIndex ||
+                  index === selectionActionsIndex)
+              }
+            >
               {section}
             </ToolbarSection>
           ))}
