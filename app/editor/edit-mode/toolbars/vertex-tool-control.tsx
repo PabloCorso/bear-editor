@@ -1,6 +1,5 @@
 import {
   ArrowCounterClockwiseIcon,
-  ArrowsLeftRightIcon,
   GearIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -17,8 +16,6 @@ import {
   useEditorToolState,
 } from "~/editor/use-editor-store";
 import {
-  canToggleVertexToolDirection,
-  getToggledVertexToolState,
   VertexTool,
   type VertexToolState,
   type VertexToolVariant,
@@ -88,7 +85,6 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
   const autoGrassOptions = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, getToolState, setAutoGrassOptions, setToolState } =
     useEditorActions();
-  const canToggleDirection = canToggleVertexToolDirection(vertexTool);
   const autoGrassAllRef = useCallback(
     (node: HTMLButtonElement | null) => {
       if (
@@ -127,29 +123,6 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       >
         <VertexIcon {...getVertexIconProps("grass")} />
       </ToolControlButton>
-      {canToggleDirection && (
-        <ToolButton
-          name="Flip direction"
-          label="Flip"
-          shortcut="Space"
-          tooltipSide="right"
-          size="sm"
-          showLabel
-          onClick={() => {
-            if (!vertexTool) return;
-
-            const nextToolState = getToggledVertexToolState(vertexTool);
-            if (!nextToolState) return;
-
-            setToolState<VertexToolState>(
-              defaultTools.vertex.id,
-              nextToolState,
-            );
-          }}
-        >
-          <ArrowsLeftRightIcon />
-        </ToolButton>
-      )}
       <div
         role="separator"
         aria-orientation="horizontal"

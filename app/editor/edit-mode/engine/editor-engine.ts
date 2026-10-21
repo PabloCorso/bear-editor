@@ -160,9 +160,11 @@ export class EditorEngine {
   private touchContextMenuTimer: number | null = null;
   private touchContextMenuPointerId: number | null = null;
   private touchContextMenuStart: { x: number; y: number } | null = null;
+  private modifierPressed = false;
   private pressedKeys = new Set<string>();
   private handleWindowBlur = () => {
     this.pressedKeys.clear();
+    this.updateModifierPressed(false);
     this.cancelTouchContextMenuTimer();
   };
 
@@ -311,6 +313,7 @@ export class EditorEngine {
       state.viewPortOffset,
       state.zoom,
     );
+    this.updateModifierPressed(checkModifierKey(event));
     const forceObjectSelection = event.shiftKey || event.altKey;
     const activeTool = state.actions.getActiveTool();
     this.updateSelectHoverState(state, context.worldPos, forceObjectSelection);
@@ -802,7 +805,14 @@ export class EditorEngine {
     this.syncMousePositionFromScreenPoint(screenPoint);
   };
 
+  private updateModifierPressed(pressed: boolean) {
+    if (this.modifierPressed === pressed) return;
+    this.modifierPressed = pressed;
+    this.requestRender();
+  }
+
   private handleKeyDown = (event: KeyboardEvent) => {
+    this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.add(event.code);
     if (isUserTyping()) return;
 
@@ -935,6 +945,7 @@ export class EditorEngine {
   }
 
   private handleKeyUp = (event: KeyboardEvent) => {
+    this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.delete(event.code);
     const state = this.store.getState();
     this.refreshSelectionHoverForModifierKeys(state, event);
@@ -1110,7 +1121,10 @@ export class EditorEngine {
     const activeTool = state.actions.getActiveTool();
     const overlays = [
       ...this.getEditorOverlays(state, viewportRect),
-      ...(activeTool?.getWorldOverlays?.({ viewportRect }) ?? []),
+      ...(activeTool?.getWorldOverlays?.({
+        viewportRect,
+        modifierPressed: this.modifierPressed,
+      }) ?? []),
     ];
     scene.overlays = [
       ...overlays.filter((overlay) => overlay.layer !== "top"),

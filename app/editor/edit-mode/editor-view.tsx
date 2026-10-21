@@ -96,10 +96,6 @@ export function useEditorView({
         }
 
         lastSizeRef.current = { width, height };
-
-        if (engineRef.current) {
-          engineRef.current.fitToView();
-        }
       };
 
       const scheduleResize = () => {

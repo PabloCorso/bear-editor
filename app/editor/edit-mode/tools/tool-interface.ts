@@ -38,6 +38,7 @@ export abstract class Tool<T extends ToolState = ToolState> {
 
   getWorldOverlays?(options: {
     viewportRect: WorldRect;
+    modifierPressed?: boolean;
   }): WorldRenderOverlayItem[];
 
   // Draft elements for previewing while using the tool

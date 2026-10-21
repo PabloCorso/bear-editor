@@ -11,6 +11,7 @@ import {
   appendAutoGrassForPolygons,
   generateAutoGrassPolygons,
 } from "~/editor/helpers/auto-grass";
+import { getClosestPointOnLineSegment } from "~/editor/helpers/coordinate-helpers";
 import { isPolygonClockwise } from "~/editor/helpers/polygon-helpers";
 import {
   colors,
@@ -228,34 +229,14 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
-    // If we're not drawing a polygon, check if we clicked near an existing polygon vertex first
-    const vertexResult = findPolygonVertexForEditing(
+    const editTarget = this.findEditTarget(
+      state,
       worldPos,
-      state.polygons,
-      selectionThresholds.vertex,
-      state.zoom,
+      state.vertexEdgeClickBehavior === "default" || checkModifierKey(event),
     );
-    if (vertexResult) {
-      // Start editing this polygon from the clicked vertex (without adding a new point)
-      this.startEditingFromVertex(state, vertexResult);
+    if (editTarget) {
+      setToolState(this.getEditingState(editTarget));
       return true;
-    }
-
-    // If not near a vertex, check if we clicked near a polygon line
-    const shouldStartEditingFromEdge =
-      state.vertexEdgeClickBehavior === "default" || checkModifierKey(event);
-    if (shouldStartEditingFromEdge) {
-      const lineResult = findPolygonLineForEditing(
-        worldPos,
-        state.polygons,
-        selectionThresholds.polygonEdge,
-        state.zoom,
-      );
-      if (lineResult) {
-        // Start editing this polygon from the closest existing edge vertex.
-        this.startEditingFromLine(state, lineResult);
-        return true;
-      }
     }
 
     // Start a new polygon
@@ -388,6 +369,31 @@ export class VertexTool extends Tool<VertexToolState> {
     return "crosshair";
   }
 
+  private findEditTarget(
+    state: EditorState,
+    position: Position,
+    modifierPressed: boolean,
+  ) {
+    const vertex = findPolygonVertexForEditing(
+      position,
+      state.polygons,
+      selectionThresholds.vertex,
+      state.zoom,
+    );
+    if (vertex) return { type: "vertex" as const, result: vertex };
+
+    if (state.vertexEdgeClickBehavior === "default" || modifierPressed) {
+      const edge = findPolygonLineForEditing(
+        position,
+        state.polygons,
+        selectionThresholds.polygonEdge,
+        state.zoom,
+      );
+      if (edge) return { type: "edge" as const, result: edge };
+    }
+    return null;
+  }
+
   private updatePolygon(index: number, polygon: Polygon): void {
     const { state } = this.getState();
     state.actions.setPolygons(
@@ -397,24 +403,66 @@ export class VertexTool extends Tool<VertexToolState> {
 
   getWorldOverlays({
     viewportRect,
+    modifierPressed = false,
   }: {
     viewportRect: WorldRect;
+    modifierPressed?: boolean;
   }): WorldRenderOverlayItem[] {
     const { state, toolState } = this.getState();
-    if (!toolState || toolState.drawingPolygon.vertices.length === 0) return [];
+    if (!toolState) return [];
+
+    let previewState = toolState;
+    let previewPosition = state.mousePosition;
+    const isHoverPreview = toolState.drawingPolygon.vertices.length === 0;
+    if (isHoverPreview) {
+      if (
+        !state.mouseOnCanvas ||
+        toolState.variant === "autoGrass" ||
+        toolState.previewAutoGrassAll
+      ) {
+        return [];
+      }
+
+      const target = this.findEditTarget(
+        state,
+        state.mousePosition,
+        modifierPressed,
+      );
+      if (!target) return [];
+
+      previewState = this.getEditingState(target);
+      // Split the hovered edge where the cursor projects onto it, keeping
+      // the polygon fixed while previewing the drawing direction.
+      const vertices = previewState.drawingPolygon.vertices;
+      previewPosition =
+        target.type === "edge"
+          ? getClosestPointOnLineSegment(
+              state.mousePosition,
+              vertices[0],
+              vertices[vertices.length - 1],
+            )
+          : previewState.editPivot!;
+    }
 
     const overlays: WorldRenderOverlayItem[] = [];
-    const isGrass = toolState.drawingPolygon.grass;
-    const strokeColor = isGrass ? colors.grass : uiColors.boundsIdle;
-    const draftPolygonLineWidth = uiStrokeWidths.boundsIdleScreen / state.zoom;
+    const isGrass = previewState.drawingPolygon.grass;
+    const strokeColor = isHoverPreview
+      ? uiColors.boundsHover
+      : isGrass
+        ? colors.grass
+        : uiColors.boundsSelected;
+    const draftPolygonLineWidth =
+      (isHoverPreview
+        ? uiStrokeWidths.boundsHoverScreen
+        : uiStrokeWidths.boundsSelectedScreen) / state.zoom;
     const draftPolygonLineOpacity = 0.75;
     const handleSize = uiSelectionHandle.halfWidthPx / state.zoom;
     const handleStrokeWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
 
-    if (isPolygonVisible(toolState.drawingPolygon, viewportRect)) {
+    if (isPolygonVisible(previewState.drawingPolygon, viewportRect)) {
       overlays.push({
         type: "polyline",
-        points: toolState.drawingPolygon.vertices,
+        points: previewState.drawingPolygon.vertices,
         color: strokeColor,
         width: draftPolygonLineWidth,
         opacity: draftPolygonLineOpacity,
@@ -422,18 +470,18 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     overlays.push(
-      ...toolState.drawingPolygon.vertices
+      ...previewState.drawingPolygon.vertices
         .filter((vertex) => isPointVisible(vertex, viewportRect))
         .map((vertex) =>
           createDraftHandleOverlay(vertex, handleSize, handleStrokeWidth),
         ),
     );
 
-    const isEditingExistingPolygon = Boolean(toolState.editingPolygon);
-    const startPoint = toolState.drawingPolygon.vertices[0]!;
+    const isEditingExistingPolygon = Boolean(previewState.editingPolygon);
+    const startPoint = previewState.drawingPolygon.vertices[0]!;
     const lastPoint =
-      toolState.drawingPolygon.vertices[
-        toolState.drawingPolygon.vertices.length - 1
+      previewState.drawingPolygon.vertices[
+        previewState.drawingPolygon.vertices.length - 1
       ]!;
 
     if (
@@ -441,23 +489,23 @@ export class VertexTool extends Tool<VertexToolState> {
         isEditingExistingPolygon ? startPoint : lastPoint,
         viewportRect,
       ) ||
-      isPointVisible(state.mousePosition, viewportRect)
+      isPointVisible(previewPosition, viewportRect)
     ) {
       overlays.push({
         type: "line",
         from: isEditingExistingPolygon ? startPoint : lastPoint,
-        to: state.mousePosition,
+        to: previewPosition,
         color: strokeColor,
         width: draftPolygonLineWidth,
         opacity: draftPolygonLineOpacity,
       });
     }
 
-    if (toolState.drawingPolygon.vertices.length >= 3) {
+    if (previewState.drawingPolygon.vertices.length >= 3) {
       overlays.push(
         ...createDottedLineOverlays({
           from: isEditingExistingPolygon ? lastPoint : startPoint,
-          to: state.mousePosition,
+          to: previewPosition,
           color: strokeColor,
           opacity: draftPolygonLineOpacity,
           radius: 1.25 / state.zoom,
@@ -514,73 +562,36 @@ export class VertexTool extends Tool<VertexToolState> {
     return false;
   }
 
-  private startEditingFromVertex(
-    _state: EditorState,
-    vertexResult: {
-      polygon: Polygon;
-      vertexIndex: number;
-      vertex: Position;
-    },
-  ): void {
-    const { setToolState } = this.getState();
-    const { polygon, vertexIndex } = vertexResult;
+  private getEditingState(
+    target: NonNullable<ReturnType<VertexTool["findEditTarget"]>>,
+  ): VertexToolState {
+    const { polygon } = target.result;
+    const pivotVertexIndex =
+      target.type === "vertex"
+        ? target.result.vertexIndex
+        : target.result.pivotVertexIndex;
+    // Vertex starts use a consistent canvas direction; edge starts follow
+    // the clicked edge from its closest endpoint.
+    const side =
+      target.type === "vertex"
+        ? isPolygonClockwise(polygon.vertices)
+          ? "previous"
+          : "next"
+        : target.result.side;
 
-    const editingPolygon = polygon;
-
-    // Always start vertex editing in the same canvas direction regardless of
-    // the stored polygon winding. Clockwise polygons move to the next vertex;
-    // counterclockwise polygons move to the previous vertex.
-    const vertices = polygon.vertices;
-    const drawingVertices = this.buildEditingVertices(
-      vertices,
-      vertexIndex,
-      isPolygonClockwise(vertices) ? "previous" : "next",
-    );
-
-    // Set this as the current drawing polygon and store the original
-    setToolState({
+    return {
       drawingPolygon: {
-        vertices: drawingVertices,
-        grass: editingPolygon.grass,
+        vertices: this.buildEditingVertices(
+          polygon.vertices,
+          pivotVertexIndex,
+          side,
+        ),
+        grass: polygon.grass,
       },
-      editingPolygon: editingPolygon,
-      editPivot: vertices[vertexIndex],
-      variant: editingPolygon.grass ? "grass" : "normal",
-    });
-  }
-
-  private startEditingFromLine(
-    _state: EditorState,
-    lineResult: {
-      polygon: Polygon;
-      pivotVertexIndex: number;
-      side: "next" | "previous";
-    },
-  ): void {
-    const { setToolState } = this.getState();
-    const { polygon, pivotVertexIndex, side } = lineResult;
-
-    const editingPolygon = polygon;
-
-    // Start from the closest endpoint and follow the side of that endpoint
-    // that belongs to the clicked edge.
-    const vertices = polygon.vertices;
-    const drawingVertices = this.buildEditingVertices(
-      vertices,
-      pivotVertexIndex,
-      side,
-    );
-
-    // Set this as the current drawing polygon and store the original
-    setToolState({
-      drawingPolygon: {
-        vertices: drawingVertices,
-        grass: editingPolygon.grass,
-      },
-      editingPolygon: editingPolygon,
-      editPivot: vertices[pivotVertexIndex],
-      variant: editingPolygon.grass ? "grass" : "normal",
-    });
+      editingPolygon: polygon,
+      editPivot: polygon.vertices[pivotVertexIndex],
+      variant: polygon.grass ? "grass" : "normal",
+    };
   }
 
   private buildEditingVertices(

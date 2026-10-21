@@ -64,6 +64,7 @@ import {
 import { Button } from "../../components/ui/button";
 import {
   ArrowCounterClockwiseIcon,
+  CheckIcon,
   FolderIcon,
   InfoIcon,
   PlusIcon,
@@ -347,6 +348,12 @@ function GeneralSettingsPanel({
                   {levelFolderName ? "Change folder" : "Choose a folder"}
                 </span>
               </span>
+              {levelFolderName && (
+                <span className="shrink-0 text-green-500">
+                  <CheckIcon aria-hidden className="size-5" />
+                  <span className="sr-only">Folder selected</span>
+                </span>
+              )}
             </button>
           </div>
         ) : (
