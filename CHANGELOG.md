@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-21
+
+- Improve vertex tool and auto grass visuals and guidance.
+- Add resize & rotate selection.
+- Improve choose lev folder setting.
+
 ## 2026-04-06
 
 - Add picture properties for distance and clipping.
