@@ -12,6 +12,7 @@ import { FileSession } from "~/editor/helpers/file-session";
 import { LevelFolder } from "~/editor/helpers/level-folder";
 import fastDeepEqual from "fast-deep-equal";
 import throttle from "just-throttle";
+import { trackEvent, trackFirstEdit } from "~/analytics";
 import { defaultLevelVisibility } from "./level-visibility";
 import {
   defaultPlaySettings,
@@ -769,6 +770,7 @@ export function createEditorStore({
       getLevelSnapshot(state),
       state.documentSession.baselineLevel,
     );
+    if (dirty) trackFirstEdit();
     const currentSaveState = state.documentSession.saveState;
     const nextSaveState =
       currentSaveState === "saving" || currentSaveState === "error"
@@ -794,6 +796,11 @@ export function createEditorStore({
   };
 
   editorStore.subscribe(syncDocumentSession);
+  editorStore.subscribe((state, previous) => {
+    if (state.isPlayMode && !previous.isPlayMode) {
+      trackEvent("playtest_started");
+    }
+  });
   syncDocumentSession();
 
   return editorStore;

@@ -1,4 +1,5 @@
 import type { ElmaLevel } from "../elma-types";
+import { trackEvent } from "~/analytics";
 
 export function levelToBlob(level: ElmaLevel): Blob {
   const buffer = level.toBuffer();
@@ -17,4 +18,5 @@ export function downloadLevel(level: ElmaLevel) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  trackEvent("level_saved");
 }

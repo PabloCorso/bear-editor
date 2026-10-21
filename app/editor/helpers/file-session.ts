@@ -8,6 +8,7 @@ import { downloadLevel, levelToBlob } from "~/editor/helpers/download-level";
 import type { EditorStore } from "~/editor/editor-store";
 import { elmaLevelFromEditorState } from "~/editor/helpers/level-parser";
 import type { ElmaLevel } from "~/editor/elma-types";
+import { trackEvent } from "~/analytics";
 
 const DB_NAME = "elma-file-session";
 const STORE_NAME = "handles";
@@ -157,6 +158,7 @@ export class FileSession {
     }
 
     await writeFile(this.handle, levelToBlob(level));
+    trackEvent("level_saved");
     await this.storage
       .persistFileHandle(LAST_FILE_KEY, this.handle)
       .catch(() => {});
@@ -189,6 +191,7 @@ export class FileSession {
 
     const blob = levelToBlob(level);
     await writeFile(fileHandle, blob);
+    trackEvent("level_saved");
     this.handle = fileHandle;
     this.name = fileHandle.name;
     await this.storage

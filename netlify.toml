@@ -5,6 +5,11 @@ publish = "build/client"
 [dev]
 command = "react-router dev"
 
+# Public Umami configuration, included only in production builds.
+[context.production.environment]
+VITE_UMAMI_WEBSITE_ID = "282c028b-3c2c-4e3f-a0a5-e3192e644dba"
+VITE_UMAMI_SCRIPT_URL = "https://cloud.umami.is/script.js"
+
 # Vite includes a content hash in imported asset filenames. Cache these in the
 # browser for a year: a changed file receives a new URL on the next deploy.
 # Built-in levels under /assets/lev keep stable filenames and are intentionally

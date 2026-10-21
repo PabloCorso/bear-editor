@@ -9,6 +9,12 @@ import {
 
 import type { Route } from "./+types/root";
 import stylesheet from "./styles/tailwind.css?url";
+import {
+  analyticsDomains,
+  analyticsEnabled,
+  analyticsScriptUrl,
+  analyticsWebsiteId,
+} from "./analytics";
 
 export const links: Route.LinksFunction = () => [
   {
@@ -30,6 +36,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        {analyticsEnabled && (
+          <script
+            defer
+            src={analyticsScriptUrl}
+            data-website-id={analyticsWebsiteId}
+            data-domains={analyticsDomains}
+            data-exclude-search="true"
+            data-exclude-hash="true"
+          />
+        )}
       </head>
       <body
         className="relative isolate bg-ground text-primary"
