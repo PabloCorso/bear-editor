@@ -231,9 +231,12 @@ function getShortcutGroups(
               label: "Resize & rotate: rotate just outside any corner",
             },
             {
-              shortcut: "Shift + Drag",
-              label:
-                "Resize & rotate: free corner resize / snap rotation to 15°",
+              shortcut: `${modifier} + Drag`,
+              label: "Resize & rotate: preserve corner resize proportions",
+            },
+            {
+              shortcut: `${modifier} + Drag`,
+              label: "Resize & rotate: snap rotation to 45°",
             },
             {
               shortcut: "Esc",

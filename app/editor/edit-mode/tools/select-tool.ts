@@ -562,7 +562,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
   onPointerMove(event: PointerEvent, context: EventContext): boolean {
     if (this.transformDrag) {
-      this.handleTransformDrag(context.worldPos, event.shiftKey);
+      this.handleTransformDrag(context.worldPos, checkModifierKey(event));
       return true;
     }
     if (this.isDragging) {
@@ -840,7 +840,10 @@ export class SelectTool extends Tool<SelectToolState> {
     };
   }
 
-  private handleTransformDrag(worldPos: Position, shiftKey: boolean): void {
+  private handleTransformDrag(
+    worldPos: Position,
+    constrainTransform: boolean,
+  ): void {
     const drag = this.transformDrag;
     if (!drag) return;
     const center = getTransformCenter(drag.frame.bounds);
@@ -857,7 +860,8 @@ export class SelectTool extends Tool<SelectToolState> {
           this.dragStartPos.y - center.y,
           this.dragStartPos.x - center.x,
         );
-      if (shiftKey) delta = Math.round(delta / (Math.PI / 12)) * (Math.PI / 12);
+      if (constrainTransform)
+        delta = Math.round(delta / (Math.PI / 4)) * (Math.PI / 4);
       angle += delta;
       drag.map = (point) => rotateTransformPoint(point, center, delta);
     } else {
@@ -870,7 +874,7 @@ export class SelectTool extends Tool<SelectToolState> {
           x: local.x - start.x,
           y: local.y - start.y,
         },
-        shiftKey,
+        !constrainTransform,
       );
       drag.map = (point) =>
         rotateTransformPoint(

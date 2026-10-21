@@ -7,11 +7,9 @@ Planned features and feedback for Bear Editor.
 - AI Assistant
 
 - More vertex tool options or new polygon tools
-  - Resize polygons
   - Pipe tool
   - Roller coaster tool
   - Frame tool
-  - Auto-grass
   - Shapes
   - Cut/connect
   - Smoothen

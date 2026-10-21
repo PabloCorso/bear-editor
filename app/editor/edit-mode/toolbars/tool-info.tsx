@@ -1,4 +1,3 @@
-import { Button } from "~/components/ui/button";
 import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useEditor,
@@ -12,16 +11,46 @@ import {
   type VertexToolState,
 } from "~/editor/edit-mode/tools/vertex-tool";
 import { ELMA_PIXELS_PER_WORLD_UNIT } from "~/editor/constants";
-import { CanvasTip } from "./canvas-tip";
+import { CanvasTip, CanvasTipKey, CanvasTipKeyButton } from "./canvas-tip";
+import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
+import { useModifier } from "~/utils/misc";
 
 const segmentClassName =
   "shrink-0 gap-1.5 rounded-none px-2.5 first:rounded-l-full last:rounded-r-full";
 
 export function ToolInfo() {
+  const modifier = useModifier();
   const activeToolId = useEditor((state) => state.activeToolId);
   const vertex = useEditorToolState<VertexToolState>("vertex");
+  const select = useEditorToolState<SelectToolState>("select");
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
+
+  if (activeToolId === "select" && select?.transformMode) {
+    return (
+      <div
+        className="flex flex-wrap items-center gap-0.5"
+        role="group"
+        aria-label="Active tool info"
+      >
+        <CanvasTip className={segmentClassName}>
+          <InfoIcon
+            aria-hidden
+            className="-ml-1 size-4 shrink-0 text-primary"
+          />
+          <span className="text-primary">Resize &amp; Rotate</span>
+        </CanvasTip>
+        <CanvasTip className={segmentClassName}>
+          Resize proportionally
+          <CanvasTipKey>{modifier}</CanvasTipKey>
+        </CanvasTip>
+        <CanvasTip className={segmentClassName}>
+          Rotate in 45° steps
+          <CanvasTipKey>{modifier}</CanvasTipKey>
+        </CanvasTip>
+      </div>
+    );
+  }
 
   if (activeToolId !== "vertex") return null;
 
@@ -78,10 +107,8 @@ export function ToolInfo() {
                 <span className="mr-1 whitespace-nowrap tabular-nums">
                   {label}: {value}
                 </span>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="size-5 rounded border border-separator p-0 text-[11px] text-secondary"
+                <CanvasTipKeyButton
+                  className="size-5 p-0"
                   aria-label={`Decrease AutoGrass ${label.toLowerCase()}`}
                   title={`Decrease ${label.toLowerCase()} (${decrease})`}
                   disabled={value <= min}
@@ -92,12 +119,10 @@ export function ToolInfo() {
                     )
                   }
                 >
-                  <kbd className="font-sans">{decrease}</kbd>
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="size-5 rounded border border-separator p-0 text-[11px] text-secondary"
+                  {decrease}
+                </CanvasTipKeyButton>
+                <CanvasTipKeyButton
+                  className="size-5 p-0"
                   aria-label={`Increase AutoGrass ${label.toLowerCase()}`}
                   title={`Increase ${label.toLowerCase()} (${increase}${field === "depth" ? " or =" : ""})`}
                   disabled={value >= 200}
@@ -105,8 +130,8 @@ export function ToolInfo() {
                     getActiveTool<VertexTool>()?.adjustAutoGrassOption(field, 1)
                   }
                 >
-                  <kbd className="font-sans">{increase}</kbd>
-                </Button>
+                  {increase}
+                </CanvasTipKeyButton>
               </CanvasTip>
             );
           })}
@@ -114,10 +139,7 @@ export function ToolInfo() {
       ) : canChangeDirection ? (
         <CanvasTip className={segmentClassName}>
           <span className="mr-1">Flip direction</span>
-          <Button
-            type="button"
-            size="sm"
-            className="h-5 rounded border border-separator px-1.5 py-0 text-[11px] text-secondary"
+          <CanvasTipKeyButton
             aria-label="Flip direction"
             title="Flip direction (Space)"
             onClick={() => {
@@ -128,8 +150,8 @@ export function ToolInfo() {
               }
             }}
           >
-            <kbd className="font-sans">space</kbd>
-          </Button>
+            space
+          </CanvasTipKeyButton>
         </CanvasTip>
       ) : null}
     </div>
