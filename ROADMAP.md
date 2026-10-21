@@ -4,6 +4,9 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
+- Improve auto grass corners.
+- Pressing Enter in some dialogs might trigger Play mode accidentally.
+
 - AI Assistant
 
 - More vertex tool options or new polygon tools
