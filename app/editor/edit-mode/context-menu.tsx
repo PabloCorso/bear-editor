@@ -290,6 +290,9 @@ export function EditorContextMenu() {
 
   toolbarSections.push(
     <SelectionActionsMenu
+      canTransform={selectTool?.canTransformSelection() ?? false}
+      transforming={Boolean(selectToolState.transformMode)}
+      onTransform={() => selectTool?.toggleTransform()}
       canArrange={canArrange}
       canDuplicate={canDuplicate}
       onArrange={(direction) => {
@@ -569,6 +572,9 @@ function useSelectionGroupIcons(): Record<
 }
 
 function SelectionActionsMenu({
+  canTransform,
+  transforming,
+  onTransform,
   canArrange,
   canDuplicate,
   onArrange,
@@ -576,6 +582,9 @@ function SelectionActionsMenu({
   onDuplicate,
   onDelete,
 }: {
+  canTransform: boolean;
+  transforming: boolean;
+  onTransform: () => void;
   canArrange: boolean;
   canDuplicate: boolean;
   onArrange: (direction: ArrangeSelectionDirection) => void;
@@ -593,6 +602,14 @@ function SelectionActionsMenu({
         </ToolbarButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="bottom">
+        <DropdownMenuItem
+          disabled={!canTransform}
+          shortcut="R"
+          onClick={onTransform}
+        >
+          {transforming ? "Exit resize & rotate" : "Resize & rotate"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
             disabled={!canDuplicate}
@@ -612,42 +629,46 @@ function SelectionActionsMenu({
             Delete
           </DropdownMenuItem>
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger disabled={!canArrange} openOnHover>
-              Arrange
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  shortcut={`${modifier} + ]`}
-                  onClick={() => onArrange("forward")}
-                >
-                  Bring forward
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  shortcut={`${modifier} + Shift + ]`}
-                  onClick={() => onArrange("front")}
-                >
-                  Bring to front
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  shortcut={`${modifier} + [`}
-                  onClick={() => onArrange("backward")}
-                >
-                  Send backward
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  shortcut={`${modifier} + Shift + [`}
-                  onClick={() => onArrange("back")}
-                >
-                  Send to back
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        </DropdownMenuGroup>
+        {canArrange && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger openOnHover>
+                  Arrange
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      shortcut={`${modifier} + ]`}
+                      onClick={() => onArrange("forward")}
+                    >
+                      Bring forward
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      shortcut={`${modifier} + Shift + ]`}
+                      onClick={() => onArrange("front")}
+                    >
+                      Bring to front
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      shortcut={`${modifier} + [`}
+                      onClick={() => onArrange("backward")}
+                    >
+                      Send backward
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      shortcut={`${modifier} + Shift + [`}
+                      onClick={() => onArrange("back")}
+                    >
+                      Send to back
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

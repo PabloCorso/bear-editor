@@ -223,6 +223,23 @@ function getShortcutGroups(
               label: "Move selected vertices along an edge",
             },
             {
+              shortcut: "R",
+              label: "Toggle resize & rotate",
+            },
+            {
+              shortcut: "Corner + Drag",
+              label: "Resize & rotate: rotate just outside any corner",
+            },
+            {
+              shortcut: "Shift + Drag",
+              label:
+                "Resize & rotate: free corner resize / snap rotation to 15°",
+            },
+            {
+              shortcut: "Esc",
+              label: "Resize & rotate: cancel drag / exit mode",
+            },
+            {
               shortcut: "Right click",
               label: "Open selection context menu",
             },

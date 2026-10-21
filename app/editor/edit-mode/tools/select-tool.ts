@@ -1,3 +1,4 @@
+import rotateCursorSvg from "~/assets/rotate-cursor.svg?raw";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import {
@@ -37,6 +38,24 @@ import fastDeepEqual from "fast-deep-equal";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import { getObjectBoundsRadius } from "~/editor/render/object-assets";
 
+import {
+  getTransformBounds,
+  getTransformCenter,
+  getTransformHandles,
+  getResizeTransform,
+  rotateTransformPoint,
+  type TransformHandle,
+} from "~/editor/helpers/selection-transform";
+
+// Cache 15° cursor variants so pointer movement does not rebuild SVG URLs.
+const rotationCursors = Array.from({ length: 24 }, (_, index) => {
+  const svg = rotateCursorSvg.replace(
+    "rotate(0 16 16)",
+    `rotate(${index * 15} 16 16)`,
+  );
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, crosshair`;
+});
+
 const DUPLICATE_OFFSET_STEP = 1;
 const MIN_PICTURE_DISTANCE = 0;
 const MAX_PICTURE_DISTANCE = 999;
@@ -47,11 +66,14 @@ export type ArrangeSelectionDirection =
   | "backward"
   | "back";
 
+type TransformFrame = { bounds: WorldRect; angle: number };
+
 export type SelectToolState = {
   selectedVertices: Array<{ polygon: Polygon; vertex: Position }>;
   selectedObjects: Position[];
   selectedPictures: Position[];
   isDragging: boolean;
+  transformMode?: boolean;
   isMarqueeSelecting?: boolean;
   hoveredObject?: Position;
   hoveredPictureBounds?: {
@@ -120,6 +142,17 @@ export class SelectTool extends Tool<SelectToolState> {
     this.pictureDimensionsResolver = resolver;
   }
 
+  private transformFrame: { frame: TransformFrame; points: Position[] } | null =
+    null;
+  private transformDrag: {
+    frame: TransformFrame;
+    previewFrame: TransformFrame;
+    handle: TransformHandle | "rotate" | "move";
+    points: Position[];
+    selection: SelectToolState;
+    map: (point: Position) => Position;
+  } | null = null;
+
   private isDragging = false;
   private dragStartPos = { x: 0, y: 0 };
   private dragOriginPositions: Position[] = [];
@@ -136,12 +169,15 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   clear(): void {
+    this.finishTransformDrag(false);
+    this.transformFrame = null;
     const { setToolState } = this.getState();
     setToolState({
       selectedVertices: [],
       selectedObjects: [],
       selectedPictures: [],
       isDragging: false,
+      transformMode: false,
       isMarqueeSelecting: false,
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
@@ -362,6 +398,27 @@ export class SelectTool extends Tool<SelectToolState> {
 
   onPointerDown(event: PointerEvent, context: EventContext): boolean {
     this.pruneHiddenSelection();
+    if (this.getState().toolState?.transformMode) {
+      const target = this.getTransformTarget(context.worldPos);
+      if (target) {
+        this.startTransformDrag(target, context.worldPos);
+        return true;
+      }
+      const { state, toolState } = this.getState();
+      const picture = this.resolveHoveredPictureFromState(
+        state,
+        toolState?.hoveredPictureBounds,
+      );
+      if (
+        !checkModifierKey(event) &&
+        this.isExistingSelectionHit(context.worldPos, picture)
+      ) {
+        this.startTransformDrag("move", context.worldPos);
+        return true;
+      }
+      // Empty box space keeps normal selection behavior rather than capturing drags.
+      this.getState().setToolState({ transformMode: false });
+    }
     const { state, toolState } = this.getState();
     const hoveredObject = toolState?.hoveredObject;
     const hoveredPicture = this.resolveHoveredPictureFromState(
@@ -504,6 +561,10 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   onPointerMove(event: PointerEvent, context: EventContext): boolean {
+    if (this.transformDrag) {
+      this.handleTransformDrag(context.worldPos, event.shiftKey);
+      return true;
+    }
     if (this.isDragging) {
       this.handleDragging(context.worldPos, event.shiftKey);
       return true;
@@ -518,6 +579,10 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   onPointerUp(_event: PointerEvent, _context: EventContext): boolean {
+    if (this.transformDrag) {
+      this.finishTransformDrag(_event.type !== "pointercancel");
+      return true;
+    }
     if (this.isDragging) {
       this.isDragging = false;
       this.getState().setToolState({ isDragging: false });
@@ -538,6 +603,27 @@ export class SelectTool extends Tool<SelectToolState> {
   onKeyDown(event: KeyboardEvent, context: EventContext): boolean {
     this.pruneHiddenSelection();
     const modifier = checkModifierKey(event);
+
+    if (this.transformDrag) {
+      if (event.key === "Escape") this.finishTransformDrag(false);
+      event.preventDefault();
+      return true;
+    }
+    if (
+      !modifier &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === "r"
+    ) {
+      if (!event.repeat && this.canTransformSelection()) this.toggleTransform();
+      event.preventDefault();
+      return true;
+    }
+    if (event.key === "Escape" && this.getState().toolState?.transformMode) {
+      this.getState().setToolState({ transformMode: false });
+      event.preventDefault();
+      return true;
+    }
 
     if (modifier && (event.key === "]" || event.key === "[")) {
       const arranged = this.arrangeSelectedPictures(
@@ -593,6 +679,315 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
     return false;
+  }
+
+  public canTransformSelection(): boolean {
+    const bounds = getTransformBounds(this.getTransformPoints());
+    return Boolean(
+      bounds && (bounds.maxX > bounds.minX || bounds.maxY > bounds.minY),
+    );
+  }
+
+  public toggleTransform(): void {
+    if (this.isDragging || this.isMarqueeSelecting) return;
+    this.pruneHiddenSelection();
+    const { toolState, setToolState } = this.getState();
+    this.transformFrame = null;
+    setToolState({
+      transformMode: !toolState?.transformMode && this.canTransformSelection(),
+      contextMenuType: undefined,
+      contextMenuPosition: undefined,
+      hoveredObject: undefined,
+      hoveredPictureBounds: undefined,
+    });
+  }
+
+  getCursor(context: EventContext): string | undefined {
+    if (!this.getState().toolState?.transformMode) return undefined;
+    const target =
+      this.transformDrag?.handle ?? this.getTransformTarget(context.worldPos);
+    if (target === "rotate") {
+      const frame = this.getTransformFrame();
+      if (!frame) return undefined;
+      // Lock onto the starting corner throughout a drag.
+      const targetFrame = this.transformDrag?.frame ?? frame;
+      const targetPosition = this.transformDrag
+        ? this.dragStartPos
+        : context.worldPos;
+      const local = rotateTransformPoint(
+        targetPosition,
+        getTransformCenter(targetFrame.bounds),
+        -targetFrame.angle,
+      );
+      const { minX, minY, maxX, maxY } = targetFrame.bounds;
+      const corners = [
+        { x: -1, y: -1, position: { x: minX, y: minY } },
+        { x: 1, y: -1, position: { x: maxX, y: minY } },
+        { x: -1, y: 1, position: { x: minX, y: maxY } },
+        { x: 1, y: 1, position: { x: maxX, y: maxY } },
+      ];
+      const distance = (corner: (typeof corners)[number]) =>
+        Math.hypot(local.x - corner.position.x, local.y - corner.position.y);
+      const corner = corners.reduce((nearest, candidate) =>
+        distance(candidate) < distance(nearest) ? candidate : nearest,
+      );
+      // Face along the corner's outward bisector, independent of pointer position.
+      const radialAngle = Math.atan2(corner.y, corner.x) + frame.angle;
+      const step = Math.round((radialAngle + Math.PI / 2) / (Math.PI / 12));
+      return rotationCursors[
+        ((step % rotationCursors.length) + rotationCursors.length) %
+          rotationCursors.length
+      ];
+    }
+    if (target === "move") return "move";
+    if (!target) return undefined;
+    const angle = this.getTransformFrame()?.angle ?? 0;
+    const direction = Math.atan2(target.y, target.x) + angle;
+    const cursors = ["ew-resize", "nwse-resize", "ns-resize", "nesw-resize"];
+    return cursors[((Math.round(direction / (Math.PI / 4)) % 4) + 4) % 4];
+  }
+
+  private getTransformPoints(): Position[] {
+    const { state, toolState } = this.getState();
+    if (!toolState) return [];
+    return [
+      ...toolState.selectedVertices.map(({ vertex }) => vertex),
+      ...toolState.selectedObjects,
+      ...toolState.selectedPictures.map((position) => {
+        const picture = state.pictures.find(
+          (entry) => entry.position === position,
+        );
+        const size = picture && this.pictureDimensionsResolver(picture);
+        return size
+          ? { x: position.x + size.width / 2, y: position.y + size.height / 2 }
+          : position;
+      }),
+    ];
+  }
+
+  private getTransformFrame(): TransformFrame | null {
+    if (this.transformDrag) return this.transformDrag.previewFrame;
+    const points = this.getTransformPoints();
+    if (
+      this.transformFrame &&
+      fastDeepEqual(this.transformFrame.points, points)
+    ) {
+      return this.transformFrame.frame;
+    }
+    const bounds = getTransformBounds(points);
+    if (!bounds) return null;
+    const frame = { bounds, angle: 0 };
+    this.transformFrame = { frame, points: points.map(clonePosition) };
+    return frame;
+  }
+
+  private getTransformTarget(
+    position: Position,
+  ): TransformHandle | "rotate" | null {
+    const { state } = this.getState();
+    const frame = this.getTransformFrame();
+    if (!frame || !this.canTransformSelection()) return null;
+    const local = rotateTransformPoint(
+      position,
+      getTransformCenter(frame.bounds),
+      -frame.angle,
+    );
+    const resizeRadius = 8 / state.zoom;
+    const resizeHandle = getTransformHandles(frame.bounds)
+      .map((handle) => ({
+        handle,
+        distance: Math.hypot(
+          local.x - handle.position.x,
+          local.y - handle.position.y,
+        ),
+      }))
+      .filter(({ distance }) => distance <= resizeRadius)
+      .sort((a, b) => a.distance - b.distance)[0]?.handle;
+    if (resizeHandle) return resizeHandle;
+
+    // Rotation lives just outside each corner; direct handle hits always resize.
+    const { minX, minY, maxX, maxY } = frame.bounds;
+    const outside =
+      local.x < minX || local.x > maxX || local.y < minY || local.y > maxY;
+    if (!outside) return null;
+    const rotationRadius = 24 / state.zoom;
+    for (const x of [minX, maxX]) {
+      for (const y of [minY, maxY]) {
+        const distance = Math.hypot(local.x - x, local.y - y);
+        if (distance > resizeRadius && distance <= rotationRadius)
+          return "rotate";
+      }
+    }
+    return null;
+  }
+
+  private startTransformDrag(
+    handle: TransformHandle | "rotate" | "move",
+    worldPos: Position,
+  ): void {
+    const { toolState } = this.getState();
+    const points = this.getTransformPoints().map(clonePosition);
+    const frame = this.getTransformFrame();
+    if (!frame || !toolState) return;
+    this.startDragging(worldPos);
+    this.transformDrag = {
+      frame,
+      previewFrame: frame,
+      handle,
+      points,
+      selection: toolState,
+      map: (point) => point,
+    };
+  }
+
+  private handleTransformDrag(worldPos: Position, shiftKey: boolean): void {
+    const drag = this.transformDrag;
+    if (!drag) return;
+    const center = getTransformCenter(drag.frame.bounds);
+    let angle = drag.frame.angle;
+    if (drag.handle === "move") {
+      drag.map = (point) => ({
+        x: point.x + worldPos.x - this.dragStartPos.x,
+        y: point.y + worldPos.y - this.dragStartPos.y,
+      });
+    } else if (drag.handle === "rotate") {
+      let delta =
+        Math.atan2(worldPos.y - center.y, worldPos.x - center.x) -
+        Math.atan2(
+          this.dragStartPos.y - center.y,
+          this.dragStartPos.x - center.x,
+        );
+      if (shiftKey) delta = Math.round(delta / (Math.PI / 12)) * (Math.PI / 12);
+      angle += delta;
+      drag.map = (point) => rotateTransformPoint(point, center, delta);
+    } else {
+      const local = rotateTransformPoint(worldPos, center, -angle);
+      const start = rotateTransformPoint(this.dragStartPos, center, -angle);
+      const resize = getResizeTransform(
+        drag.frame.bounds,
+        drag.handle,
+        {
+          x: local.x - start.x,
+          y: local.y - start.y,
+        },
+        shiftKey,
+      );
+      drag.map = (point) =>
+        rotateTransformPoint(
+          resize(rotateTransformPoint(point, center, -angle)),
+          center,
+          angle,
+        );
+    }
+    // Keep the same oriented frame, including for subsequent gestures.
+    const bounds = drag.frame.bounds;
+    const toWorld = (point: Position) =>
+      rotateTransformPoint(point, center, drag.frame.angle);
+    const left = drag.map(toWorld({ x: bounds.minX, y: center.y }));
+    const right = drag.map(toWorld({ x: bounds.maxX, y: center.y }));
+    const top = drag.map(toWorld({ x: center.x, y: bounds.minY }));
+    const bottom = drag.map(toWorld({ x: center.x, y: bounds.maxY }));
+    const nextCenter = drag.map(center);
+    const halfWidth = Math.hypot(right.x - left.x, right.y - left.y) / 2;
+    const halfHeight = Math.hypot(bottom.x - top.x, bottom.y - top.y) / 2;
+    drag.previewFrame = {
+      angle,
+      bounds: {
+        minX: nextCenter.x - halfWidth,
+        maxX: nextCenter.x + halfWidth,
+        minY: nextCenter.y - halfHeight,
+        maxY: nextCenter.y + halfHeight,
+      },
+    };
+    const positions = drag.points.map(drag.map);
+    this.dragHasChanges = positions.some(
+      (point, index) =>
+        Math.hypot(
+          point.x - drag.points[index].x,
+          point.y - drag.points[index].y,
+        ) > 1e-9,
+    );
+    const vertices = drag.selection.selectedVertices.length;
+    const objects = drag.selection.selectedObjects.length;
+    if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
+    if (objects)
+      this.updateSelectedObjects(positions.slice(vertices, vertices + objects));
+    if (drag.selection.selectedPictures.length) {
+      this.updateSelectedPictures(
+        positions.slice(vertices + objects).map((point, index) => {
+          // Picture anchors stay offset from their transformed visual centres.
+          const origin = this.dragOriginPositions[vertices + objects + index];
+          const center = drag.points[vertices + objects + index];
+          return {
+            x: point.x + origin.x - center.x,
+            y: point.y + origin.y - center.y,
+          };
+        }),
+      );
+    }
+  }
+
+  private finishTransformDrag(commit: boolean): void {
+    const drag = this.transformDrag;
+    if (!drag) return;
+    if (!commit && this.dragHistoryStart) {
+      this.store.setState(this.dragHistoryStart);
+      this.getState().setToolState(drag.selection);
+    }
+    if (commit) {
+      this.transformFrame = {
+        frame: drag.previewFrame,
+        points: this.getTransformPoints().map(clonePosition),
+      };
+    }
+    this.transformDrag = null;
+    this.isDragging = false;
+    this.getState().setToolState({ isDragging: false });
+    this.endDragHistoryBatch(commit);
+  }
+
+  private getTransformOverlays(): WorldRenderOverlayItem[] {
+    const { state, toolState } = this.getState();
+    if (!toolState?.transformMode || !this.canTransformSelection()) return [];
+    const frame = this.getTransformFrame();
+    if (!frame) return [];
+    const bounds = frame.bounds;
+    const center = getTransformCenter(bounds);
+    const map = (point: Position) =>
+      rotateTransformPoint(point, center, frame.angle);
+    const color = uiColors.boundsSelected;
+    const width = uiStrokeWidths.boundsSelectedScreen / state.zoom;
+    const hovered =
+      this.transformDrag?.handle ??
+      (state.mouseOnCanvas
+        ? this.getTransformTarget(state.mousePosition)
+        : null);
+    return [
+      {
+        type: "polyline",
+        points: [
+          { x: bounds.minX, y: bounds.minY },
+          { x: bounds.maxX, y: bounds.minY },
+          { x: bounds.maxX, y: bounds.maxY },
+          { x: bounds.minX, y: bounds.maxY },
+        ].map(map),
+        closed: true,
+        color,
+        width,
+        layer: "top",
+      },
+      ...getTransformHandles(bounds).map((handle) =>
+        createSelectionHandleOverlay(
+          map(handle.position),
+          (typeof hovered === "object" &&
+          hovered?.x === handle.x &&
+          hovered?.y === handle.y
+            ? 5
+            : 4) / state.zoom,
+          width,
+        ),
+      ),
+    ];
   }
 
   public hasSelection(): boolean {
@@ -819,7 +1214,12 @@ export class SelectTool extends Tool<SelectToolState> {
     const selectedLineWidth = uiStrokeWidths.boundsSelectedScreen / state.zoom;
     const handleStrokeWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
 
-    if (!this.isDragging && !this.isMarqueeSelecting && state.mouseOnCanvas) {
+    if (
+      !toolState.transformMode &&
+      !this.isDragging &&
+      !this.isMarqueeSelecting &&
+      state.mouseOnCanvas
+    ) {
       const { hoveredObject } = toolState;
       if (
         hoveredObject &&
@@ -972,10 +1372,9 @@ export class SelectTool extends Tool<SelectToolState> {
     const selectedObjectHandlePositions = toolState.selectedObjects.filter(
       (position) => isPointVisible(position, viewportRect),
     );
-    const allSelected = [
-      ...selectedHandlePositions,
-      ...selectedObjectHandlePositions,
-    ];
+    const allSelected = toolState.transformMode
+      ? []
+      : [...selectedHandlePositions, ...selectedObjectHandlePositions];
     if (
       allSelected.length <= selectionRenderLimits.maxIndividualHandles &&
       allSelected.length > 0
@@ -1006,6 +1405,8 @@ export class SelectTool extends Tool<SelectToolState> {
         );
       }
     }
+
+    overlays.push(...this.getTransformOverlays());
 
     if (this.isMarqueeSelecting) {
       const bounds = getSelectionBounds(

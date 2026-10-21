@@ -642,6 +642,10 @@ export class EditorEngine {
         this.store.getState().actions.setMouseOnCanvas(false);
         this.updateCanvasCursor();
       }
+    } else if (
+      this.store.getState().actions.getActiveTool() instanceof SelectTool
+    ) {
+      this.dispatchToolPointerEvent("up", event);
     }
 
     this.isPanning = false;
