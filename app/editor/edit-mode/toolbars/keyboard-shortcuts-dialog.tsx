@@ -7,6 +7,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import { Icon } from "~/components/ui/icon";
 import { PictureIcon, SpriteIcon } from "~/components/sprite-icon";
 import {
@@ -80,13 +85,7 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
 
   return (
     <Dialog {...props}>
-      <DialogContent
-        className="grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-xl"
-        onKeyDown={(event) => {
-          // Prevent the editor from reacting to shortcuts while the dialog is open.
-          event.stopPropagation();
-        }}
-      >
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-xl">
         <DialogHeader showCloseButton>
           <DialogTitle className="text-2xl">Shortcuts</DialogTitle>
         </DialogHeader>
@@ -102,14 +101,6 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
 }
 
 function ShortcutGroupSection({ group }: { group: ShortcutGroup }) {
-  const flattenedItems = group.items.flatMap((item) => [
-    item,
-    ...(item.subItems?.map((subItem) => ({
-      ...subItem,
-      isSubtleChild: true,
-    })) ?? []),
-  ]);
-
   return (
     <section className="flex flex-col gap-4">
       <h2 className="pl-16 text-lg font-bold tracking-tight sm:pl-[84px] sm:text-xl">
@@ -117,13 +108,25 @@ function ShortcutGroupSection({ group }: { group: ShortcutGroup }) {
       </h2>
 
       <div>
-        {flattenedItems.map((item, index) => (
-          <ShortcutRow
-            key={`${group.title}-${item.label}`}
-            item={item}
-            isFirst={index === 0}
-          />
-        ))}
+        {group.items.map((item, index) =>
+          item.subItems?.length ? (
+            <Collapsible key={item.label}>
+              <ShortcutRow item={item} isFirst={index === 0} expandable />
+              <CollapsiblePanel className="ml-4 sm:ml-9">
+                {item.subItems.map((subItem) => (
+                  <ShortcutRow
+                    key={subItem.label}
+                    item={subItem}
+                    isFirst={false}
+                    nested
+                  />
+                ))}
+              </CollapsiblePanel>
+            </Collapsible>
+          ) : (
+            <ShortcutRow key={item.label} item={item} isFirst={index === 0} />
+          ),
+        )}
       </div>
     </section>
   );
@@ -132,25 +135,61 @@ function ShortcutGroupSection({ group }: { group: ShortcutGroup }) {
 function ShortcutRow({
   item,
   isFirst,
+  expandable = false,
+  nested = false,
 }: {
-  item: ShortcutItem | (ShortcutSubItem & { isSubtleChild: true });
+  item: ShortcutItem | ShortcutSubItem;
   isFirst: boolean;
+  expandable?: boolean;
+  nested?: boolean;
 }) {
+  const Content = expandable ? CollapsibleTrigger : "div";
   return (
-    <div className="grid min-h-10 grid-cols-[2rem_minmax(4.75rem,7rem)_1fr] items-center gap-x-2 px-2 sm:grid-cols-[2.5rem_minmax(6rem,8rem)_1fr] sm:gap-x-5 sm:px-6">
-      <div className="flex h-8 w-8 items-center justify-center text-primary/85">
-        {item.icon ? <Icon size="lg">{item.icon}</Icon> : null}
-      </div>
-      <div
+    <div
+      className={cn(
+        "min-h-10",
+        nested
+          ? "flex pr-2 pl-12 sm:pr-6 sm:pl-[84px]"
+          : "grid grid-cols-[2rem_minmax(4.75rem,7rem)_1fr] items-center gap-x-2 px-2 sm:grid-cols-[2.5rem_minmax(6rem,8rem)_1fr] sm:gap-x-5 sm:px-6",
+      )}
+    >
+      {!nested ? (
+        <div className="flex h-8 w-8 items-center justify-center text-primary/85">
+          {item.icon ? <Icon size="lg">{item.icon}</Icon> : null}
+        </div>
+      ) : null}
+      <Content
         className={cn(
-          "col-span-2 col-start-2 grid h-full grid-cols-[minmax(4.75rem,7rem)_1fr] items-center gap-x-4 sm:grid-cols-[minmax(6rem,8rem)_1fr] sm:gap-x-5",
+          "min-h-10 w-full",
+          nested
+            ? "flex items-stretch gap-x-2 border-x px-2 sm:gap-x-3"
+            : "col-span-2 col-start-2 grid h-full items-center gap-x-4 sm:gap-x-5",
+          !nested &&
+            (expandable
+              ? "grid-cols-[minmax(4.75rem,7rem)_1fr_auto] hover:bg-primary-hover/50 sm:grid-cols-[minmax(6rem,8rem)_1fr_auto]"
+              : "grid-cols-[minmax(4.75rem,7rem)_1fr] sm:grid-cols-[minmax(6rem,8rem)_1fr]"),
           isFirst && "border-t border-separator",
           "border-b border-separator",
         )}
       >
-        <ShortcutKeys shortcut={item.shortcut} />
-        <div className="text-sm leading-5 text-primary/85">{item.label}</div>
-      </div>
+        <div
+          className={cn(
+            "flex min-w-0 items-center",
+            nested ? "shrink-0" : "h-full",
+          )}
+        >
+          <ShortcutKeys shortcut={item.shortcut} />
+          {nested ? (
+            <span
+              aria-hidden
+              className="ml-2 w-px shrink-0 self-stretch bg-separator"
+            />
+          ) : null}
+        </div>
+        <span className="self-center text-sm leading-5 text-primary/85">
+          {item.label}
+        </span>
+      </Content>
     </div>
   );
 }
@@ -158,9 +197,9 @@ function ShortcutRow({
 function ShortcutKeys({ shortcut }: { shortcut: Shortcut }) {
   if (typeof shortcut === "string") {
     return (
-      <div className="font-mono text-sm leading-5 font-bold tracking-tight">
+      <span className="font-mono text-sm leading-5 font-bold tracking-tight">
         {shortcut}
-      </div>
+      </span>
     );
   }
 
@@ -168,7 +207,7 @@ function ShortcutKeys({ shortcut }: { shortcut: Shortcut }) {
   const hasFixedKeyCells = shortcut.every((key) => key.length === 1);
 
   return (
-    <div className="flex h-full min-w-0 items-center gap-x-2 font-mono text-sm leading-5 font-bold tracking-tight">
+    <span className="flex h-full min-w-0 items-center gap-x-2 font-mono text-sm leading-5 font-bold tracking-tight">
       {shortcut.map((key, index) => (
         <span key={`${key}-${index}`} className="contents">
           {index > 0 && hasSeparators ? (
@@ -181,7 +220,7 @@ function ShortcutKeys({ shortcut }: { shortcut: Shortcut }) {
           </span>
         </span>
       ))}
-    </div>
+    </span>
   );
 }
 
@@ -211,44 +250,16 @@ function getShortcutGroups(
           icon: <CursorIcon weight="light" />,
           subItems: [
             {
-              shortcut: ["Shift", "Alt"],
-              label: "Select object behind images",
-            },
-            {
               shortcut: `${modifier} + A`,
               label: "Select all visible",
             },
             {
-              shortcut: "Shift + Drag",
-              label: "Move selected vertices along an edge",
-            },
-            {
-              shortcut: "R",
-              label: "Toggle resize & rotate",
-            },
-            {
-              shortcut: "Corner + Drag",
-              label: "Resize & rotate: rotate just outside any corner",
-            },
-            {
-              shortcut: `${modifier} + Drag`,
-              label: "Resize & rotate: preserve corner resize proportions",
-            },
-            {
-              shortcut: `${modifier} + Drag`,
-              label: "Resize & rotate: snap rotation to 45°",
-            },
-            {
-              shortcut: "Esc",
-              label: "Resize & rotate: cancel drag / exit mode",
+              shortcut: ["Shift", "Alt"],
+              label: "Select object behind images",
             },
             {
               shortcut: "Right click",
               label: "Open selection context menu",
-            },
-            {
-              shortcut: "Delete",
-              label: "Delete selection",
             },
             {
               shortcut: `${modifier} + C`,
@@ -263,16 +274,44 @@ function getShortcutGroups(
               label: "Duplicate selection",
             },
             {
+              shortcut: "Delete",
+              label: "Delete selection",
+            },
+            {
+              shortcut: "Shift + Drag",
+              label: "Move selected vertices along an edge",
+            },
+            {
+              shortcut: "R",
+              label: "Toggle resize & rotate",
+            },
+            {
+              shortcut: `${modifier} + Drag`,
+              label: "Resize & rotate: preserve corner resize proportions",
+            },
+            {
+              shortcut: "Corner + Drag",
+              label: "Resize & rotate: rotate just outside any corner",
+            },
+            {
+              shortcut: `${modifier} + Drag`,
+              label: "Resize & rotate: snap rotation to 45°",
+            },
+            {
+              shortcut: "Esc",
+              label: "Resize & rotate: cancel drag / exit mode",
+            },
+            {
               shortcut: `${modifier} + ]`,
               label: "Bring picture forward",
             },
             {
-              shortcut: `${modifier} + Shift + ]`,
-              label: "Bring picture to front",
-            },
-            {
               shortcut: `${modifier} + [`,
               label: "Send picture backward",
+            },
+            {
+              shortcut: `${modifier} + Shift + ]`,
+              label: "Bring picture to front",
             },
             {
               shortcut: `${modifier} + Shift + [`,
@@ -287,29 +326,11 @@ function getShortcutGroups(
         },
         {
           shortcut: defaultTools.vertex.shortcut,
-          label: defaultTools.vertex.name,
+          label: "Select Vertex tool",
           icon: (
             <VertexIcon {...getVertexIconProps("normal")} className="h-6 w-6" />
           ),
           subItems: [
-            {
-              shortcut: defaultTools.vertex.variants?.grass?.shortcut ?? "G",
-              label: "Toggle grass mode",
-            },
-            {
-              shortcut: AUTO_GRASS_ALL_SHORTCUT,
-              label: "AutoGrass all polygons",
-            },
-            {
-              shortcut: ["-", "+", "="],
-              label:
-                "Adjust AutoGrass height (also while hovering All; overrides keyboard zoom)",
-            },
-            {
-              shortcut: ["[", "]"],
-              label:
-                "Decrease / increase AutoGrass end inset (also while hovering All)",
-            },
             ...(toolIcons.showVertexInternalEdgeClickHint
               ? [
                   {
@@ -323,8 +344,74 @@ function getShortcutGroups(
               label: "Flip direction",
             },
             {
-              shortcut: ["Enter", "Esc"],
-              label: "Finish polygon or restore edit",
+              shortcut: ["Enter", "Esc", "Right click"],
+              label: "Finish polygon",
+            },
+          ],
+        },
+        {
+          shortcut: defaultTools.vertex.variants.grass.shortcut,
+          label: "Select Grass tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("grass")} className="h-6 w-6" />
+          ),
+          subItems: [
+            { shortcut: "Space", label: "Flip direction" },
+            {
+              shortcut: ["Enter", "Esc", "Right click"],
+              label: "Finish polygon",
+            },
+          ],
+        },
+        {
+          shortcut: defaultTools.vertex.variants.pipe.shortcut,
+          label: "Select Pipe tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("pipe")} className="h-6 w-6" />
+          ),
+          subItems: [
+            { shortcut: ["-", "+"], label: "Adjust width" },
+            {
+              shortcut: "Space",
+              label:
+                "Cycle mode: no apples / apples by distance / apples by count",
+            },
+            {
+              shortcut: ["[", "]"],
+              label:
+                "Decrease / increase apple distance (0.25 units) or count (1 apple)",
+            },
+            {
+              shortcut: "0–250",
+              label:
+                "Type apple count in count mode; pause briefly to start a new number",
+            },
+            { shortcut: "S", label: "Toggle start chamber and player" },
+            { shortcut: "F", label: "Toggle end flower" },
+            {
+              shortcut: ["Enter", "Esc", "Right click"],
+              label: "Finish pipe",
+            },
+          ],
+        },
+        {
+          shortcut: AUTO_GRASS_ALL_SHORTCUT,
+          label: "AutoGrass all polygons",
+          icon: (
+            <VertexIcon
+              {...getVertexIconProps("autoGrass")}
+              className="h-6 w-6"
+            />
+          ),
+          subItems: [
+            {
+              shortcut: ["-", "+"],
+              label: "Adjust height (AutoGrass tool or hovering All)",
+            },
+            {
+              shortcut: ["[", "]"],
+              label:
+                "Decrease / increase end inset (AutoGrass tool or hovering All)",
             },
           ],
         },
@@ -380,11 +467,7 @@ function getShortcutGroups(
       items: [
         {
           shortcut: "Enter",
-          label: "Start / restart run",
-        },
-        {
-          shortcut: "Esc",
-          label: "Exit play mode",
+          label: "Start / restart run (outside dialogs)",
         },
         {
           shortcut: formatShortcutCode(toolIcons.playKeyBindings.throttle),
@@ -409,6 +492,10 @@ function getShortcutGroups(
         {
           shortcut: formatShortcutCode(toolIcons.playKeyBindings.aloVolt),
           label: "Alo volt",
+        },
+        {
+          shortcut: "Esc",
+          label: "Exit play mode",
         },
       ],
     },
@@ -449,12 +536,12 @@ function getShortcutGroups(
           label: "Redo",
         },
         {
-          shortcut: ["+", "="],
-          label: "Zoom in (outside AutoGrass)",
+          shortcut: "+",
+          label: "Zoom in",
         },
         {
-          shortcut: ["-", "_"],
-          label: "Zoom out (outside AutoGrass)",
+          shortcut: "-",
+          label: "Zoom out",
         },
         {
           shortcut: `${modifier} + 0`,

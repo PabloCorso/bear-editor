@@ -47,6 +47,7 @@ export abstract class Tool<T extends ToolState = ToolState> {
     apples?: Apple[];
     killers?: Position[];
     flowers?: Position[];
+    start?: Position;
     pictures?: Picture[];
   };
 }

@@ -834,6 +834,26 @@ export class EditorEngine {
     const key = event.key.toUpperCase();
     const modifier = checkModifierKey(event);
 
+    if (
+      key === "P" &&
+      event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      const vertexState = state.actions.getToolState<VertexToolState>(
+        defaultTools.vertex.id,
+      );
+      if (
+        state.activeToolId !== defaultTools.vertex.id ||
+        vertexState?.variant !== "pipe"
+      ) {
+        state.actions.activateTool(defaultTools.vertex.id, "pipe");
+      }
+      event.preventDefault();
+      return;
+    }
+
     if (key === "G" && event.shiftKey && !modifier && !event.altKey) {
       this.autoGrassAll(state);
       event.preventDefault();
@@ -863,7 +883,10 @@ export class EditorEngine {
 
     for (const tool of state.toolsMap.values()) {
       if (tool.meta.shortcut.toUpperCase() === key) {
-        state.actions.activateTool(tool.meta.id);
+        state.actions.activateTool(
+          tool.meta.id,
+          tool.meta.id === defaultTools.vertex.id ? "normal" : undefined,
+        );
         return;
       }
 

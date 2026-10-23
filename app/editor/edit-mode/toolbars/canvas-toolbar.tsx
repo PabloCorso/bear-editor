@@ -48,9 +48,11 @@ export function CanvasToolbar({
   const { triggerFitToView } = useEditorActions();
   const activeToolId = useEditor((state) => state.activeToolId);
   const vertex = useEditorToolState<VertexToolState>("vertex");
-  const isAutoGrass =
+  const usesSizeShortcuts =
     activeToolId === "vertex" &&
-    (vertex?.variant === "autoGrass" || vertex?.previewAutoGrassAll);
+    (vertex?.variant === "autoGrass" ||
+      vertex?.variant === "pipe" ||
+      vertex?.previewAutoGrassAll);
   const modifier = useModifier();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -90,14 +92,14 @@ export function CanvasToolbar({
         <Toolbar className="w-fit gap-2">
           <ToolButton
             name="Zoom In"
-            shortcut={isAutoGrass ? undefined : "+"}
+            shortcut={usesSizeShortcuts ? undefined : "+"}
             onClick={() => engineRef.current?.zoomIn()}
           >
             <PlusIcon />
           </ToolButton>
           <ToolButton
             name="Zoom Out"
-            shortcut={isAutoGrass ? undefined : "-"}
+            shortcut={usesSizeShortcuts ? undefined : "-"}
             onClick={() => engineRef.current?.zoomOut()}
           >
             <MinusIcon />

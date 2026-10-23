@@ -277,12 +277,14 @@ function getDrawItemQueue(
       boundsOpacity: idleBoundsOpacity,
     })),
     ...(showAnyObjects &&
-    (!viewportRect || isPointVisible(state.start, viewportRect))
+    (!viewportRect || isPointVisible(drafts.start ?? state.start, viewportRect))
       ? [
           {
             type: "start" as const,
             ...DEFAULT_DISTANCE_AND_CLIP,
-            position: state.start,
+            position: drafts.start ?? state.start,
+            opacity: drafts.start ? DRAFT_PREVIEW_OPACITY : undefined,
+            forceVisible: !!drafts.start,
             showBounds: showObjectBounds,
             boundsLineWidth: idleBoundsLineWidth,
             boundsColor: idleBoundsColor,

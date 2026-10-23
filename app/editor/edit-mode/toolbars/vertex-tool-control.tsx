@@ -129,6 +129,18 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       >
         <VertexIcon {...getVertexIconProps("grass")} />
       </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
+        name="Pipe"
+        shortcut={defaultTools.vertex.variants.pipe.shortcut}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "pipe"}
+        onClick={() => onVariantChange("pipe")}
+      >
+        <VertexIcon {...getVertexIconProps("pipe")} />
+      </ToolControlButton>
       <div
         role="separator"
         aria-orientation="horizontal"
@@ -419,6 +431,7 @@ type VertexIconProps = React.ComponentPropsWithoutRef<"svg"> & {
   boundsColor?: string;
   handles?: boolean;
   badge?: string;
+  corridor?: boolean;
 };
 
 export function VertexIcon({
@@ -429,6 +442,7 @@ export function VertexIcon({
   boundsColor = uiColors.vertexDraftLine,
   handles,
   badge,
+  corridor,
   ...props
 }: VertexIconProps) {
   const frameClipId = useId();
@@ -447,10 +461,22 @@ export function VertexIcon({
         </clipPath>
       </defs>
 
-      <g clipPath={`url(#${frameClipId})`}>
-        <rect x="0" y="0" width="24" height="24" fill={ground} />
-        <path d="M0 0H24L0 24Z" fill={sky} />
-      </g>
+      {corridor ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={ground} />
+          <path
+            d="M-3 20L20-3L27 4L4 27Z"
+            fill={sky}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+        </g>
+      ) : (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect x="0" y="0" width="24" height="24" fill={ground} />
+          <path d="M0 0H24L0 24Z" fill={sky} />
+        </g>
+      )}
 
       {bounds && (
         <path
@@ -509,6 +535,10 @@ export function VertexIcon({
 export function getVertexIconProps(
   variant?: VertexToolVariant,
 ): VertexIconProps {
+  if (variant === "pipe") {
+    return { corridor: true };
+  }
+
   if (variant === "grass") {
     return {
       sky: colors.sky,

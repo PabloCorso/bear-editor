@@ -4,7 +4,11 @@ import type { EditorStore } from "~/editor/editor-store";
 import type { Polygon, Position } from "~/editor/elma-types";
 import { defaultAutoGrassOptions } from "~/editor/helpers/auto-grass";
 import { ELMA_PIXEL_SCALE } from "~/editor/constants";
-import { VertexTool, type VertexToolState } from "./vertex-tool";
+import {
+  VertexTool,
+  type VertexToolState,
+  type VertexToolVariant,
+} from "./vertex-tool";
 
 function position(x: number, y: number): Position {
   return { x, y } as Position;
@@ -48,6 +52,8 @@ function createVertexTool({
   return Object.assign(new VertexTool(store), {
     getToolState: () => toolState,
     getAutoGrassOptions: () => state.autoGrassOptions,
+    setToolState: (patch: Partial<VertexToolState>) =>
+      state.actions.setToolState("vertex", patch),
   });
 }
 
@@ -89,6 +95,66 @@ describe("VertexTool", () => {
         before + input.delta * ELMA_PIXEL_SCALE,
       );
       expect(prevented).toBe(true);
+    },
+  );
+
+  it.each(["normal", "grass", "both", "pipe"] as const)(
+    "prioritizes AutoGrass shortcuts over %s while previewing all polygons",
+    (variant) => {
+      const tool = createVertexTool({
+        polygons: [],
+        mousePosition: position(0, 0),
+        toolState: {
+          variant,
+          previewAutoGrassAll: true,
+          drawingPolygon: polygon([]),
+          pipeWidthPx: 30,
+          pipeAppleMode: "distance",
+          pipeAppleDistance: 2,
+        },
+      });
+      tool.getAutoGrassOptions().endInset = defaultAutoGrassOptions.endInset;
+      for (const [key, field, delta] of [
+        ["+", "depth", 1],
+        ["=", "depth", 1],
+        ["-", "depth", -1],
+        ["_", "depth", -1],
+        ["[", "endInset", -1],
+        ["]", "endInset", 1],
+      ] as const) {
+        const before = tool.getAutoGrassOptions()[field];
+        expect(
+          tool.onKeyDown(
+            { key, preventDefault() {} } as KeyboardEvent,
+            {} as Parameters<VertexTool["onKeyDown"]>[1],
+          ),
+        ).toBe(true);
+        expect(tool.getAutoGrassOptions()[field]).toBeCloseTo(
+          before + delta * ELMA_PIXEL_SCALE,
+        );
+        expect(tool.getToolState()).toMatchObject({
+          variant,
+          pipeWidthPx: 30,
+          pipeAppleDistance: 2,
+        });
+      }
+
+      // Leaving the preview restores the selected tool's shortcuts.
+      tool.setToolState({ previewAutoGrassAll: false });
+      const options = { ...tool.getAutoGrassOptions() };
+      for (const key of ["+", "]"]) {
+        tool.onKeyDown(
+          { key, preventDefault() {} } as KeyboardEvent,
+          {} as Parameters<VertexTool["onKeyDown"]>[1],
+        );
+      }
+      expect(tool.getAutoGrassOptions()).toEqual(options);
+      if (variant === "pipe") {
+        expect(tool.getToolState()).toMatchObject({
+          pipeWidthPx: 31,
+          pipeAppleDistance: 2.25,
+        });
+      }
     },
   );
 
@@ -246,6 +312,35 @@ describe("VertexTool", () => {
 
     expect(tool.getDrafts().polygons).toEqual([]);
   });
+
+  it.each<VertexToolVariant>(["normal", "grass", "both", "autoGrass", "pipe"])(
+    "prioritizes the All hover preview over %s drafts and restores them on leave",
+    (variant) => {
+      const ground = polygon([
+        position(0, 0),
+        position(10, 0),
+        position(10, 2),
+        position(0, 2),
+      ]);
+      const drawingPolygon = polygon([position(20, 0), position(30, 0)]);
+      const tool = createVertexTool({
+        polygons: [ground],
+        mousePosition: position(50, 50),
+        mouseOnCanvas: false,
+        toolState: { variant, drawingPolygon },
+      });
+      const before = tool.getDrafts();
+
+      tool.setToolState({ previewAutoGrassAll: true });
+      expect(tool.getDrafts().polygons).toMatchObject([{ grass: true }]);
+      expect(tool.getDrafts().apples).toBeUndefined();
+      expect(tool.getToolState().drawingPolygon).toBe(drawingPolygon);
+      expect(tool.getToolState().variant).toBe(variant);
+
+      tool.setToolState({ previewAutoGrassAll: false });
+      expect(tool.getDrafts()).toEqual(before);
+    },
+  );
 
   it("previews the whole level off canvas while hovering All and updates with shortcuts", () => {
     const grounds = [0, 20].map((x) =>

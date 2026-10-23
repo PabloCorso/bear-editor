@@ -1,4 +1,3 @@
-import { InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useEditor,
   useEditorActions,
@@ -11,12 +10,28 @@ import {
   type VertexToolState,
 } from "~/editor/edit-mode/tools/vertex-tool";
 import { ELMA_PIXELS_PER_WORLD_UNIT } from "~/editor/constants";
-import { CanvasTip, CanvasTipKey, CanvasTipKeyButton } from "./canvas-tip";
+import {
+  CanvasTipGroup,
+  CanvasTipSections,
+  CanvasTipSection,
+  CanvasTipSegment,
+  CanvasTipNumberControl,
+  CanvasTipKey,
+  CanvasTipKeyButton,
+} from "./canvas-tip";
 import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
 import { useModifier } from "~/utils/misc";
 
-const segmentClassName =
-  "shrink-0 gap-1.5 rounded-none px-2.5 first:rounded-l-full last:rounded-r-full";
+import {
+  DEFAULT_PIPE_WIDTH_PX,
+  MIN_PIPE_WIDTH_PX,
+  MAX_PIPE_WIDTH_PX,
+  DEFAULT_PIPE_APPLE_DISTANCE,
+  PIPE_APPLE_DISTANCE_STEP,
+  MAX_PIPE_APPLE_DISTANCE,
+  DEFAULT_PIPE_APPLE_COUNT,
+  MAX_PIPE_APPLE_COUNT,
+} from "~/editor/helpers/pipe";
 
 export function ToolInfo() {
   const modifier = useModifier();
@@ -28,27 +43,33 @@ export function ToolInfo() {
 
   if (activeToolId === "select" && select?.transformMode) {
     return (
-      <div
-        className="flex flex-wrap items-center gap-0.5"
-        role="group"
-        aria-label="Active tool info"
-      >
-        <CanvasTip className={segmentClassName}>
-          <InfoIcon
-            aria-hidden
-            className="-ml-1 size-4 shrink-0 text-primary"
-          />
-          <span className="text-primary">Resize &amp; Rotate</span>
-        </CanvasTip>
-        <CanvasTip className={segmentClassName}>
+      <CanvasTipGroup title="Resize & Rotate" aria-label="Active tool info">
+        <CanvasTipSegment>
           Resize proportionally
           <CanvasTipKey>{modifier}</CanvasTipKey>
-        </CanvasTip>
-        <CanvasTip className={segmentClassName}>
+        </CanvasTipSegment>
+        <CanvasTipSegment>
           Rotate in 45° steps
           <CanvasTipKey>{modifier}</CanvasTipKey>
-        </CanvasTip>
-      </div>
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
+  if (activeToolId === "select") {
+    return (
+      <CanvasTipGroup title="Select" aria-label="Active tool info">
+        <CanvasTipSegment>
+          Pick behind images
+          <CanvasTipKey>Shift / Alt + Click</CanvasTipKey>
+        </CanvasTipSegment>
+        {!!select?.selectedVertices.length && (
+          <CanvasTipSegment>
+            Slide along edge
+            <CanvasTipKey>Shift + Drag</CanvasTipKey>
+          </CanvasTipSegment>
+        )}
+      </CanvasTipGroup>
     );
   }
 
@@ -56,8 +77,97 @@ export function ToolInfo() {
 
   const isAutoGrass =
     vertex?.variant === "autoGrass" || vertex?.previewAutoGrassAll;
+  const isPipe = vertex?.variant === "pipe" && !isAutoGrass;
+  const pipeWidth = vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
+  const pipeAppleMode = vertex?.pipeAppleMode ?? "none";
   const canChangeDirection = canToggleVertexToolDirection(vertex);
-  if (!isAutoGrass && !canChangeDirection) return null;
+  if (!isAutoGrass && !isPipe && !canChangeDirection) return null;
+
+  if (isPipe) {
+    return (
+      <CanvasTipSections aria-label="Active tool info">
+        <CanvasTipGroup title="Pipe" aria-label="Pipe width">
+          <CanvasTipNumberControl
+            label="Width"
+            accessibleLabel="pipe width"
+            value={pipeWidth}
+            min={MIN_PIPE_WIDTH_PX}
+            max={MAX_PIPE_WIDTH_PX}
+            onAdjust={(delta) =>
+              getActiveTool<VertexTool>()?.adjustPipeWidth(delta)
+            }
+          />
+        </CanvasTipGroup>
+        <CanvasTipSection aria-label="Pipe apples">
+          <CanvasTipSegment>
+            <span className="mr-1">Mode</span>
+            <CanvasTipKeyButton
+              aria-label="Change pipe apple mode"
+              title="Mode (Space)"
+              onClick={() => getActiveTool<VertexTool>()?.cyclePipeAppleMode()}
+            >
+              space
+            </CanvasTipKeyButton>
+          </CanvasTipSegment>
+          {pipeAppleMode === "none" ? (
+            <CanvasTipSegment>No apples</CanvasTipSegment>
+          ) : (
+            <CanvasTipNumberControl
+              label={pipeAppleMode === "distance" ? "Apple distance" : "Apples"}
+              accessibleLabel={
+                pipeAppleMode === "distance" ? "apple distance" : "apple count"
+              }
+              value={
+                pipeAppleMode === "distance"
+                  ? (vertex?.pipeAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE)
+                  : (vertex?.pipeAppleCount ?? DEFAULT_PIPE_APPLE_COUNT)
+              }
+              min={pipeAppleMode === "distance" ? PIPE_APPLE_DISTANCE_STEP : 0}
+              max={
+                pipeAppleMode === "distance"
+                  ? MAX_PIPE_APPLE_DISTANCE
+                  : MAX_PIPE_APPLE_COUNT
+              }
+              decreaseKey="["
+              increaseKey="]"
+              increaseShortcut="]"
+              onAdjust={(delta) =>
+                getActiveTool<VertexTool>()?.adjustPipeApples(delta)
+              }
+            />
+          )}
+        </CanvasTipSection>
+        <CanvasTipSection aria-label="Pipe start and flower">
+          <CanvasTipSegment>
+            <span className="mr-1">
+              Start: {vertex?.pipeStart ? "On" : "Off"}
+            </span>
+            <CanvasTipKeyButton
+              aria-label="Toggle start chamber and player"
+              aria-pressed={!!vertex?.pipeStart}
+              title="Toggle start chamber and player (S)"
+              onClick={() => getActiveTool<VertexTool>()?.togglePipeStart()}
+            >
+              S
+            </CanvasTipKeyButton>
+          </CanvasTipSegment>
+          <CanvasTipSegment>
+            <span className="mr-1">
+              Flower: {vertex?.pipeFlower ? "On" : "Off"}
+            </span>
+            <CanvasTipKeyButton
+              aria-label="Toggle end flower"
+              aria-pressed={!!vertex?.pipeFlower}
+              title="Toggle end flower (F)"
+              onClick={() => getActiveTool<VertexTool>()?.togglePipeFlower()}
+            >
+              F
+            </CanvasTipKeyButton>
+          </CanvasTipSegment>
+        </CanvasTipSection>
+      </CanvasTipSections>
+    );
+  }
 
   const toolName = isAutoGrass
     ? "AutoGrass"
@@ -68,17 +178,7 @@ export function ToolInfo() {
         : "Vertex";
 
   return (
-    <div
-      className="flex flex-wrap items-center gap-0.5"
-      role="group"
-      aria-label="Active tool info"
-    >
-      <CanvasTip
-        className={`${segmentClassName} gap-1.5 rounded-l-full px-2.5`}
-      >
-        <InfoIcon aria-hidden className="-ml-1 size-4 shrink-0 text-primary" />
-        <span className="text-primary">{toolName}</span>
-      </CanvasTip>
+    <CanvasTipGroup title={toolName} aria-label="Active tool info">
       {isAutoGrass ? (
         <>
           {(
@@ -103,41 +203,28 @@ export function ToolInfo() {
               options[field] * ELMA_PIXELS_PER_WORLD_UNIT,
             );
             return (
-              <CanvasTip key={field} className={segmentClassName}>
-                <span className="mr-1 whitespace-nowrap tabular-nums">
-                  {label}: {value}
-                </span>
-                <CanvasTipKeyButton
-                  className="size-5 p-0"
-                  aria-label={`Decrease AutoGrass ${label.toLowerCase()}`}
-                  title={`Decrease ${label.toLowerCase()} (${decrease})`}
-                  disabled={value <= min}
-                  onClick={() =>
-                    getActiveTool<VertexTool>()?.adjustAutoGrassOption(
-                      field,
-                      -1,
-                    )
-                  }
-                >
-                  {decrease}
-                </CanvasTipKeyButton>
-                <CanvasTipKeyButton
-                  className="size-5 p-0"
-                  aria-label={`Increase AutoGrass ${label.toLowerCase()}`}
-                  title={`Increase ${label.toLowerCase()} (${increase}${field === "depth" ? " or =" : ""})`}
-                  disabled={value >= 200}
-                  onClick={() =>
-                    getActiveTool<VertexTool>()?.adjustAutoGrassOption(field, 1)
-                  }
-                >
-                  {increase}
-                </CanvasTipKeyButton>
-              </CanvasTip>
+              <CanvasTipNumberControl
+                key={field}
+                label={label}
+                accessibleLabel={`AutoGrass ${label.toLowerCase()}`}
+                value={value}
+                min={min}
+                max={200}
+                decreaseKey={decrease}
+                increaseKey={increase}
+                increaseShortcut={field === "depth" ? "+ or =" : increase}
+                onAdjust={(delta) =>
+                  getActiveTool<VertexTool>()?.adjustAutoGrassOption(
+                    field,
+                    delta,
+                  )
+                }
+              />
             );
           })}
         </>
       ) : canChangeDirection ? (
-        <CanvasTip className={segmentClassName}>
+        <CanvasTipSegment>
           <span className="mr-1">Flip direction</span>
           <CanvasTipKeyButton
             aria-label="Flip direction"
@@ -152,8 +239,8 @@ export function ToolInfo() {
           >
             space
           </CanvasTipKeyButton>
-        </CanvasTip>
+        </CanvasTipSegment>
       ) : null}
-    </div>
+    </CanvasTipGroup>
   );
 }

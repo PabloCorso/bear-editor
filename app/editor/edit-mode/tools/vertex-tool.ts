@@ -33,9 +33,31 @@ import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import { checkModifierKey } from "~/utils/misc";
 import fastDeepEqual from "fast-deep-equal";
 
+import {
+  createPipePolygon,
+  createPipeApples,
+  getPipeStart,
+  getPipeFlower,
+  PIPE_APPLE_MODES,
+  type PipeAppleMode,
+  DEFAULT_PIPE_APPLE_DISTANCE,
+  PIPE_APPLE_DISTANCE_STEP,
+  MAX_PIPE_APPLE_DISTANCE,
+  DEFAULT_PIPE_APPLE_COUNT,
+  MAX_PIPE_APPLE_COUNT,
+  DEFAULT_PIPE_WIDTH_PX,
+  MIN_PIPE_WIDTH_PX,
+  MAX_PIPE_WIDTH_PX,
+} from "~/editor/helpers/pipe";
+
 const DEFAULT_VARIANT: VertexToolVariant = "normal";
 
-export type VertexToolVariant = "normal" | "grass" | "both" | "autoGrass";
+export type VertexToolVariant =
+  | "normal"
+  | "grass"
+  | "both"
+  | "autoGrass"
+  | "pipe";
 
 export type VertexToolState = {
   drawingPolygon: Polygon;
@@ -43,6 +65,12 @@ export type VertexToolState = {
   editPivot?: Position;
   variant?: VertexToolVariant;
   previewAutoGrassAll?: boolean;
+  pipeStart?: boolean;
+  pipeFlower?: boolean;
+  pipeWidthPx?: number;
+  pipeAppleMode?: PipeAppleMode;
+  pipeAppleDistance?: number;
+  pipeAppleCount?: number;
 };
 
 export function canToggleVertexToolDirection(
@@ -94,22 +122,30 @@ export function getToggledVertexToolState(
 export class VertexTool extends Tool<VertexToolState> {
   readonly meta = defaultTools.vertex;
 
+  private pipeCountDigits = "";
+  private lastPipeCountDigitAt = 0;
+
   constructor(store: EditorStore) {
     super(store);
   }
 
   onActivate(variant?: VertexToolVariant): void {
+    this.pipeCountDigits = "";
     const { toolState, setToolState } = this.getState();
     const nextVariant = variant ?? toolState?.variant ?? DEFAULT_VARIANT;
     setToolState({
       drawingPolygon: { vertices: [], grass: nextVariant === "grass" },
       editPivot: undefined,
+      editingPolygon: undefined,
       variant: nextVariant,
       previewAutoGrassAll: false,
+      pipeStart: false,
+      pipeFlower: false,
     });
   }
 
   onDeactivate(): void {
+    this.pipeCountDigits = "";
     const finalized = this.finalizeDrawingOrRestore();
     if (!finalized) {
       this.clear();
@@ -117,6 +153,7 @@ export class VertexTool extends Tool<VertexToolState> {
   }
 
   clear(): void {
+    this.pipeCountDigits = "";
     const { toolState, setToolState } = this.getState();
     // Preserve the current variant when clearing
     const currentVariant = toolState?.variant ?? DEFAULT_VARIANT;
@@ -126,7 +163,122 @@ export class VertexTool extends Tool<VertexToolState> {
       editPivot: undefined,
       variant: currentVariant,
       previewAutoGrassAll: false,
+      pipeStart: false,
+      pipeFlower: false,
     });
+  }
+
+  togglePipeStart(): void {
+    const { toolState, setToolState } = this.getState();
+    setToolState({ pipeStart: !toolState?.pipeStart });
+  }
+
+  togglePipeFlower(): void {
+    const { toolState, setToolState } = this.getState();
+    setToolState({ pipeFlower: !toolState?.pipeFlower });
+  }
+
+  private getPipeStart(includeMouse: boolean) {
+    const { toolState } = this.getState();
+    return toolState?.pipeStart
+      ? getPipeStart(
+          this.getPipePoints(includeMouse),
+          (toolState.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX) /
+            ELMA_PIXELS_PER_WORLD_UNIT,
+        )
+      : undefined;
+  }
+
+  private getPipeFlower(includeMouse: boolean) {
+    const { toolState } = this.getState();
+    return toolState?.pipeFlower
+      ? getPipeFlower(
+          this.getPipePoints(includeMouse),
+          (toolState.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX) /
+            ELMA_PIXELS_PER_WORLD_UNIT,
+        )
+      : undefined;
+  }
+
+  adjustPipeWidth(delta: number): void {
+    const { toolState, setToolState } = this.getState();
+    setToolState({
+      pipeWidthPx: Math.max(
+        MIN_PIPE_WIDTH_PX,
+        Math.min(
+          MAX_PIPE_WIDTH_PX,
+          (toolState?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX) + delta,
+        ),
+      ),
+    });
+  }
+
+  cyclePipeAppleMode(): void {
+    this.pipeCountDigits = "";
+    const { toolState, setToolState } = this.getState();
+    const index = PIPE_APPLE_MODES.indexOf(toolState?.pipeAppleMode ?? "none");
+    setToolState({
+      pipeAppleMode: PIPE_APPLE_MODES[(index + 1) % PIPE_APPLE_MODES.length],
+    });
+  }
+
+  adjustPipeApples(delta: number): void {
+    this.pipeCountDigits = "";
+    const { toolState, setToolState } = this.getState();
+    if (toolState?.pipeAppleMode === "distance") {
+      setToolState({
+        pipeAppleDistance: Math.max(
+          PIPE_APPLE_DISTANCE_STEP,
+          Math.min(
+            MAX_PIPE_APPLE_DISTANCE,
+            (toolState.pipeAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE) +
+              delta * PIPE_APPLE_DISTANCE_STEP,
+          ),
+        ),
+      });
+    } else if (toolState?.pipeAppleMode === "count") {
+      setToolState({
+        pipeAppleCount: Math.max(
+          0,
+          Math.min(
+            MAX_PIPE_APPLE_COUNT,
+            (toolState.pipeAppleCount ?? DEFAULT_PIPE_APPLE_COUNT) + delta,
+          ),
+        ),
+      });
+    }
+  }
+
+  private getPipePoints(includeMouse: boolean): Position[] {
+    const { state, toolState } = this.getState();
+    if (!toolState || toolState.drawingPolygon.vertices.length === 0) return [];
+    return includeMouse && state.mouseOnCanvas
+      ? [...toolState.drawingPolygon.vertices, state.mousePosition]
+      : toolState.drawingPolygon.vertices;
+  }
+
+  private getPipeApples(includeMouse: boolean) {
+    const { toolState } = this.getState();
+    return createPipeApples(
+      this.getPipePoints(includeMouse),
+      toolState?.pipeAppleMode ?? "none",
+      toolState?.pipeAppleDistance,
+      toolState?.pipeAppleCount,
+      toolState?.pipeFlower,
+      (toolState?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX) /
+        ELMA_PIXELS_PER_WORLD_UNIT,
+    );
+  }
+
+  private getPipePolygon(includeMouse: boolean): Polygon | null {
+    const { toolState } = this.getState();
+    if (!toolState) return null;
+    return createPipePolygon(
+      this.getPipePoints(includeMouse),
+      (toolState.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX) /
+        ELMA_PIXELS_PER_WORLD_UNIT,
+      toolState.pipeStart,
+    );
   }
 
   adjustAutoGrassOption(field: "depth" | "endInset", delta: number): void {
@@ -145,6 +297,7 @@ export class VertexTool extends Tool<VertexToolState> {
     const { state, toolState } = this.getState();
     if (!toolState) return { polygons: [] };
 
+    // Toolbar previews take precedence over the active drawing variant.
     if (toolState.previewAutoGrassAll) {
       return {
         polygons: generateAutoGrassPolygons({
@@ -152,6 +305,17 @@ export class VertexTool extends Tool<VertexToolState> {
           sourcePolygons: state.polygons.filter((polygon) => !polygon.grass),
           options: state.autoGrassOptions,
         }),
+      };
+    }
+
+    if (toolState.variant === "pipe") {
+      const polygon = this.getPipePolygon(true);
+      const flower = polygon ? this.getPipeFlower(true) : undefined;
+      return {
+        polygons: polygon ? [polygon] : [],
+        apples: polygon ? this.getPipeApples(true) : [],
+        flowers: flower ? [flower] : [],
+        start: polygon ? this.getPipeStart(true) : undefined,
       };
     }
 
@@ -215,6 +379,21 @@ export class VertexTool extends Tool<VertexToolState> {
       return this.autoGrassPolygons([polygon]);
     }
 
+    if (toolState.variant === "pipe") {
+      const vertices = toolState.drawingPolygon.vertices;
+      const previous = vertices[vertices.length - 1];
+      if (
+        !previous ||
+        Math.hypot(worldPos.x - previous.x, worldPos.y - previous.y) > 1e-8
+      ) {
+        setToolState({
+          drawingPolygon: { vertices: [...vertices, worldPos], grass: false },
+          editPivot: worldPos,
+        });
+      }
+      return true;
+    }
+
     // If we're already drawing a polygon, continue with normal drawing behavior
     if (toolState.drawingPolygon.vertices.length > 0) {
       // When editing an existing polygon, keep inserting from the active
@@ -256,6 +435,57 @@ export class VertexTool extends Tool<VertexToolState> {
     if (!toolState) return false;
 
     if (
+      toolState.variant === "pipe" &&
+      ["s", "f"].includes(event.key.toLowerCase()) &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !event.isComposing
+    ) {
+      event.preventDefault();
+      if (!event.repeat) {
+        if (event.key.toLowerCase() === "s") this.togglePipeStart();
+        else this.togglePipeFlower();
+      }
+      return true;
+    }
+
+    if (
+      toolState.variant === "pipe" &&
+      toolState.pipeAppleMode === "count" &&
+      /^[0-9]$/.test(event.key) &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.isComposing
+    ) {
+      event.preventDefault();
+      if (event.repeat) return true;
+
+      const now = performance.now();
+      // A pause or a complete three-digit entry starts a fresh count.
+      if (
+        now - this.lastPipeCountDigitAt >= 1500 ||
+        this.pipeCountDigits.length === 3
+      ) {
+        this.pipeCountDigits = "";
+      }
+      this.pipeCountDigits += event.key;
+      this.lastPipeCountDigitAt = now;
+      setToolState({
+        pipeAppleCount: Math.min(
+          MAX_PIPE_APPLE_COUNT,
+          Number(this.pipeCountDigits),
+        ),
+      });
+      return true;
+    }
+
+    this.pipeCountDigits = "";
+
+    // Hovering All makes AutoGrass the target of shared size shortcuts.
+    if (
       (toolState.variant === "autoGrass" || toolState.previewAutoGrassAll) &&
       ["+", "=", "-", "_", "[", "]"].includes(event.key) &&
       !event.metaKey &&
@@ -266,6 +496,30 @@ export class VertexTool extends Tool<VertexToolState> {
         event.key === "[" || event.key === "]" ? "endInset" : "depth",
         event.key === "]" || event.key === "+" || event.key === "=" ? 1 : -1,
       );
+      event.preventDefault();
+      return true;
+    }
+
+    if (
+      toolState.variant === "pipe" &&
+      ["[", "]"].includes(event.key) &&
+      toolState.pipeAppleMode &&
+      toolState.pipeAppleMode !== "none" &&
+      !event.metaKey &&
+      (!event.ctrlKey || event.getModifierState("AltGraph"))
+    ) {
+      this.adjustPipeApples(event.key === "]" ? 1 : -1);
+      event.preventDefault();
+      return true;
+    }
+
+    if (
+      toolState.variant === "pipe" &&
+      ["+", "=", "-", "_"].includes(event.key) &&
+      !event.metaKey &&
+      (!event.ctrlKey || event.getModifierState("AltGraph"))
+    ) {
+      this.adjustPipeWidth(event.key === "+" || event.key === "=" ? 1 : -1);
       event.preventDefault();
       return true;
     }
@@ -287,6 +541,11 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (event.key === " " || event.key === "Space") {
+      if (toolState.variant === "pipe") {
+        if (!event.repeat) this.cyclePipeAppleMode();
+        event.preventDefault();
+        return true;
+      }
       // Reverse the drawing, preserving the pivot when editing a polygon.
       const nextToolState = getToggledVertexToolState(toolState);
       if (nextToolState) {
@@ -296,6 +555,11 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (event.key.toUpperCase() === "G" || event.key.toUpperCase() === "V") {
+      if (toolState.variant === "pipe") {
+        this.finalizeDrawingOrRestore();
+        this.onActivate(event.key.toUpperCase() === "G" ? "grass" : "normal");
+        return true;
+      }
       const targetGrass = event.key.toUpperCase() === "G";
       const targetVariant = targetGrass ? "grass" : "normal";
 
@@ -321,6 +585,8 @@ export class VertexTool extends Tool<VertexToolState> {
       this.finalizeDrawingOrRestore();
       return true;
     }
+
+    if (toolState?.variant === "pipe") return false;
 
     const polygon = findPolygonEdgeNearPosition(
       context.worldPos,
@@ -410,6 +676,33 @@ export class VertexTool extends Tool<VertexToolState> {
   }): WorldRenderOverlayItem[] {
     const { state, toolState } = this.getState();
     if (!toolState) return [];
+
+    if (toolState.variant === "pipe") {
+      const polygon = this.getPipePolygon(true);
+      const overlays: WorldRenderOverlayItem[] = polygon
+        ? [
+            {
+              type: "polyline",
+              points: [...polygon.vertices, polygon.vertices[0]],
+              color: uiColors.boundsSelected,
+              width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
+              opacity: 0.75,
+            },
+          ]
+        : [];
+      overlays.push(
+        ...(polygon?.vertices ?? [])
+          .filter((vertex) => isPointVisible(vertex, viewportRect))
+          .map((vertex) =>
+            createDraftHandleOverlay(
+              vertex,
+              uiSelectionHandle.halfWidthPx / state.zoom,
+              uiSelectionHandle.strokeWidthPx / state.zoom,
+            ),
+          ),
+      );
+      return overlays;
+    }
 
     let previewState = toolState;
     let previewPosition = state.mousePosition;
@@ -537,6 +830,32 @@ export class VertexTool extends Tool<VertexToolState> {
   private finalizeDrawingOrRestore(): boolean {
     const { toolState } = this.getState();
     if (!toolState) return false;
+
+    if (toolState.variant === "pipe") {
+      const polygon = this.getPipePolygon(false);
+      if (polygon) {
+        const apples = this.getPipeApples(false);
+        const start = this.getPipeStart(false);
+        const flower = this.getPipeFlower(false);
+        this.runHistoryBatch(() => {
+          this.addPolygon(polygon);
+          const { state } = this.getState();
+          if (start) state.actions.setStart(start);
+          if (flower) state.actions.setFlowers([...state.flowers, flower]);
+          if (apples.length > 0) {
+            const { state } = this.getState();
+            state.actions.setApples([...state.apples, ...apples]);
+          }
+          this.clear();
+        });
+        return true;
+      }
+      if (toolState.drawingPolygon.vertices.length > 0) {
+        this.clear();
+        return true;
+      }
+      return false;
+    }
 
     if (toolState.drawingPolygon.vertices.length >= 3) {
       const finalizedPolygon = {
