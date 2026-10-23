@@ -4,8 +4,6 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
-- Import level
-
 - AI Assistant
 
 - Explore a consistent pattern for tool settings access and reset; AutoGrass has an accessible settings panel, while Pipe has none.
@@ -44,3 +42,5 @@ Planned features and feedback for Bear Editor.
 - Export to SVG
 - Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
 - Save start position
+  - Checkpoints: create, move, select for play mode, and delete multiple translucent, distinctly colored bike markers without moving the actual level start. Editor-only and session-local (not stored in Elma level files), with per-designer test starts in the future multiplayer editor.
+- Import level
