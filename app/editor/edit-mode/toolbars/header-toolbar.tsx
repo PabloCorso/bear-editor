@@ -9,6 +9,7 @@ import {
   useEditorActiveTool,
   useEditorDocumentSession,
   useEditorStore,
+  useEditor,
   useLevelName,
 } from "~/editor/use-editor-store";
 import { useEditorDocumentGuard } from "~/editor/session/document-guard";
@@ -28,6 +29,7 @@ import {
 } from "~/components/ui/dropdown-menu";
 import {
   CaretRightIcon,
+  CaretLeftIcon,
   CaretDownIcon,
   CheckIcon,
   ChecksIcon,
@@ -48,7 +50,13 @@ import {
   useCustomDefaultLevelTemplate,
   useDefaultLevelPreset,
 } from "~/editor/edit-mode/default-level-preset";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { supportsFilePickers } from "~/editor/helpers/file-session";
 import { SettingsDialog } from "~/editor/edit-mode/edit-settings";
 import { IconButton } from "~/components/ui/button";
@@ -76,6 +84,8 @@ import {
 import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
 import { LevelFolderTip } from "./level-folder-tip";
 import { ToolInfo } from "./tool-info";
+import { CanvasTips } from "./canvas-tip";
+import "./level-file-name.css";
 
 const ISSUE_FOCUS_MIN_ZOOM = 0.2;
 const ISSUE_FOCUS_MAX_ZOOM = 10000;
@@ -168,7 +178,6 @@ export function HeaderToolbar({
           <LevelVisibilityControl />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
-          <LevelFileName />
           <TopologyCheck
             setTopologyResult={setTopologyResult}
             isLoading={isLoading}
@@ -188,7 +197,6 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
             <LevelPropertiesControl />
             <LevelNameControl isLoading={isLoading} />
-            <LevelFileName />
             <TopologyCheck
               setTopologyResult={setTopologyResult}
               isLoading={isLoading}
@@ -200,6 +208,8 @@ export function HeaderToolbar({
           </Toolbar>
         </div>
 
+        <LevelFileName className="justify-center" isLoading={isLoading} />
+
         <div className="pointer-events-none mt-2 flex justify-center">
           <TopologyResultPanel
             key={getTopologyResultKey(topologyResult)}
@@ -208,7 +218,7 @@ export function HeaderToolbar({
           />
         </div>
       </div>
-      <div className="pointer-events-none absolute right-4 bottom-16 left-4 z-10 flex flex-col items-start gap-2 sm:right-auto sm:bottom-4">
+      <CanvasTips>
         <LevelFolderTip
           onOpenSettings={() => {
             setHighlightLevelFolder(true);
@@ -216,7 +226,7 @@ export function HeaderToolbar({
           }}
         />
         <ToolInfo />
-      </div>
+      </CanvasTips>
       <SettingsDialog
         open={settingsOpen}
         highlightLevelFolder={highlightLevelFolder}
@@ -758,25 +768,188 @@ function LevelNameControl({ isLoading }: { isLoading?: boolean }) {
 
 function LevelFileName({
   className,
+  isLoading,
   ...props
-}: React.ComponentPropsWithRef<"div">) {
+}: React.ComponentPropsWithRef<"div"> & { isLoading?: boolean }) {
+  const store = useEditorStore();
+  const levelFolder = useEditor((state) => state.levelFolder);
+  const folderRevision = useSyncExternalStore(
+    levelFolder.subscribe,
+    levelFolder.getSnapshot,
+    () => 0,
+  );
+  const { replaceDocument, triggerFitToView } = useEditorActions();
+  const { confirmDiscardChanges } = useEditorDocumentGuard();
   const documentSession = useEditorDocumentSession();
+  const [folderLevels, setFolderLevels] = useState<string[]>([]);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const navigatingRef = useRef(false);
   const fileName = documentSession.hasExternalHandle
     ? documentSession.displayName
     : null;
+  const [entrance, setEntrance] = useState({
+    fileName,
+    isEntering: Boolean(fileName),
+  });
+
+  if (entrance.fileName !== fileName) {
+    setEntrance({
+      fileName,
+      isEntering: !entrance.fileName && Boolean(fileName),
+    });
+  }
+
+  useEffect(
+    function syncLevelFolderFiles() {
+      let cancelled = false;
+
+      async function refreshLevels() {
+        try {
+          const names = (await levelFolder.hasAccess())
+            ? await levelFolder.listLevels()
+            : [];
+          names.sort((a, b) =>
+            a.localeCompare(b, undefined, {
+              numeric: true,
+              sensitivity: "base",
+            }),
+          );
+          if (!cancelled) setFolderLevels(names);
+        } catch {
+          if (!cancelled) setFolderLevels([]);
+        }
+      }
+
+      void refreshLevels();
+      window.addEventListener("focus", refreshLevels);
+      return function cleanupLevelFolderFiles() {
+        cancelled = true;
+        window.removeEventListener("focus", refreshLevels);
+      };
+    },
+    [levelFolder, folderRevision, fileName],
+  );
+
+  const currentIndex = fileName ? folderLevels.indexOf(fileName) : -1;
+  const canNavigateFolder = currentIndex >= 0 && folderLevels.length > 1;
+  const previousFile = canNavigateFolder
+    ? folderLevels[
+        (currentIndex - 1 + folderLevels.length) % folderLevels.length
+      ]
+    : null;
+  const nextFile = canNavigateFolder
+    ? folderLevels[(currentIndex + 1) % folderLevels.length]
+    : null;
+  const navigationDisabled =
+    isLoading || isNavigating || documentSession.saveState === "saving";
+
+  async function navigateToLevel(name: string) {
+    if (navigatingRef.current || navigationDisabled) return;
+    navigatingRef.current = true;
+    setIsNavigating(true);
+    try {
+      if (!(await confirmDiscardChanges())) return;
+      if (!(await levelFolder.hasAccess())) {
+        setFolderLevels([]);
+        return;
+      }
+      const handle = await levelFolder.getLevelFileHandle(name);
+      const level = await editorLevelFromFile(await handle.getFile());
+      const result = await store.getState().fileSession.open(handle);
+      if (!result) return;
+      store.getState().actions.getActiveTool()?.clear?.();
+      replaceDocument({
+        level,
+        origin: { kind: "file", label: "File", canOverwrite: true },
+        displayName: result.fileName,
+        hasExternalHandle: true,
+      });
+      triggerFitToView();
+    } catch (error) {
+      alert(`Import failed: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      navigatingRef.current = false;
+      setIsNavigating(false);
+    }
+  }
+
   if (!fileName) return null;
 
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center text-sm text-white/80",
+        "level-file-name pointer-events-auto mx-auto flex w-fit max-w-[20rem] items-center font-mono text-xs tracking-wide text-white/70",
+        entrance.isEntering && "level-file-name-entering",
         className,
       )}
+      onAnimationEnd={(event) => {
+        if (event.animationName !== "level-file-name-flip") return;
+        const target = event.target as HTMLElement;
+        const isLastPiece = target.classList.contains(
+          currentIndex >= 0 ? "level-file-name-next" : "level-file-name-label",
+        );
+        if (isLastPiece) {
+          setEntrance((current) => ({ ...current, isEntering: false }));
+        }
+      }}
       {...props}
     >
-      <span className="max-w-[16rem] truncate rounded bg-white/5 px-2 py-1 text-white/70">
+      {currentIndex >= 0 && (
+        <Tooltip>
+          <TooltipTrigger delay={1000}>
+            <IconButton
+              type="button"
+              size="sm"
+              className="level-file-name-piece level-file-name-previous size-7 rounded-none rounded-bl-xs bg-screen/80 shadow-[0_1px_2px_rgb(0_0_0/0.12)] disabled:opacity-100"
+              aria-label={
+                previousFile
+                  ? `Previous level: ${previousFile}`
+                  : "Previous level"
+              }
+              disabled={navigationDisabled || !previousFile}
+              onClick={() => previousFile && void navigateToLevel(previousFile)}
+            >
+              <CaretLeftIcon
+                aria-hidden
+                className={!previousFile ? "opacity-40" : undefined}
+              />
+            </IconButton>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="font-mono text-xs">
+            {previousFile ?? "No previous level"}
+          </TooltipContent>
+        </Tooltip>
+      )}
+      <span
+        className={cn(
+          "level-file-name-piece level-file-name-label h-7 w-[calc(12ch+1rem)] shrink-0 cursor-text truncate bg-screen/80 px-1 text-center leading-7 shadow-[0_1px_2px_rgb(0_0_0/0.12)] select-text",
+          currentIndex < 0 && "rounded-b-xs",
+        )}
+      >
         {fileName}
       </span>
+      {currentIndex >= 0 && (
+        <Tooltip>
+          <TooltipTrigger delay={1000}>
+            <IconButton
+              type="button"
+              size="sm"
+              className="level-file-name-piece level-file-name-next size-7 rounded-none rounded-br-xs bg-screen/80 shadow-[0_1px_2px_rgb(0_0_0/0.12)] disabled:opacity-100"
+              aria-label={nextFile ? `Next level: ${nextFile}` : "Next level"}
+              disabled={navigationDisabled || !nextFile}
+              onClick={() => nextFile && void navigateToLevel(nextFile)}
+            >
+              <CaretRightIcon
+                aria-hidden
+                className={!nextFile ? "opacity-40" : undefined}
+              />
+            </IconButton>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="font-mono text-xs">
+            {nextFile ?? "No next level"}
+          </TooltipContent>
+        </Tooltip>
+      )}
     </div>
   );
 }

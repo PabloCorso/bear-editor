@@ -9,6 +9,10 @@ export const buttonVariants = cva(
   ],
   {
     variants: {
+      variant: {
+        default: "",
+        accent: "bg-primary",
+      },
       size: {
         sm: "h-8 px-3 py-2 text-xs",
         md: "h-10 px-4 py-2.5 text-sm",
@@ -22,6 +26,7 @@ export const buttonVariants = cva(
       { iconOnly: true, size: "lg", className: "w-12" },
     ],
     defaultVariants: {
+      variant: "default",
       size: "md",
       iconOnly: false,
     },
@@ -41,6 +46,7 @@ export type ButtonProps<T extends React.ElementType = "button"> = Omit<
 
 export function Button<T extends React.ElementType = "button">({
   as,
+  variant,
   size = "md",
   iconBefore,
   iconAfter,
@@ -58,7 +64,7 @@ export function Button<T extends React.ElementType = "button">({
 
   return (
     <Comp
-      className={cn(buttonVariants({ size, iconOnly, className }))}
+      className={cn(buttonVariants({ variant, size, iconOnly, className }))}
       {...props}
     >
       {iconBefore && (

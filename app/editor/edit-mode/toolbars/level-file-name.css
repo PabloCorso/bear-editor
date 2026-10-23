@@ -1,0 +1,52 @@
+.level-file-name {
+  perspective: 500px;
+}
+
+.level-file-name-piece {
+  transform-origin: center top;
+  backface-visibility: hidden;
+}
+
+.level-file-name-entering .level-file-name-piece {
+  animation: level-file-name-flip 760ms both;
+}
+
+.level-file-name:has(.level-file-name-previous) .level-file-name-label {
+  animation-delay: 70ms;
+}
+
+.level-file-name-entering .level-file-name-next {
+  animation-delay: 140ms;
+}
+
+@keyframes level-file-name-flip {
+  0% {
+    transform: rotateX(90deg);
+    animation-timing-function: cubic-bezier(0.32, 0, 0.67, 0);
+  }
+
+  45% {
+    transform: rotateX(-24deg);
+    animation-timing-function: ease-out;
+  }
+
+  70% {
+    transform: rotateX(12deg);
+    animation-timing-function: ease-in-out;
+  }
+
+  86% {
+    transform: rotateX(-5deg);
+    animation-timing-function: ease-out;
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .level-file-name-entering .level-file-name-piece {
+    animation: none;
+  }
+}

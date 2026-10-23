@@ -9,6 +9,20 @@ export class LevelFolder {
   private handle?: FileSystemDirectoryHandle;
   private folderName?: string;
   private loadPromise: Promise<boolean>;
+  private revision = 0;
+  private listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  getSnapshot = () => this.revision;
+
+  private notifyChange() {
+    this.revision += 1;
+    this.listeners.forEach((listener) => listener());
+  }
 
   constructor(store: EditorStore) {
     this.store = store;
@@ -33,10 +47,12 @@ export class LevelFolder {
     if (!handle) {
       this.handle = undefined;
       this.folderName = undefined;
+      this.notifyChange();
       return false;
     }
     this.handle = handle;
     this.folderName = handle.name;
+    this.notifyChange();
     return true;
   }
 
@@ -54,6 +70,7 @@ export class LevelFolder {
       this.folderName = handle.name;
       this.loadPromise = Promise.resolve(true);
       await persistHandle(LEVEL_FOLDER_KEY, handle);
+      this.notifyChange();
       return true;
     } catch (err: any) {
       if (err?.name === "AbortError") return false;
@@ -81,7 +98,8 @@ export class LevelFolder {
     if (!this.handle) return [];
     const names: string[] = [];
     for await (const [name, entry] of this.handle.entries()) {
-      if (entry.kind === "file" && name.endsWith(".lev")) names.push(name);
+      if (entry.kind === "file" && name.toLowerCase().endsWith(".lev"))
+        names.push(name);
     }
     return names;
   }
@@ -111,6 +129,7 @@ export class LevelFolder {
     this.handle = undefined;
     this.folderName = undefined;
     this.loadPromise = Promise.resolve(false);
+    this.notifyChange();
     await deleteHandle(LEVEL_FOLDER_KEY);
   }
 }

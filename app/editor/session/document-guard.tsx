@@ -139,9 +139,9 @@ export function EditorDocumentGuardProvider({
           </DialogBody>
           <DialogFooter>
             <Button size="sm" onClick={handleCancel}>
-              Cancel
+              Keep editing
             </Button>
-            <Button size="sm" onClick={handleDiscard}>
+            <Button size="sm" variant="accent" onClick={handleDiscard}>
               Discard changes
             </Button>
           </DialogFooter>

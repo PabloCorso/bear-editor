@@ -50,6 +50,7 @@ type DialogContentProps = React.ComponentProps<typeof DialogPrimitive.Popup>;
 export function DialogContent({
   className,
   children,
+  onKeyDown,
   ...props
 }: DialogContentProps) {
   return (
@@ -61,6 +62,11 @@ export function DialogContent({
           className,
         )}
         {...props}
+        onKeyDown={(event) => {
+          onKeyDown?.(event);
+          // Dialog controls own their keys; don't also run editor shortcuts.
+          event.stopPropagation();
+        }}
       >
         {children}
       </DialogPrimitive.Popup>
