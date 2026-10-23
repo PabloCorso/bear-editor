@@ -4,6 +4,8 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
+- Import level
+
 - AI Assistant
 
 - Explore a consistent pattern for tool settings access and reset; AutoGrass has an accessible settings panel, while Pipe has none.
