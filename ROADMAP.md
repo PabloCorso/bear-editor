@@ -42,3 +42,4 @@ Planned features and feedback for Bear Editor.
 - Multi-player level editor
 - Version history info
 - Export to SVG
+- Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
