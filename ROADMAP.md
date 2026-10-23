@@ -48,4 +48,4 @@ Planned features and feedback for Bear Editor.
   - Snap to grid
 - Replace selection
   - Replace with copied content
-- History playback: scrub backward and forward through the existing undo/redo history with a slider, or press play to replay edits sequentially for fun.
+- History playback: scrub backward and forward through the existing undo/redo history with a slider, or press play to replay edits sequentially for fun. Could also help show who changed what in multiplayer editing.
