@@ -4,13 +4,11 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
-- Improve auto grass corners.
-- Pressing Enter in some dialogs might trigger Play mode accidentally.
-
 - AI Assistant
 
+- Explore a consistent pattern for tool settings access and reset; AutoGrass has an accessible settings panel, while Pipe has none.
+
 - More vertex tool options or new polygon tools
-  - Pipe tool
   - Roller coaster tool
   - Frame tool
   - Shapes
@@ -28,7 +26,8 @@ Planned features and feedback for Bear Editor.
   - Automatic or action to fix issue when possible
 
 - Faster loads
-  - Investigate making `elmajs` tree-shakeable (it currently enters the client bundle through its CommonJS barrel, bringing unused package areas with it).
+  - Prioritize the initial HTML response delay. [Investigation](docs/elmajs-bundling.md#priority-relative-to-server-response-time) measured 8.7 s to first byte on the initial request versus 1.0 s on the next; confirm whether SSR function cold starts are responsible, then evaluate a static/prerendered editor shell or HTML caching. The cause and any connection to Netlify's free tier remain unconfirmed.
+  - Smaller follow-up: use the existing `elmajs` ESM build to enable tree shaking. [Bundle measurements](docs/elmajs-bundling.md#measured-production-output) showed a 24.6 kB minified / 7.2 kB gzip reduction in the main editor chunk. Implementation and browser validation remain; this does not address the initial HTML response delay.
 
 ## Known issues
 

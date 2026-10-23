@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-24
+
+- Improve auto grass corners logic.
+- Add pipe tool.
+- Add mirror selection.
+- Add previous/next lev in folder.
+- Add default level title setting.
+
 ## 2026-10-21
 
 - Improve vertex tool and auto grass visuals and guidance.
