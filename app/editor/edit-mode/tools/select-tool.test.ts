@@ -64,6 +64,108 @@ function getSelection(store: ReturnType<typeof createEditorStore>) {
     .actions.getToolState<SelectToolState>(defaultTools.select.id);
 }
 
+describe("SelectTool mirroring", () => {
+  it.each(["horizontal", "vertical"] as const)(
+    "mirrors a mixed selection on the canvas %s axis in one undo step",
+    (direction) => {
+      const { store, tool, firstApple } = createTool();
+      const polygon = {
+        grass: false,
+        vertices: [position(0, 0), position(20, 0), position(0, 30)],
+      };
+      store.getState().actions.setPolygons([polygon]);
+      store
+        .getState()
+        .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+          selectedVertices: polygon.vertices.map((vertex) => ({
+            polygon,
+            vertex,
+          })),
+          selectedObjects: [firstApple],
+          contextMenuType: "selection",
+        });
+      store.temporal.getState().clear();
+
+      tool.mirrorSelection(direction);
+
+      const reflected = (point: Position) => ({
+        x: direction === "horizontal" ? 100 - point.x : point.x,
+        y: direction === "vertical" ? 100 - point.y : point.y,
+      });
+      expect(store.getState().polygons[0].vertices).toEqual(
+        polygon.vertices.map(reflected),
+      );
+      expect(store.getState().apples[0].position).toEqual(
+        reflected(firstApple),
+      );
+      expect(store.getState().apples[1].position).toEqual(position(200, 100));
+      expect(getSelection(store)?.selectedVertices[0].polygon).toBe(
+        store.getState().polygons[0],
+      );
+      expect(getSelection(store)?.selectedObjects[0]).toBe(
+        store.getState().apples[0].position,
+      );
+      expect(getSelection(store)?.contextMenuType).toBeUndefined();
+      expect(store.temporal.getState().pastStates).toHaveLength(1);
+
+      tool.mirrorSelection(direction);
+      expect(store.getState().polygons[0]).toEqual(polygon);
+      expect(store.getState().apples[0].position).toEqual(firstApple);
+      store.temporal.getState().undo();
+      expect(store.getState().apples[0].position).toEqual(
+        reflected(firstApple),
+      );
+      store.temporal.getState().undo();
+      expect(store.getState().polygons[0]).toEqual(polygon);
+      expect(store.getState().apples[0].position).toEqual(firstApple);
+    },
+  );
+
+  it("reflects picture centres while preserving sprite dimensions and properties", () => {
+    const { store, tool } = createTool();
+    const pictures = [
+      {
+        name: "first",
+        texture: "",
+        mask: "" as const,
+        clip: Clip.Unclipped,
+        distance: 500,
+        position: position(0, 0),
+      },
+      {
+        name: "second",
+        texture: "",
+        mask: "" as const,
+        clip: Clip.Unclipped,
+        distance: 500,
+        position: position(20, 20),
+      },
+    ];
+    store.getState().actions.setPictures(pictures);
+    tool.setPictureDimensionsResolver((picture) =>
+      picture.name === "first"
+        ? { width: 10, height: 10 }
+        : { width: 20, height: 20 },
+    );
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedPictures: pictures.map((picture) => picture.position),
+      });
+
+    tool.mirrorSelection("horizontal");
+    expect(store.getState().pictures).toEqual([
+      { ...pictures[0], position: position(25, 0) },
+      { ...pictures[1], position: position(-5, 20) },
+    ]);
+    tool.mirrorSelection("vertical");
+    expect(store.getState().pictures).toEqual([
+      { ...pictures[0], position: position(25, 25) },
+      { ...pictures[1], position: position(-5, -5) },
+    ]);
+  });
+});
+
 describe("SelectTool right-click selection context menu", () => {
   beforeEach(() => {
     vi.stubGlobal("window", {

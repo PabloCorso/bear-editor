@@ -66,6 +66,8 @@ export type ArrangeSelectionDirection =
   | "backward"
   | "back";
 
+export type MirrorSelectionDirection = "horizontal" | "vertical";
+
 type TransformFrame = { bounds: WorldRect; angle: number };
 
 export type SelectToolState = {
@@ -700,6 +702,45 @@ export class SelectTool extends Tool<SelectToolState> {
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
     });
+  }
+
+  public mirrorSelection(direction: MirrorSelectionDirection): void {
+    if (this.isDragging || this.isMarqueeSelecting) return;
+    this.pruneHiddenSelection();
+    const { toolState } = this.getState();
+    const points = this.getTransformPoints();
+    const bounds = getTransformBounds(points);
+    if (!toolState || !bounds) return;
+
+    const center = getTransformCenter(bounds);
+    const positions = points.map((point) => ({
+      x: direction === "horizontal" ? 2 * center.x - point.x : point.x,
+      y: direction === "vertical" ? 2 * center.y - point.y : point.y,
+    }));
+    const vertices = toolState.selectedVertices.length;
+    const objects = toolState.selectedObjects.length;
+    this.runHistoryBatch(() => {
+      if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
+      if (objects)
+        this.updateSelectedObjects(
+          positions.slice(vertices, vertices + objects),
+        );
+      if (toolState.selectedPictures.length) {
+        this.updateSelectedPictures(
+          positions.slice(vertices + objects).map((point, index) => {
+            // Reflect visual centres while retaining each picture's anchor offset.
+            const origin = toolState.selectedPictures[index];
+            const pictureCenter = points[vertices + objects + index];
+            return {
+              x: point.x + origin.x - pictureCenter.x,
+              y: point.y + origin.y - pictureCenter.y,
+            };
+          }),
+        );
+      }
+    });
+    this.transformFrame = null;
+    this.closeContextMenu();
   }
 
   getCursor(context: EventContext): string | undefined {
@@ -2720,7 +2761,7 @@ function isPolygon(value: unknown): value is Polygon {
     isRecord(value) &&
     typeof value.grass === "boolean" &&
     isPositionArray(value.vertices) &&
-    value.vertices.length >= 3
+    value.vertices.length >= (value.grass ? 2 : 3)
   );
 }
 

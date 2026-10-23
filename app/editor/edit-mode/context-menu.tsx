@@ -6,6 +6,7 @@ import {
 import {
   SelectTool,
   type ArrangeSelectionDirection,
+  type MirrorSelectionDirection,
   type SelectSelectionKind,
   type SelectToolState,
 } from "~/editor/edit-mode/tools/select-tool";
@@ -295,6 +296,7 @@ export function EditorContextMenu() {
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(selectToolState.transformMode)}
       onTransform={() => selectTool?.toggleTransform()}
+      onMirror={(direction) => selectTool?.mirrorSelection(direction)}
       canArrange={canArrange}
       canDuplicate={canDuplicate}
       onArrange={(direction) => {
@@ -584,6 +586,7 @@ function SelectionActionsMenu({
   canTransform,
   transforming,
   onTransform,
+  onMirror,
   canArrange,
   canDuplicate,
   onArrange,
@@ -594,6 +597,7 @@ function SelectionActionsMenu({
   canTransform: boolean;
   transforming: boolean;
   onTransform: () => void;
+  onMirror: (direction: MirrorSelectionDirection) => void;
   canArrange: boolean;
   canDuplicate: boolean;
   onArrange: (direction: ArrangeSelectionDirection) => void;
@@ -618,6 +622,21 @@ function SelectionActionsMenu({
         >
           {transforming ? "Exit resize & rotate" : "Resize & rotate"}
         </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger disabled={!canTransform} openOnHover>
+            Mirror
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => onMirror("horizontal")}>
+                Mirror horizontally
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onMirror("vertical")}>
+                Mirror vertically
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem
