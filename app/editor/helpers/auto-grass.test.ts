@@ -15,6 +15,17 @@ function position(x: number, y: number): Position {
   return { x, y } as Position;
 }
 
+const leftClearance = 1 / 48;
+const rightClearance = 10 / 48;
+
+function expectVertices(actual: Position[], expected: Position[]) {
+  expect(actual).toHaveLength(expected.length);
+  actual.forEach((vertex, index) => {
+    expect(vertex.x).toBeCloseTo(expected[index]!.x, 10);
+    expect(vertex.y).toBeCloseTo(expected[index]!.y, 10);
+  });
+}
+
 function polygon(vertices: Position[], grass = false): Polygon {
   return { vertices, grass } as Polygon;
 }
@@ -36,11 +47,34 @@ describe("generateAutoGrassPolygons", () => {
 
     expect(generated).toHaveLength(1);
     expect(generated[0]?.grass).toBe(true);
-    expect(generated[0]?.vertices[0]?.x).toBe(10);
-    expect(generated[0]?.vertices[1]?.x).toBe(0);
+    expect(generated[0]?.vertices[0]?.x).toBeCloseTo(10 - rightClearance);
+    expect(generated[0]?.vertices[1]?.x).toBeCloseTo(leftClearance);
     expect(generated[0]?.vertices[0]?.y).toBeGreaterThan(2);
     expect(generated[0]?.vertices[1]?.y).toBeGreaterThan(2);
   });
+
+  it.each([false, true])(
+    "extends zero-inset grass to a thin outward tip (reversed: %s)",
+    (reverse) => {
+      const outer = polygon([
+        position(-5, -5),
+        position(25, -5),
+        position(25, 10),
+        position(-5, 10),
+      ]);
+      const vertices = [position(0, 0), position(20, 0), position(0, 0.6)];
+      const ledge = polygon(reverse ? vertices.reverse() : vertices);
+      const generated = generateAutoGrassPolygons({
+        polygons: [outer, ledge],
+        sourcePolygons: [ledge],
+        options: { depth: 16 / 48, endInset: 0 },
+      });
+      expect(generated).toHaveLength(1);
+      expect(Math.max(...generated[0]!.vertices.map((v) => v.x))).toBeCloseTo(
+        20,
+      );
+    },
+  );
 
   it("moves the visible grass edge away from the ground edge when depth changes", () => {
     const skyPocket = polygon([
@@ -64,7 +98,7 @@ describe("generateAutoGrassPolygons", () => {
     expect(deep[0]!.vertices[0]!.y).toBeGreaterThan(shallow[0]!.vertices[0]!.y);
   });
 
-  it("generates flat grass as a line polygon with only an overlapping end vertex", () => {
+  it("generates zero-inset flat grass with two distinct endpoints", () => {
     const skyPocket = polygon([
       position(0, 0),
       position(10, 0),
@@ -79,10 +113,9 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(generated).toHaveLength(1);
-    expect(generated[0]?.vertices).toEqual([
-      position(10, 2 + defaultAutoGrassOptions.depth),
-      position(0, 2 + defaultAutoGrassOptions.depth),
-      position(0, 2 + defaultAutoGrassOptions.depth),
+    expectVertices(generated[0]!.vertices, [
+      position(10 - rightClearance, 2 + defaultAutoGrassOptions.depth),
+      position(leftClearance, 2 + defaultAutoGrassOptions.depth),
     ]);
   });
 
@@ -107,9 +140,9 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(quads).toHaveLength(1);
-    expect([quads[0]?.[0].x, quads[0]?.[1].x].sort((a, b) => a - b)).toEqual([
-      0, 10,
-    ]);
+    const ends = [quads[0]![0].x, quads[0]![1].x].sort((a, b) => a - b);
+    expect(ends[0]).toBeCloseTo(leftClearance);
+    expect(ends[1]).toBeCloseTo(10 - rightClearance);
     expect(quads[0]?.[0].y).toBe(2 + defaultAutoGrassOptions.depth);
     expect(quads[0]?.[1].y).toBe(2 + defaultAutoGrassOptions.depth);
   });
@@ -156,11 +189,10 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(generated).toHaveLength(1);
-    expect(generated[0]?.vertices).toEqual([
-      position(10, 2 + defaultAutoGrassOptions.depth),
+    expectVertices(generated[0]!.vertices, [
+      position(10 - rightClearance, 2 + defaultAutoGrassOptions.depth),
       position(5, 2 + defaultAutoGrassOptions.depth),
-      position(0, 2 + defaultAutoGrassOptions.depth),
-      position(0, 2 + defaultAutoGrassOptions.depth),
+      position(leftClearance, 2 + defaultAutoGrassOptions.depth),
     ]);
   });
 
@@ -180,18 +212,18 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(generated).toHaveLength(1);
-    expect(generated[0]?.vertices).toEqual([
+    expectVertices(generated[0]!.vertices, [
       position(
-        10 - defaultAutoGrassOptions.endInset,
+        10 - Math.max(rightClearance, defaultAutoGrassOptions.endInset),
         2 + defaultAutoGrassOptions.depth,
       ),
       position(5, 2 + defaultAutoGrassOptions.depth),
       position(
-        defaultAutoGrassOptions.endInset,
+        Math.max(leftClearance, defaultAutoGrassOptions.endInset),
         2 + defaultAutoGrassOptions.depth,
       ),
       position(
-        defaultAutoGrassOptions.endInset,
+        Math.max(leftClearance, defaultAutoGrassOptions.endInset),
         2 + defaultAutoGrassOptions.depth,
       ),
     ]);
@@ -212,7 +244,7 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(generated).toHaveLength(1);
-    expect(generated[0]?.vertices).toEqual([
+    expectVertices(generated[0]!.vertices, [
       position(8, 2 + defaultAutoGrassOptions.depth),
       position(2, 2 + defaultAutoGrassOptions.depth),
       position(2, 2 + defaultAutoGrassOptions.depth),
@@ -238,17 +270,31 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(generated).toHaveLength(1);
-    expect(generated[0]?.vertices).toHaveLength(7);
-    const firstSegmentLength = Math.hypot(0.25, 0.02);
-    expect(generated[0]?.vertices[0]?.x).toBeCloseTo(
-      10 +
-        defaultAutoGrassOptions.depth * (0.02 / firstSegmentLength) -
-        defaultAutoGrassOptions.endInset * (0.25 / firstSegmentLength),
+    const vertices = generated[0]!.vertices;
+    // The smaller clearance preserves every segment; inset is not added twice.
+    expect(vertices).toHaveLength(7);
+    expect(vertices[0]!.x).toBeLessThan(
+      10 + defaultAutoGrassOptions.depth * (0.02 / Math.hypot(0.25, 0.02)),
     );
-    expect(generated[0]?.vertices[0]?.y).toBeCloseTo(
-      2 +
-        defaultAutoGrassOptions.endInset * (0.02 / firstSegmentLength) +
-        defaultAutoGrassOptions.depth * (0.25 / firstSegmentLength),
+    expect(vertices[0]!.x).toBeGreaterThan(
+      9.75 + defaultAutoGrassOptions.depth * (0.02 / Math.hypot(0.25, 0.02)),
+    );
+    const quads = getGrassFillQuads({
+      vertices,
+      zoom: 1,
+      depth: defaultAutoGrassOptions.depth,
+    });
+    expect(quads).toHaveLength(5);
+    expectVertices(
+      [vertices[1]!],
+      [
+        position(
+          9.75 +
+            defaultAutoGrassOptions.depth * (0.02 / Math.hypot(0.25, 0.02)),
+          2.02 +
+            defaultAutoGrassOptions.depth * (0.25 / Math.hypot(0.25, 0.02)),
+        ),
+      ],
     );
   });
 
@@ -279,10 +325,10 @@ describe("generateAutoGrassPolygons", () => {
     expect(quads).toHaveLength(4);
     expect(
       Math.min(...quads.flatMap((quad) => [quad[0].x, quad[1].x])),
-    ).toBeLessThanOrEqual(0);
+    ).toBeCloseTo(leftClearance);
     expect(
       Math.max(...quads.flatMap((quad) => [quad[0].x, quad[1].x])),
-    ).toBeGreaterThanOrEqual(12);
+    ).toBeCloseTo(12 - rightClearance);
   });
 
   it("continues grass from a flat edge onto a shallow incoming edge", () => {
@@ -310,7 +356,7 @@ describe("generateAutoGrassPolygons", () => {
     expect(quads).toHaveLength(2);
     expect(
       Math.min(...quads.flatMap((quad) => [quad[0].x, quad[1].x])),
-    ).toBeLessThanOrEqual(0);
+    ).toBeCloseTo(leftClearance);
   });
 
   it("generates grass on slopes represented by the steepest grass sprite", () => {
@@ -338,7 +384,7 @@ describe("generateAutoGrassPolygons", () => {
     expect(quads).toHaveLength(2);
     expect(
       Math.min(...quads.flatMap((quad) => [quad[0].x, quad[1].x])),
-    ).toBeLessThanOrEqual(0);
+    ).toBeCloseTo(leftClearance);
   });
 
   it("offsets sloped grass by the configured depth perpendicular to the ground edge", () => {
@@ -388,9 +434,15 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(generated).toHaveLength(2);
-    expect(generated.map((grass) => grass.vertices.length)).toEqual([3, 3]);
-    expect(generated.map((grass) => grass.vertices[0]!.x)).toEqual([20, 8]);
-    expect(generated.map((grass) => grass.vertices[1]!.x)).toEqual([12, 0]);
+    expect(generated.map((grass) => grass.vertices.length)).toEqual([2, 2]);
+    expect(generated.map((grass) => grass.vertices[0]!.x)).toEqual([
+      expect.closeTo(20 - rightClearance),
+      expect.closeTo(8),
+    ]);
+    expect(generated.map((grass) => grass.vertices[1]!.x)).toEqual([
+      expect.closeTo(12),
+      expect.closeTo(leftClearance),
+    ]);
   });
 
   it("splits grass polygons when an ungrassable edge interrupts the run", () => {
@@ -411,7 +463,99 @@ describe("generateAutoGrassPolygons", () => {
     });
 
     expect(generated).toHaveLength(2);
-    expect(generated.map((grass) => grass.vertices.length)).toEqual([3, 3]);
+    expect(generated.map((grass) => grass.vertices.length)).toEqual([2, 2]);
+  });
+
+  it.each([false, true])(
+    "clears sloped endpoints regardless of winding (reversed: %s)",
+    (reverse) => {
+      const vertices = [
+        position(0, 0),
+        position(10, 0),
+        position(10, 8),
+        position(0, 2),
+      ];
+      const source = polygon(reverse ? vertices.reverse() : vertices);
+      const generated = generateAutoGrassPolygons({
+        polygons: [source],
+        sourcePolygons: [source],
+        options: { depth: 16 / 48, endInset: 0 },
+      });
+      expect(generated).toHaveLength(1);
+      const ends = generated[0]!.vertices.slice(0, 2).sort((a, b) => a.x - b.x);
+      expect(ends[0]!.x).toBeCloseTo(leftClearance);
+      expect(ends[1]!.x).toBeCloseTo(10 - rightClearance);
+      // The safe endpoints stay on the same parallel offset of the floor.
+      expect(ends[1]!.y - ends[0]!.y).toBeCloseTo(
+        (ends[1]!.x - ends[0]!.x) * 0.6,
+      );
+    },
+  );
+
+  it("backs away from an inward wall at an acute corner", () => {
+    const source = polygon([
+      position(0, 0),
+      position(10, 0),
+      position(10, 4),
+      position(0, 4),
+      position(2, 2),
+    ]);
+    const generated = generateAutoGrassPolygons({
+      polygons: [source],
+      sourcePolygons: [source],
+      options: { depth: 16 / 48, endInset: 0 },
+    });
+    const floor = generated.find((grass) =>
+      grass.vertices.every((vertex) => vertex.y > 4),
+    )!;
+    // The wall reaches x=0.5 at the top of the visible grass band.
+    expect(Math.min(...floor.vertices.map((vertex) => vertex.x))).toBeCloseTo(
+      0.5 + leftClearance,
+    );
+  });
+
+  it.each([0.5, 2])(
+    "keeps a floor continuous under a separate roof at height %s",
+    (roofHeight) => {
+      const source = polygon([
+        position(0, 0),
+        position(10, 0),
+        position(10, 4),
+        position(0, 4),
+      ]);
+      const roof = polygon([
+        position(2, 4 - roofHeight - 0.1),
+        position(6, 4 - roofHeight - 0.1),
+        position(6, 4 - roofHeight),
+        position(2, 4 - roofHeight),
+      ]);
+      const generated = generateAutoGrassPolygons({
+        polygons: [source, roof],
+        sourcePolygons: [source],
+        options: { depth: 16 / 48, endInset: 0 },
+      });
+      expect(generated).toHaveLength(1);
+      expectVertices(generated[0]!.vertices, [
+        position(10 - rightClearance, 4 + 16 / 48),
+        position(leftClearance, 4 + 16 / 48),
+      ]);
+    },
+  );
+
+  it("omits runs consumed by the user's inset", () => {
+    const source = polygon([
+      position(0, 0),
+      position(2, 0),
+      position(2, 4),
+      position(0, 4),
+    ]);
+    expect(
+      generateAutoGrassPolygons({
+        polygons: [source],
+        sourcePolygons: [source],
+        options: { depth: 16 / 48, endInset: 2 },
+      }),
+    ).toEqual([]);
   });
 
   it("does not generate grass on steep wall edges", () => {

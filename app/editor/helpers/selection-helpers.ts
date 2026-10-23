@@ -106,7 +106,7 @@ export function findPolygonEdgeNearPosition(
 ): Polygon | null {
   const candidatePolygons = getCandidatePolygons(polygons, pos, threshold);
   for (const polygon of candidatePolygons) {
-    if (polygon.vertices.length < 3) continue;
+    if (polygon.vertices.length < (polygon.grass ? 2 : 3)) continue;
 
     // Check each edge of the polygon
     for (let i = 0; i < polygon.vertices.length; i++) {
@@ -205,7 +205,7 @@ export function findPolygonLineForEditing(
     adjustedThreshold,
   );
   for (const polygon of candidatePolygons) {
-    if (polygon.vertices.length < 3) continue;
+    if (polygon.vertices.length < (polygon.grass ? 2 : 3)) continue;
 
     // Check each edge of the polygon
     for (let i = 0; i < polygon.vertices.length; i++) {

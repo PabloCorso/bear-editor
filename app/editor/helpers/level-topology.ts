@@ -57,12 +57,16 @@ export function validateLevelTopology(
   }
 
   const vertices = level.polygons.flatMap((polygon, polygonIndex) =>
-    polygon.vertices.map((vertex, vertexIndex) => ({
-      polygon,
-      polygonIndex,
-      vertex,
-      vertexIndex,
-    })),
+    // Decorative grass may overlap itself or solid geometry, just as it may
+    // cross edges. Only solid vertices participate in proximity checks.
+    polygon.grass
+      ? []
+      : polygon.vertices.map((vertex, vertexIndex) => ({
+          polygon,
+          polygonIndex,
+          vertex,
+          vertexIndex,
+        })),
   );
 
   for (let i = 0; i < vertices.length; i++) {

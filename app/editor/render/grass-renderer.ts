@@ -119,7 +119,7 @@ function scaleQgrass(qgrass: ImageBitmap, scale: number): HTMLCanvasElement {
 function createGrassPolygonHeightmap(
   vertices: WorldPoint[],
 ): PolygonHeightmap | null {
-  if (vertices.length < 3) return null;
+  if (vertices.length < 2) return null;
 
   const lineHeightmap = createLineGrassPolygonHeightmap(vertices);
   if (lineHeightmap) return lineHeightmap;
@@ -216,9 +216,12 @@ function createLineGrassPolygonHeightmap(
 ): PolygonHeightmap | null {
   const last = vertices[vertices.length - 1]!;
   const previous = vertices[vertices.length - 2]!;
-  if (last.x !== previous.x || last.y !== previous.y) return null;
+  const hasRepeatedEndpoint = last.x === previous.x && last.y === previous.y;
+  if (vertices.length !== 2 && !hasRepeatedEndpoint) return null;
 
-  const surfaceVertices = vertices.slice(0, -1);
+  const surfaceVertices = hasRepeatedEndpoint
+    ? vertices.slice(0, -1)
+    : [...vertices];
   if (surfaceVertices.length < 2) return null;
   if (surfaceVertices[0]!.x > surfaceVertices[surfaceVertices.length - 1]!.x) {
     surfaceVertices.reverse();

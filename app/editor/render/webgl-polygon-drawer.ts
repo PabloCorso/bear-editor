@@ -142,7 +142,7 @@ export class WebGLPolygonDrawer {
 
   drawGrassPolygons(scene: WorldRenderScene) {
     for (const polygon of scene.polygons) {
-      if (!polygon.isGrass || polygon.vertices.length < 3) continue;
+      if (!polygon.isGrass || polygon.vertices.length < 2) continue;
       this.drawGrassPolygon(polygon, scene);
     }
   }

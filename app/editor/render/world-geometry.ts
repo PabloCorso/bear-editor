@@ -149,6 +149,7 @@ export function getViewportWorldRectFromOffset(viewport: {
 export function getGrassEdgeIndices(vertices: Array<{ x: number; y: number }>) {
   const vertexCount = vertices.length;
   if (vertexCount < 2) return [];
+  if (vertexCount === 2) return [0];
 
   const lineGrassEdgeIndices = getLineGrassEdgeIndices(vertices);
   if (lineGrassEdgeIndices) {

@@ -2391,7 +2391,7 @@ export class SelectTool extends Tool<SelectToolState> {
           .filter((vertex) => selectedVertices.has(vertex))
           .map(clonePosition);
 
-        if (vertices.length < 3) return null;
+        if (vertices.length < (polygon.grass ? 2 : 3)) return null;
 
         return {
           ...polygon,
@@ -2533,7 +2533,7 @@ export class SelectTool extends Tool<SelectToolState> {
             (vertex: Position) => !verticesToDelete.includes(vertex),
           );
 
-          if (updatedVertices.length < 3) {
+          if (updatedVertices.length < (polygon.grass ? 2 : 3)) {
             this.removePolygon(polygonIndex);
           } else {
             this.updatePolygon(polygonIndex, {
