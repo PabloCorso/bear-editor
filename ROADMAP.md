@@ -44,3 +44,7 @@ Planned features and feedback for Bear Editor.
 - Save start position
   - Checkpoints: create, move, select for play mode, and delete multiple translucent, distinctly colored bike markers without moving the actual level start. Editor-only and session-local (not stored in Elma level files), with per-designer test starts in the future multiplayer editor.
 - Import level
+- Grid
+  - Snap to grid
+- Replace selection
+  - Replace with copied content
