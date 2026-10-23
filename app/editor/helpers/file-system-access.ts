@@ -1,7 +1,16 @@
-export async function getFileHandle() {
+export async function getFileHandle(options?: {
+  startIn?: FileSystemDirectoryHandle;
+  multiple?: boolean;
+  types?: Array<{
+    description: string;
+    accept: Record<string, string[]>;
+  }>;
+}) {
   if (!("showOpenFilePicker" in window)) return;
   try {
-    return await window.showOpenFilePicker().then((handles) => handles[0]);
+    return await window
+      .showOpenFilePicker(options)
+      .then((handles) => handles[0]);
   } catch (error) {
     if (isAbortError(error) || isActivePickerError(error)) return;
     throw error;

@@ -1,3 +1,7 @@
+import {
+  DEFAULT_LEVEL_TITLE,
+  LEVEL_TITLE_MAX_LENGTH,
+} from "~/editor/helpers/level-title";
 import { Input } from "~/components/ui/input";
 import {
   Select,
@@ -20,6 +24,7 @@ import {
   useVertexEdgeClickPreference,
   usePlaySettings,
   useEditorStore,
+  useEditor,
 } from "~/editor/use-editor-store";
 import { createEditorStore } from "~/editor/editor-store";
 import {
@@ -38,6 +43,7 @@ import type { EditorLevel } from "~/editor/elma-types";
 import { defaultLevelVisibility } from "~/editor/level-visibility";
 import { defaultAutoGrassOptions } from "~/editor/helpers/auto-grass";
 import { supportsFilePickers } from "~/editor/helpers/file-session";
+import { getFileHandle } from "~/editor/helpers/file-system-access";
 import {
   Dialog,
   DialogBody,
@@ -113,10 +119,6 @@ export function SettingsDialog({
             ? () => document.getElementById("settings-level-folder") ?? true
             : undefined
         }
-        onKeyDown={(event) => {
-          // Prevent global editor shortcuts specially arrow navigation
-          event.stopPropagation();
-        }}
       >
         <SettingsPanel
           key={highlightLevelFolder ? "level-folder" : "settings"}
@@ -130,13 +132,7 @@ export function SettingsDialog({
 export function PlaySettingsDialog(props: DialogProps) {
   return (
     <Dialog {...props}>
-      <DialogContent
-        className="sm:max-w-3xl"
-        onKeyDown={(event) => {
-          // Prevent global editor shortcuts specially arrow navigation
-          event.stopPropagation();
-        }}
-      >
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader showCloseButton className="pb-4">
           <DialogTitle>Play settings</DialogTitle>
         </DialogHeader>
@@ -385,6 +381,7 @@ function PreferencesSettingsPanel({
   }>;
 }) {
   const store = useEditorStore();
+  const defaultLevelTitle = useEditor((state) => state.defaultLevelTitle);
   const defaultLevelPreset = useDefaultLevelPreset();
   const setDefaultLevelPreset = useSetDefaultLevelPreset();
   const customDefaultLevelTemplate = useCustomDefaultLevelTemplate();
@@ -396,13 +393,7 @@ function PreferencesSettingsPanel({
   );
   const { setVertexEdgeClickBehavior: setEditorVertexEdgeClickBehavior } =
     store.getState().actions;
-  const handleCustomTemplateUpload = async (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (!file) return;
-
+  const importCustomTemplate = async (file: File) => {
     try {
       const level = await editorLevelFromFile(file);
       setCustomDefaultLevelTemplate(level);
@@ -414,13 +405,83 @@ function PreferencesSettingsPanel({
       );
     }
   };
+  const handleCustomTemplateUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (file) await importCustomTemplate(file);
+  };
+  const chooseCustomTemplate = async () => {
+    if (!("showOpenFilePicker" in window)) {
+      customTemplateInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const handle = await getFileHandle({
+        startIn: store.getState().levelFolder.directoryHandle,
+        multiple: false,
+        types: [
+          {
+            description: "Elasto Mania level",
+            accept: { "application/octet-stream": [".lev"] },
+          },
+        ],
+      });
+      if (handle) await importCustomTemplate(await handle.getFile());
+    } catch (error) {
+      setCustomTemplateError(
+        error instanceof Error ? error.message : "Could not import template.",
+      );
+    }
+  };
   return (
     <TabsContent value="default-level" className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
         <SettingsSectionHeading
           title="Starter template"
-          description="Start new levels with this layout."
-        />
+          description="Choose the title and layout for new levels."
+        >
+          <Button
+            type="button"
+            onClick={() => {
+              store
+                .getState()
+                .actions.setDefaultLevelTitle(DEFAULT_LEVEL_TITLE);
+              setDefaultLevelPreset("default");
+              setCustomDefaultLevelTemplate(null);
+              setCustomTemplateError(null);
+              setEditorVertexEdgeClickBehavior("default");
+            }}
+            className="ml-auto h-6 px-2"
+            size="sm"
+            iconBefore={<ArrowCounterClockwiseIcon />}
+          >
+            Reset
+          </Button>
+        </SettingsSectionHeading>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex min-w-0 items-center gap-3">
+            <label htmlFor="default-level-title" className="shrink-0 text-sm">
+              Default level title:
+            </label>
+            <Input
+              id="default-level-title"
+              name="default-level-title"
+              className="w-0 flex-1"
+              value={defaultLevelTitle}
+              maxLength={LEVEL_TITLE_MAX_LENGTH}
+              placeholder={DEFAULT_LEVEL_TITLE}
+              onChange={(event) =>
+                store
+                  .getState()
+                  .actions.setDefaultLevelTitle(event.target.value)
+              }
+            />
+          </div>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           {LEVEL_PRESETS.map((preset) => {
@@ -479,7 +540,7 @@ function PreferencesSettingsPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => customTemplateInputRef.current?.click()}
+                  onClick={chooseCustomTemplate}
                   className="absolute top-1/2 left-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white/90 shadow-sm transition-colors hover:bg-black/70 focus-visible:focus-ring"
                   aria-label="Replace custom template"
                 >
@@ -489,7 +550,7 @@ function PreferencesSettingsPanel({
             ) : (
               <button
                 type="button"
-                onClick={() => customTemplateInputRef.current?.click()}
+                onClick={chooseCustomTemplate}
                 className="relative flex h-full w-full cursor-pointer items-center justify-center bg-transparent focus-visible:focus-ring"
               >
                 <PlusIcon className="size-7 text-primary/70" />
@@ -581,7 +642,7 @@ export function PlaySettingsPanel() {
             size="sm"
             iconBefore={<ArrowCounterClockwiseIcon />}
           >
-            Reset settings
+            Reset
           </Button>
         </SettingsSectionHeading>
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
@@ -765,6 +826,7 @@ function LevelPresetPreview({
           lgrAssets: lgrAssets.lgr ?? undefined,
           store: createEditorStore({
             initialPreferences: {
+              defaultLevelTitle: DEFAULT_LEVEL_TITLE,
               animateSprites: false,
               isUIVisible: true,
               levelVisibility: {

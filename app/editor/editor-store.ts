@@ -1,3 +1,7 @@
+import {
+  DEFAULT_LEVEL_TITLE,
+  normalizeLevelTitle,
+} from "./helpers/level-title";
 import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { temporal, type TemporalState } from "zundo";
 import type {
@@ -146,10 +150,15 @@ function createDocumentSession(
 
 export function createEditorStore({
   initialToolId = "select",
-  defaultLevelTitle = "Untitled",
+  defaultLevelTitle = DEFAULT_LEVEL_TITLE,
   historyUpdateThrottle = 50,
   initialPreferences,
 }: CreateEditorStoreOptions = {}) {
+  defaultLevelTitle =
+    normalizeLevelTitle(
+      initialPreferences?.defaultLevelTitle ?? defaultLevelTitle,
+    ) || DEFAULT_LEVEL_TITLE;
+
   const emptySelectionMemento = (): SelectionMemento => ({
     selectedVertices: [],
     selectedObjects: [],
@@ -387,6 +396,8 @@ export function createEditorStore({
         playModeZoom:
           initialPreferences?.playModeZoom ?? DEFAULT_PLAY_MODE_ZOOM,
 
+        defaultLevelTitle,
+
         // View settings
         animateSprites: initialPreferences?.animateSprites ?? true,
         showSprites: true,
@@ -418,7 +429,9 @@ export function createEditorStore({
 
         actions: {
           // Level data operations
-          setLevelName: (name) => set({ levelName: name }),
+          setDefaultLevelTitle: (title) =>
+            set({ defaultLevelTitle: normalizeLevelTitle(title) }),
+          setLevelName: (name) => set({ levelName: normalizeLevelTitle(name) }),
           setLgr: (lgr) => set({ lgr }),
           setGround: (ground) => set({ ground }),
           setSky: (sky) => set({ sky }),
@@ -621,6 +634,8 @@ export function createEditorStore({
             set((state) => ({ isPlayMode: !state.isPlayMode })),
 
           replaceDocument: (document) => {
+            const defaultLevelTitle =
+              get().defaultLevelTitle || DEFAULT_LEVEL_TITLE;
             const normalizedLevel = normalizeLevelSnapshot(
               document.level,
               defaultLevelTitle,

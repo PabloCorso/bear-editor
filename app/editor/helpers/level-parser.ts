@@ -73,12 +73,13 @@ export const defaultLevel: EditorLevel = {
 export function getDefaultLevel(
   preset: DefaultLevelPreset = "default",
   customLevel?: EditorLevel | null,
+  defaultLevelTitle?: string,
 ): EditorLevel {
-  if (preset === "custom" && customLevel) {
-    return cloneEditorLevel(customLevel);
-  }
-
-  return cloneEditorLevel(defaultLevel);
+  const level = cloneEditorLevel(
+    preset === "custom" && customLevel ? customLevel : defaultLevel,
+  );
+  if (defaultLevelTitle !== undefined) level.levelName = defaultLevelTitle;
+  return level;
 }
 
 function cloneEditorLevel(level: EditorLevel): EditorLevel {

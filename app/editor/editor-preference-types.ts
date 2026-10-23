@@ -4,6 +4,7 @@ export type VertexEdgeClickBehavior = "default" | "internal";
 
 export type EditorPreferences = Pick<
   EditorState,
+  | "defaultLevelTitle"
   | "animateSprites"
   | "isUIVisible"
   | "levelVisibility"

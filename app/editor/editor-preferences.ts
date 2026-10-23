@@ -1,3 +1,7 @@
+import {
+  DEFAULT_LEVEL_TITLE,
+  normalizeLevelTitle,
+} from "./helpers/level-title";
 import fastDeepEqual from "fast-deep-equal";
 import { useEffect, useRef } from "react";
 import type { EditorState } from "./editor-state";
@@ -55,6 +59,7 @@ function parseStoredItem<T>(key: string): T | null {
 }
 
 const defaultEditorPreferences: EditorPreferences = {
+  defaultLevelTitle: DEFAULT_LEVEL_TITLE,
   animateSprites: true,
   isUIVisible: true,
   levelVisibility: defaultLevelVisibility,
@@ -78,6 +83,10 @@ export function loadEditorPreferences(): EditorPreferences {
   const preferences = persistedPreferences?.preferences;
 
   return {
+    defaultLevelTitle:
+      typeof preferences?.defaultLevelTitle === "string"
+        ? normalizeLevelTitle(preferences.defaultLevelTitle)
+        : defaultEditorPreferences.defaultLevelTitle,
     animateSprites:
       preferences?.animateSprites ?? defaultEditorPreferences.animateSprites,
     isUIVisible:
@@ -144,6 +153,7 @@ function getPersistedEditorPreferences(
 
 function getComparableEditorPreferences(state: EditorState): EditorPreferences {
   return {
+    defaultLevelTitle: state.defaultLevelTitle,
     animateSprites: state.animateSprites,
     isUIVisible: state.isUIVisible,
     levelVisibility: state.levelVisibility,

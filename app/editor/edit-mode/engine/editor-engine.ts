@@ -1,3 +1,4 @@
+import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import { type EditorState } from "~/editor/editor-state";
 import {
   getEventContext,
@@ -215,10 +216,11 @@ export class EditorEngine {
 
     this.store = store || createEditorStore();
     const state = this.store.getState();
+    const title = state.defaultLevelTitle || DEFAULT_LEVEL_TITLE;
     const resolvedInitialDocument = initialDocument ?? {
-      level: getDefaultLevel(defaultLevelPreset),
-      origin: { kind: "default", label: "Untitled", canOverwrite: false },
-      displayName: "Untitled",
+      level: getDefaultLevel(defaultLevelPreset, undefined, title),
+      origin: { kind: "default", label: title, canOverwrite: false },
+      displayName: title,
       hasExternalHandle: false,
     };
 

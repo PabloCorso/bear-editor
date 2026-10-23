@@ -1,3 +1,4 @@
+import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import React from "react";
 import { useEffect, useRef, useState } from "react";
 import { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
@@ -189,6 +190,9 @@ export function useInitialLevel(levelName?: string): InitialDocument {
   const store = useEditorStore();
   const defaultLevelPreset = useDefaultLevelPreset();
   const customDefaultLevelTemplate = useCustomDefaultLevelTemplate();
+  const [initialDefaultLevelTitle] = useState(
+    () => store.getState().defaultLevelTitle || DEFAULT_LEVEL_TITLE,
+  );
   const [initialDefaultLevelPreset] = useState(defaultLevelPreset);
   const [initialCustomDefaultLevelTemplate] = useState(
     customDefaultLevelTemplate,
@@ -270,9 +274,14 @@ export function useInitialLevel(levelName?: string): InitialDocument {
         level: getDefaultLevel(
           initialDefaultLevelPreset,
           initialCustomDefaultLevelTemplate,
+          initialDefaultLevelTitle,
         ),
-        origin: { kind: "default", label: "Untitled", canOverwrite: false },
-        displayName: "Untitled",
+        origin: {
+          kind: "default",
+          label: initialDefaultLevelTitle,
+          canOverwrite: false,
+        },
+        displayName: initialDefaultLevelTitle,
         hasExternalHandle: false,
       };
     }
@@ -288,6 +297,7 @@ export function useInitialLevel(levelName?: string): InitialDocument {
     fileName,
     initialCustomDefaultLevelTemplate,
     initialDefaultLevelPreset,
+    initialDefaultLevelTitle,
     levelName,
     status,
   ]);

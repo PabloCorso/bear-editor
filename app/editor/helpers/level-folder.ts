@@ -19,6 +19,10 @@ export class LevelFolder {
     return this.handle?.name ?? this.folderName;
   }
 
+  get directoryHandle() {
+    return this.handle;
+  }
+
   hasFolder() {
     return Boolean(this.handle);
   }

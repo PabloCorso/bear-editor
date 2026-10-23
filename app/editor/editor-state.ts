@@ -83,6 +83,8 @@ export type EditorState = EditorLevel & {
   zoom: number;
   playModeZoom: number;
 
+  defaultLevelTitle: string;
+
   // View settings
   animateSprites: boolean;
   showSprites: boolean;
@@ -125,6 +127,7 @@ export type EditorState = EditorLevel & {
     setFlowers: (flowers: Position[]) => void;
     setPictures: (pictures: Picture[]) => void;
 
+    setDefaultLevelTitle: (title: string) => void;
     setLevelName: (name: string) => void;
     setLgr: (lgr: string) => void;
     setGround: (ground: string) => void;

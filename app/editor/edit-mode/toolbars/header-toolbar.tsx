@@ -1,3 +1,7 @@
+import {
+  DEFAULT_LEVEL_TITLE,
+  LEVEL_TITLE_MAX_LENGTH,
+} from "~/editor/helpers/level-title";
 import { Input } from "~/components/ui/input";
 import {
   useEditorIsPlayMode,
@@ -321,14 +325,16 @@ function useMainMenuActions() {
 
     activeTool?.clear?.();
     await store.getState().fileSession.clear();
+    const title = store.getState().defaultLevelTitle || DEFAULT_LEVEL_TITLE;
     const defaultLevel = getDefaultLevel(
       defaultLevelPreset,
       customDefaultLevelTemplate,
+      title,
     );
     replaceDocument({
       level: defaultLevel,
-      origin: { kind: "default", label: "Untitled", canOverwrite: false },
-      displayName: "Untitled",
+      origin: { kind: "default", label: title, canOverwrite: false },
+      displayName: title,
       hasExternalHandle: false,
     });
     triggerFitToView();
@@ -726,6 +732,7 @@ function LevelTitleInput({
     <Input
       type="text"
       name="level-name"
+      maxLength={LEVEL_TITLE_MAX_LENGTH}
       value={isLoading ? "" : levelName}
       onChange={(e) => setLevelName(e.target.value)}
       className={cn(
