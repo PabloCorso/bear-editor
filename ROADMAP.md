@@ -38,6 +38,8 @@ Planned features and feedback for Bear Editor.
 - Custom lev folder management with preview thumbnails
 - Switch Level / Graphics design modes (toggle pics/grass visibility and show different toolbar)
 - Multi-player level editor
+  - Follow a designer's view while editing; explore following them in play mode too.
+  - Chain level working areas: let different designers build separate parts, with optional locks to prevent edits by others and optional hiding to keep parts secret until revealed.
 - Version history info
 - Export to SVG
 - Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
