@@ -889,7 +889,7 @@ export class EditorEngine {
     }
 
     if (
-      key === "P" &&
+      (key === "P" || key === "F") &&
       event.shiftKey &&
       !event.metaKey &&
       !event.ctrlKey &&
@@ -898,11 +898,12 @@ export class EditorEngine {
       const vertexState = state.actions.getToolState<VertexToolState>(
         defaultTools.vertex.id,
       );
+      const variant = key === "F" ? "frame" : "pipe";
       if (
         state.activeToolId !== defaultTools.vertex.id ||
-        vertexState?.variant !== "pipe"
+        vertexState?.variant !== variant
       ) {
-        state.actions.activateTool(defaultTools.vertex.id, "pipe");
+        state.actions.activateTool(defaultTools.vertex.id, variant);
       }
       event.preventDefault();
       return;

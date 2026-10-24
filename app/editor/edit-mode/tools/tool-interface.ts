@@ -53,6 +53,7 @@ export abstract class Tool<T extends ToolState = ToolState> {
     polygons?: Polygon[];
     // Complete terrain replacement for non-destructive boolean previews.
     replacementPolygons?: Polygon[];
+    hiddenPolygons?: Polygon[];
     apples?: Apple[];
     killers?: Position[];
     flowers?: Position[];

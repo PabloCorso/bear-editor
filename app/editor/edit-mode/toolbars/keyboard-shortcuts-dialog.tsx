@@ -418,6 +418,21 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: defaultTools.vertex.variants.frame.shortcut,
+          label: "Select Frame tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("frame")} className="h-6 w-6" />
+          ),
+          subItems: [
+            { shortcut: ["-", "+"], label: "Adjust frame width" },
+            {
+              shortcut: "Space",
+              label: "Cycle mode: Inside / Outside / Centered",
+            },
+            { shortcut: "Click", label: "Frame the hovered polygon" },
+          ],
+        },
+        {
           shortcut: AUTO_GRASS_ALL_SHORTCUT,
           label: "AutoGrass all polygons",
           icon: (
