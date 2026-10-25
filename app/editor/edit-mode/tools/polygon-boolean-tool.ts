@@ -18,7 +18,12 @@ export type PolygonBooleanToolState = {
 };
 
 export function isPolygonBooleanTool(id: string): id is PolygonOperation {
-  return id === "union" || id === "subtract" || id === "intersect";
+  return (
+    id === "union" ||
+    id === "subtract" ||
+    id === "intersect" ||
+    id === "exclude"
+  );
 }
 
 export abstract class PolygonBooleanTool extends Tool<PolygonBooleanToolState> {
@@ -204,4 +209,9 @@ export class SubtractTool extends PolygonBooleanTool {
 export class IntersectTool extends PolygonBooleanTool {
   readonly meta = defaultTools.intersect;
   readonly operation = "intersect";
+}
+
+export class ExcludeTool extends PolygonBooleanTool {
+  readonly meta = defaultTools.exclude;
+  readonly operation = "exclude";
 }

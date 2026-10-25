@@ -53,7 +53,9 @@ export function ToolInfo() {
           ? "Choose an overlapping polygon"
           : result?.status === "ready" && result.polygons.length === 0
             ? "Click to remove both polygons — the result is empty"
-            : "Hover another polygon to preview · Click to apply";
+            : result?.status === "ready" && result.touchingVertices
+              ? "Click to apply · Result has touching vertices"
+              : "Hover another polygon to preview · Click to apply";
   });
   const modifier = useModifier();
   const activeToolId = useEditor((state) => state.activeToolId);
@@ -106,7 +108,9 @@ export function ToolInfo() {
             ? "Second removed from first"
             : activeToolId === "union"
               ? "Combine both areas"
-              : "Keep only the overlap"}
+              : activeToolId === "exclude"
+                ? "Keep non-overlapping areas"
+                : "Keep only the overlap"}
         </CanvasTipSegment>
         <CanvasTipSegment>
           Cancel<CanvasTipKey>Esc</CanvasTipKey>

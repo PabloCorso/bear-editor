@@ -22,6 +22,7 @@ export const defaultTools = {
   },
   union: { id: "union", name: "Union", shortcut: "" },
   subtract: { id: "subtract", name: "Subtract", shortcut: "" },
+  exclude: { id: "exclude", name: "Exclude", shortcut: "" },
   intersect: { id: "intersect", name: "Intersect", shortcut: "" },
   apple: { id: "apple", name: "Apple", shortcut: "A" },
   killer: { id: "killer", name: "Killer", shortcut: "K" },

@@ -396,7 +396,7 @@ function getShortcutGroups(
         },
         {
           shortcut: ["Esc", "Right click"],
-          label: "Cancel Union, Subtract, or Intersect",
+          label: "Cancel Union, Subtract, Intersect, or Exclude",
         },
         {
           shortcut: AUTO_GRASS_ALL_SHORTCUT,

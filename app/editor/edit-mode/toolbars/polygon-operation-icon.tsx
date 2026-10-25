@@ -4,6 +4,7 @@ import type { PolygonOperation } from "~/editor/helpers/polygon-boolean";
 const paths = {
   union: "M3 3H15V9H21V21H9V15H3Z",
   subtract: "M3 3H15V9H9V15H3Z",
+  exclude: "M3 3H15V9H9V15H3Z M15 9H21V21H9V15H15Z",
   intersect: "M9 9H15V15H9Z",
 };
 

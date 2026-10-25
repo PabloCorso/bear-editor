@@ -56,7 +56,12 @@ import {
 
 export const AUTO_GRASS_ALL_SHORTCUT = "Shift + G";
 
-const polygonOperations = ["union", "subtract", "intersect"] as const;
+const polygonOperations = [
+  "union",
+  "subtract",
+  "intersect",
+  "exclude",
+] as const;
 
 export function VertexToolControl(props: ToolControlButtonProps) {
   const activeToolId = useEditor((state) => state.activeToolId);
