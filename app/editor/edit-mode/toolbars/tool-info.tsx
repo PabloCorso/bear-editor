@@ -6,6 +6,9 @@ import {
 } from "~/editor/use-editor-store";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import {
+  DEFAULT_DRAW_EDGE_LENGTH_PX,
+  MIN_DRAW_EDGE_LENGTH_PX,
+  MAX_DRAW_EDGE_LENGTH_PX,
   canToggleVertexToolDirection,
   getToggledVertexToolState,
   VertexTool,
@@ -150,6 +153,7 @@ export function ToolInfo() {
 
   const isAutoGrass =
     vertex?.variant === "autoGrass" || vertex?.previewAutoGrassAll;
+  const isDraw = vertex?.variant === "draw" && !isAutoGrass;
   const isPipe = vertex?.variant === "pipe" && !isAutoGrass;
   const pipeWidth = vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
   const pipeAppleMode = vertex?.pipeAppleMode ?? "none";
@@ -178,6 +182,26 @@ export function ToolInfo() {
           </CanvasTipSection>
         )}
       </CanvasTipSections>
+    );
+  }
+
+  if (isDraw) {
+    return (
+      <CanvasTipGroup title="Draw" aria-label="Active tool info">
+        <CanvasTipNumberControl
+          label="Edge length"
+          accessibleLabel="draw edge length in Elma pixels"
+          value={vertex?.drawEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+          min={MIN_DRAW_EDGE_LENGTH_PX}
+          max={MAX_DRAW_EDGE_LENGTH_PX}
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
+          }
+        />
+        <CanvasTipSegment>
+          Drag and release, or click–move–click
+        </CanvasTipSegment>
+      </CanvasTipGroup>
     );
   }
 

@@ -1,3 +1,4 @@
+import { PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   ToolControlButton,
   ToolControlMenu,
@@ -115,6 +116,18 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       </ToolControlButton>
       <ToolControlButton
         {...defaultTools.vertex}
+        name="Draw"
+        shortcut={undefined}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "draw"}
+        onClick={() => onVariantChange("draw")}
+      >
+        <VertexIcon {...getVertexIconProps("draw")} />
+      </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
         name="Frame"
         shortcut={defaultTools.vertex.variants.frame.shortcut}
         tooltipSide="right"
@@ -189,6 +202,7 @@ type VertexIconProps = React.ComponentPropsWithoutRef<"svg"> & {
   badge?: string;
   corridor?: boolean | "narrow";
   frame?: boolean;
+  freehand?: boolean;
 };
 
 export function VertexIcon({
@@ -201,6 +215,7 @@ export function VertexIcon({
   badge,
   corridor,
   frame,
+  freehand,
   ...props
 }: VertexIconProps) {
   const frameClipId = useId();
@@ -229,6 +244,17 @@ export function VertexIcon({
             stroke={boundsColor}
             strokeWidth="1"
           />
+        </g>
+      ) : freehand ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={sky} />
+          <path
+            d="M0 20L4 16L6 9L10 7L13 12L17 10L24 17V24H0Z"
+            fill={ground}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+          <PencilSimpleIcon x="12" y="0" width="13" height="13" color="white" />
         </g>
       ) : corridor ? (
         <g clipPath={`url(#${frameClipId})`}>
@@ -317,6 +343,7 @@ export function getVertexIconProps(
     };
   }
   if (variant === "frame") return { frame: true };
+  if (variant === "draw") return { freehand: true };
 
   if (variant === "pipe") {
     return { corridor: true };

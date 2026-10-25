@@ -370,6 +370,28 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: "",
+          label: "Draw (Vertex toolbar)",
+          icon: (
+            <VertexIcon {...getVertexIconProps("draw")} className="h-6 w-6" />
+          ),
+          subItems: [
+            { shortcut: "Drag", label: "Draw polygon; release to finish" },
+            {
+              shortcut: "Click–move–click",
+              label: "Draw without holding the mouse",
+            },
+            {
+              shortcut: ["-", "+"],
+              label: "Adjust edge length in Elma pixels",
+            },
+            {
+              shortcut: ["Enter", "Esc", "Right click"],
+              label: "Finish polygon",
+            },
+          ],
+        },
+        {
           shortcut: defaultTools.vertex.variants.pipe.shortcut,
           label: "Select Pipe tool",
           icon: (

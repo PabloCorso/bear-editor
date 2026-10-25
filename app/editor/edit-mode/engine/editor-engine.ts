@@ -680,7 +680,8 @@ export class EditorEngine {
         this.updateCanvasCursor();
       }
     } else if (
-      this.store.getState().actions.getActiveTool() instanceof SelectTool
+      this.store.getState().actions.getActiveTool() instanceof SelectTool ||
+      this.store.getState().actions.getActiveTool() instanceof VertexTool
     ) {
       this.dispatchToolPointerEvent("up", event);
     }
