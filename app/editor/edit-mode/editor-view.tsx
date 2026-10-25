@@ -17,6 +17,7 @@ import {
 } from "~/editor/helpers/level-parser";
 import { PictureTool } from "~/editor/edit-mode/tools/picture-tool";
 import { HandTool } from "~/editor/edit-mode/tools/hand-tool";
+import { TextureFillTool } from "~/editor/edit-mode/tools/texture-fill-tool";
 import { TextureTool } from "~/editor/edit-mode/tools/texture-tool";
 import { cn } from "~/utils/misc";
 import type { EditorLevel } from "~/editor/elma-types";
@@ -118,6 +119,7 @@ export function useEditorView({
         FlowerTool,
         PictureTool,
         TextureTool,
+        TextureFillTool,
       ];
 
       const widgets = [];

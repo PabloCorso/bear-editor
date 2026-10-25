@@ -1,3 +1,4 @@
+import { TextureFillToolControl } from "./texture-fill-tool-control";
 import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
@@ -26,6 +27,7 @@ const SPRITE_TOOL_IDS = new Set<string>([
   defaultTools.flower.id,
   defaultTools.picture.id,
   defaultTools.texture.id,
+  defaultTools.textureFill.id,
 ]);
 
 type ControlToolbarProps = ToolbarProps & {
@@ -116,6 +118,9 @@ function RegisteredToolControl({
   }
   if (meta.id === defaultTools.picture.id) {
     return <PictureToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.textureFill.id) {
+    return <TextureFillToolControl {...props} />;
   }
   if (meta.id === defaultTools.texture.id) {
     return <TextureToolControl {...props} />;

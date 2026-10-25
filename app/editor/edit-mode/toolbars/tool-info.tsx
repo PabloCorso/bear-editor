@@ -1,3 +1,4 @@
+import { TextureFillTool } from "../tools/texture-fill-tool";
 import {
   useEditor,
   useEditorActions,
@@ -72,6 +73,8 @@ export function ToolInfo() {
       </CanvasTipGroup>
     );
   }
+
+  if (activeToolId === "textureFill") return <TextureFillInfo />;
 
   if (activeToolId !== "vertex") return null;
 
@@ -241,6 +244,29 @@ export function ToolInfo() {
           </CanvasTipKeyButton>
         </CanvasTipSegment>
       ) : null}
+    </CanvasTipGroup>
+  );
+}
+
+function TextureFillInfo() {
+  // Subscribe to preview inputs; placement work is cached by the tool.
+  useEditor((state) => state.mousePosition);
+  useEditor((state) => state.polygons);
+  useEditor((state) => state.levelVisibility);
+  useEditorToolState("textureFill");
+  const onCanvas = useEditor((state) => state.mouseOnCanvas);
+  const { getActiveTool } = useEditorActions();
+  const preview = onCanvas
+    ? getActiveTool<TextureFillTool>()?.getFillPreview()
+    : null;
+  return (
+    <CanvasTipGroup title="Texture Fill" aria-label="Active tool info">
+      <CanvasTipSegment>
+        {preview?.error ??
+          (preview?.pictures.length
+            ? `Click to fill · ${preview.pictures.length} textures`
+            : "Hover a polygon to preview")}
+      </CanvasTipSegment>
     </CanvasTipGroup>
   );
 }
