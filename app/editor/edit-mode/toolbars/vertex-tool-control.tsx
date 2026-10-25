@@ -128,6 +128,18 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       </ToolControlButton>
       <ToolControlButton
         {...defaultTools.vertex}
+        name="Brush"
+        shortcut={undefined}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "brush"}
+        onClick={() => onVariantChange("brush")}
+      >
+        <VertexIcon {...getVertexIconProps("brush")} />
+      </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
         name="Frame"
         shortcut={defaultTools.vertex.variants.frame.shortcut}
         tooltipSide="right"
@@ -245,6 +257,17 @@ export function VertexIcon({
             strokeWidth="1"
           />
         </g>
+      ) : freehand && corridor ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={ground} />
+          <path
+            d="M-3 18C4 18 3 5 10 5S16 17 27 4L27 13C16 26 11 12 10 12S9 25-3 25Z"
+            fill={sky}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+          <PencilSimpleIcon x="12" y="0" width="13" height="13" color="white" />
+        </g>
       ) : freehand ? (
         <g clipPath={`url(#${frameClipId})`}>
           <rect width="24" height="24" fill={sky} />
@@ -343,6 +366,8 @@ export function getVertexIconProps(
     };
   }
   if (variant === "frame") return { frame: true };
+  if (variant === "brush") return { corridor: true, freehand: true };
+
   if (variant === "draw") return { freehand: true };
 
   if (variant === "pipe") {

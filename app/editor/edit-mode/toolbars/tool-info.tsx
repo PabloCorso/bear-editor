@@ -154,7 +154,9 @@ export function ToolInfo() {
   const isAutoGrass =
     vertex?.variant === "autoGrass" || vertex?.previewAutoGrassAll;
   const isDraw = vertex?.variant === "draw" && !isAutoGrass;
-  const isPipe = vertex?.variant === "pipe" && !isAutoGrass;
+  const isBrush = vertex?.variant === "brush" && !isAutoGrass;
+  const isPipe = (vertex?.variant === "pipe" || isBrush) && !isAutoGrass;
+  const pipeName = isBrush ? "Brush" : "Pipe";
   const pipeWidth = vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
   const pipeAppleMode = vertex?.pipeAppleMode ?? "none";
   const canChangeDirection = canToggleVertexToolDirection(vertex);
@@ -208,7 +210,7 @@ export function ToolInfo() {
   if (isPipe) {
     return (
       <CanvasTipSections aria-label="Active tool info">
-        <CanvasTipGroup title="Pipe" aria-label="Pipe width">
+        <CanvasTipGroup title={pipeName} aria-label={`${pipeName} width`}>
           <CanvasTipNumberControl
             label="Width"
             accessibleLabel="pipe width"
@@ -220,7 +222,27 @@ export function ToolInfo() {
             }
           />
         </CanvasTipGroup>
-        <CanvasTipSection aria-label="Pipe apples">
+        {isBrush && (
+          <CanvasTipSection aria-label="Brush drawing">
+            <CanvasTipNumberControl
+              label="Edge length"
+              accessibleLabel="brush edge length in Elma pixels"
+              value={vertex?.drawEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+              min={MIN_DRAW_EDGE_LENGTH_PX}
+              max={MAX_DRAW_EDGE_LENGTH_PX}
+              decreaseKey=","
+              increaseKey="."
+              increaseShortcut="."
+              onAdjust={(delta) =>
+                getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
+              }
+            />
+            <CanvasTipSegment>
+              Drag and release, or click–move–click
+            </CanvasTipSegment>
+          </CanvasTipSection>
+        )}
+        <CanvasTipSection aria-label={`${pipeName} apples`}>
           <CanvasTipSegment>
             <span className="mr-1">Mode</span>
             <CanvasTipKeyButton

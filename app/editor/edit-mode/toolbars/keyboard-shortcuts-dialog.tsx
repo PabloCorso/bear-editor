@@ -457,6 +457,34 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: "",
+          label: "Brush (Vertex toolbar)",
+          icon: (
+            <VertexIcon {...getVertexIconProps("brush")} className="h-6 w-6" />
+          ),
+          subItems: [
+            { shortcut: "Drag", label: "Draw pipe; release to finish" },
+            {
+              shortcut: "Click–move–click",
+              label: "Draw without holding the mouse",
+            },
+            { shortcut: ["-", "+"], label: "Adjust width" },
+            {
+              shortcut: [",", "."],
+              label: "Adjust centerline edge length in Elma pixels",
+            },
+            { shortcut: "Space", label: "Cycle apple mode (same as Pipe)" },
+            { shortcut: ["[", "]"], label: "Adjust apple distance or count" },
+            { shortcut: "0–250", label: "Type apple count in count mode" },
+            { shortcut: "S", label: "Toggle start chamber and player" },
+            { shortcut: "F", label: "Toggle end flower" },
+            {
+              shortcut: ["Enter", "Esc", "Right click"],
+              label: "Finish brush stroke",
+            },
+          ],
+        },
+        {
           shortcut: AUTO_GRASS_ALL_SHORTCUT,
           label: "AutoGrass all polygons",
           icon: (

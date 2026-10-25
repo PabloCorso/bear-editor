@@ -38,7 +38,12 @@ import {
   MIN_CUT_CONNECT_WIDTH_PX,
   MAX_CUT_CONNECT_WIDTH_PX,
 } from "~/editor/helpers/cut-and-connect";
-import type { VertexToolState } from "./tools/vertex-tool";
+import {
+  type VertexToolState,
+  DEFAULT_DRAW_EDGE_LENGTH_PX,
+  MIN_DRAW_EDGE_LENGTH_PX,
+  MAX_DRAW_EDGE_LENGTH_PX,
+} from "./tools/vertex-tool";
 export function ToolSettingsPanel() {
   return (
     <div className="columns-1 gap-3 sm:columns-2">
@@ -92,7 +97,7 @@ function VertexShapeSettings() {
         />
       </ToolSettingsSection>
       <ToolSettingsSection
-        title="Pipe"
+        title="Pipe & Brush"
         icon={<VertexIcon {...getVertexIconProps("pipe")} />}
         onReset={() =>
           update({
@@ -153,6 +158,26 @@ function VertexShapeSettings() {
             onChange={(pipeAppleCount) => update({ pipeAppleCount })}
           />
         )}
+      </ToolSettingsSection>
+      <ToolSettingsSection
+        title="Draw & Brush"
+        icon={<VertexIcon {...getVertexIconProps("draw")} />}
+        onReset={() =>
+          update({ drawEdgeLengthPx: DEFAULT_DRAW_EDGE_LENGTH_PX })
+        }
+        isDefault={
+          (vertex?.drawEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX) ===
+          DEFAULT_DRAW_EDGE_LENGTH_PX
+        }
+      >
+        <NumberSetting
+          label="Edge length (px)"
+          name="Draw and Brush centerline edge length"
+          value={vertex?.drawEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+          min={MIN_DRAW_EDGE_LENGTH_PX}
+          max={MAX_DRAW_EDGE_LENGTH_PX}
+          onChange={(drawEdgeLengthPx) => update({ drawEdgeLengthPx })}
+        />
       </ToolSettingsSection>
       <ToolSettingsSection
         title="Frame"

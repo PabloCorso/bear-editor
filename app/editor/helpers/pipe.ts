@@ -150,6 +150,7 @@ export function createPipePolygon(
   points: Position[],
   width: number,
   startChamber = false,
+  miterLimit = Infinity,
 ): Polygon | null {
   const centers = points.filter(
     (point, index) =>
@@ -171,8 +172,8 @@ export function createPipePolygon(
       const after = normals[Math.min(index, normals.length - 1)];
       const denominator = 1 + before.x * after.x + before.y * after.y;
       const halfWidth = (side * width) / 2;
-      // An exact reversal has no finite miter. Use two square corners instead.
-      if (denominator < 1e-8) {
+      // Bevel reversals and corners exceeding the requested miter limit.
+      if (denominator < 1e-8 || Math.sqrt(2 / denominator) > miterLimit) {
         return [before, after].map((normal) => ({
           x: point.x + normal.x * halfWidth,
           y: point.y + normal.y * halfWidth,

@@ -80,7 +80,16 @@ export type VertexToolVariant =
   | "pipe"
   | "cutConnect"
   | "frame"
-  | "draw";
+  | "draw"
+  | "brush";
+
+function isFreehandVariant(variant?: VertexToolVariant) {
+  return variant === "draw" || variant === "brush";
+}
+
+function isPipeVariant(variant?: VertexToolVariant) {
+  return variant === "pipe" || variant === "brush";
+}
 
 export type VertexToolState = {
   drawingPolygon: Polygon;
@@ -353,6 +362,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
     // Closing the loop must not leave a duplicate first/last vertex in Elma.
     if (
+      toolState?.variant === "draw" &&
       vertices.length > 1 &&
       Math.hypot(
         vertices[0].x - vertices[vertices.length - 1].x,
@@ -363,10 +373,14 @@ export class VertexTool extends Tool<VertexToolState> {
     return vertices;
   }
 
-  private onDrawPointerMove(_event: PointerEvent, context: EventContext): boolean {
+  private onDrawPointerMove(
+    _event: PointerEvent,
+    context: EventContext,
+  ): boolean {
     const { toolState } = this.getState();
     if (
-      toolState?.variant !== "draw" ||
+      !toolState ||
+      !isFreehandVariant(toolState.variant) ||
       !toolState.drawingPolygon.vertices.length
     )
       return false;
@@ -384,7 +398,7 @@ export class VertexTool extends Tool<VertexToolState> {
 
   private onDrawPointerUp(event: PointerEvent, context: EventContext): boolean {
     const { toolState } = this.getState();
-    if (toolState?.variant !== "draw") return false;
+    if (!isFreehandVariant(toolState?.variant)) return false;
     if (event.type === "pointercancel") {
       this.clear();
       return true;
@@ -572,6 +586,7 @@ export class VertexTool extends Tool<VertexToolState> {
   private getPipePoints(includeMouse: boolean): Position[] {
     const { state, toolState } = this.getState();
     if (!toolState || toolState.drawingPolygon.vertices.length === 0) return [];
+    if (toolState.variant === "brush") return this.getDrawVertices();
     return includeMouse && state.mouseOnCanvas
       ? [...toolState.drawingPolygon.vertices, state.mousePosition]
       : toolState.drawingPolygon.vertices;
@@ -598,6 +613,7 @@ export class VertexTool extends Tool<VertexToolState> {
       (toolState.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX) /
         ELMA_PIXELS_PER_WORLD_UNIT,
       toolState.pipeStart,
+      toolState.variant === "brush" ? 2 : Infinity,
     );
   }
 
@@ -648,7 +664,7 @@ export class VertexTool extends Tool<VertexToolState> {
       };
     }
 
-    if (toolState.variant === "pipe") {
+    if (isPipeVariant(toolState.variant)) {
       const polygon = this.getPipePolygon(true);
       const flower = polygon ? this.getPipeFlower(true) : undefined;
       return {
@@ -722,7 +738,7 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
-    if (toolState.variant === "draw") {
+    if (isFreehandVariant(toolState.variant)) {
       if (toolState.drawingPolygon.vertices.length) {
         this.sampleDraw(worldPos);
         return this.finalizeDrawingOrRestore();
@@ -771,7 +787,7 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
-    if (toolState.variant === "pipe") {
+    if (isPipeVariant(toolState.variant)) {
       const vertices = toolState.drawingPolygon.vertices;
       const previous = vertices[vertices.length - 1];
       if (
@@ -866,7 +882,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (
-      toolState.variant === "pipe" &&
+      isPipeVariant(toolState.variant) &&
       ["s", "f"].includes(event.key.toLowerCase()) &&
       !event.metaKey &&
       !event.ctrlKey &&
@@ -883,7 +899,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (
-      toolState.variant === "pipe" &&
+      isPipeVariant(toolState.variant) &&
       toolState.pipeAppleMode === "count" &&
       /^[0-9]$/.test(event.key) &&
       !event.metaKey &&
@@ -946,6 +962,20 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
+    if (
+      toolState.variant === "brush" &&
+      [",", "."].includes(event.key) &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !event.isComposing
+    ) {
+      this.adjustDrawEdgeLength(event.key === "." ? 1 : -1);
+      event.preventDefault();
+      return true;
+    }
+
     // Hovering All makes AutoGrass the target of shared size shortcuts.
     if (
       (toolState.variant === "autoGrass" || toolState.previewAutoGrassAll) &&
@@ -963,7 +993,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (
-      toolState.variant === "pipe" &&
+      isPipeVariant(toolState.variant) &&
       ["[", "]"].includes(event.key) &&
       toolState.pipeAppleMode &&
       toolState.pipeAppleMode !== "none" &&
@@ -976,7 +1006,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (
-      toolState.variant === "pipe" &&
+      isPipeVariant(toolState.variant) &&
       ["+", "=", "-", "_"].includes(event.key) &&
       !event.metaKey &&
       (!event.ctrlKey || event.getModifierState("AltGraph"))
@@ -1003,7 +1033,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (event.key === " " || event.key === "Space") {
-      if (toolState.variant === "pipe") {
+      if (isPipeVariant(toolState.variant)) {
         if (!event.repeat) this.cyclePipeAppleMode();
         event.preventDefault();
         return true;
@@ -1018,7 +1048,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (event.key.toUpperCase() === "G" || event.key.toUpperCase() === "V") {
-      if (toolState.variant === "pipe" || toolState.variant === "draw") {
+      if (isPipeVariant(toolState.variant) || toolState.variant === "draw") {
         this.finalizeDrawingOrRestore();
         this.onActivate(event.key.toUpperCase() === "G" ? "grass" : "normal");
         return true;
@@ -1053,7 +1083,7 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
-    if (["pipe", "frame", "draw"].includes(toolState?.variant ?? ""))
+    if (["pipe", "frame", "draw", "brush"].includes(toolState?.variant ?? ""))
       return false;
 
     const polygon = findPolygonEdgeNearPosition(
@@ -1237,7 +1267,7 @@ export class VertexTool extends Tool<VertexToolState> {
       ];
     }
 
-    if (toolState.variant === "pipe") {
+    if (isPipeVariant(toolState.variant)) {
       const polygon = this.getPipePolygon(true);
       const overlays: WorldRenderOverlayItem[] = polygon
         ? [
@@ -1419,7 +1449,7 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
-    if (toolState.variant === "pipe") {
+    if (isPipeVariant(toolState.variant)) {
       const polygon = this.getPipePolygon(false);
       if (polygon) {
         const apples = this.getPipeApples(false);
