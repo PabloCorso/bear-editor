@@ -52,6 +52,8 @@ import {
   getTransformCenter,
   getTransformHandles,
   getResizeTransform,
+  getSkewHandles,
+  getSkewTransform,
   rotateTransformPoint,
   type TransformHandle,
 } from "~/editor/helpers/selection-transform";
@@ -85,6 +87,7 @@ export type SelectToolState = {
   selectedPictures: Position[];
   isDragging: boolean;
   transformMode?: boolean;
+  skewMode?: boolean;
   isMarqueeSelecting?: boolean;
   hoveredObject?: Position;
   hoveredPictureBounds?: {
@@ -190,6 +193,7 @@ export class SelectTool extends Tool<SelectToolState> {
       selectedPictures: [],
       isDragging: false,
       transformMode: false,
+      skewMode: false,
       isMarqueeSelecting: false,
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
@@ -700,13 +704,18 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   }
 
-  public toggleTransform(): void {
-    if (this.isDragging || this.isMarqueeSelecting) return;
+  public toggleTransform(skew = false): void {
+    if (this.isDragging || this.isMarqueeSelecting || this.transformDrag)
+      return;
     this.pruneHiddenSelection();
     const { toolState, setToolState } = this.getState();
     this.transformFrame = null;
+    const enabled =
+      !(toolState?.transformMode && Boolean(toolState.skewMode) === skew) &&
+      this.canTransformSelection();
     setToolState({
-      transformMode: !toolState?.transformMode && this.canTransformSelection(),
+      transformMode: enabled,
+      skewMode: enabled && skew,
       contextMenuType: undefined,
       contextMenuPosition: undefined,
       hoveredObject: undefined,
@@ -792,6 +801,7 @@ export class SelectTool extends Tool<SelectToolState> {
     }
     if (target === "move") return "move";
     if (!target) return undefined;
+    if (this.getState().toolState?.skewMode) return target.cursor;
     const angle = this.getTransformFrame()?.angle ?? 0;
     const direction = Math.atan2(target.y, target.x) + angle;
     const cursors = ["ew-resize", "nwse-resize", "ns-resize", "nesw-resize"];
@@ -844,7 +854,7 @@ export class SelectTool extends Tool<SelectToolState> {
       -frame.angle,
     );
     const resizeRadius = 8 / state.zoom;
-    const resizeHandle = getTransformHandles(frame.bounds)
+    const resizeHandle = this.getFrameHandles(frame.bounds)
       .map((handle) => ({
         handle,
         distance: Math.hypot(
@@ -855,6 +865,7 @@ export class SelectTool extends Tool<SelectToolState> {
       .filter(({ distance }) => distance <= resizeRadius)
       .sort((a, b) => a.distance - b.distance)[0]?.handle;
     if (resizeHandle) return resizeHandle;
+    if (this.getState().toolState?.skewMode) return null;
 
     // Rotation lives just outside each corner; direct handle hits always resize.
     const { minX, minY, maxX, maxY } = frame.bounds;
@@ -870,6 +881,12 @@ export class SelectTool extends Tool<SelectToolState> {
       }
     }
     return null;
+  }
+
+  private getFrameHandles(bounds: WorldRect): TransformHandle[] {
+    return this.getState().toolState?.skewMode
+      ? getSkewHandles(bounds)
+      : getTransformHandles(bounds);
   }
 
   private startTransformDrag(
@@ -904,6 +921,11 @@ export class SelectTool extends Tool<SelectToolState> {
         x: point.x + worldPos.x - this.dragStartPos.x,
         y: point.y + worldPos.y - this.dragStartPos.y,
       });
+    } else if (drag.selection.skewMode && typeof drag.handle === "object") {
+      drag.map = getSkewTransform(drag.frame.bounds, drag.handle, {
+        x: worldPos.x - this.dragStartPos.x,
+        y: worldPos.y - this.dragStartPos.y,
+      });
     } else if (drag.handle === "rotate") {
       let delta =
         Math.atan2(worldPos.y - center.y, worldPos.x - center.x) -
@@ -934,26 +956,32 @@ export class SelectTool extends Tool<SelectToolState> {
           angle,
         );
     }
-    // Keep the same oriented frame, including for subsequent gestures.
-    const bounds = drag.frame.bounds;
-    const toWorld = (point: Position) =>
-      rotateTransformPoint(point, center, drag.frame.angle);
-    const left = drag.map(toWorld({ x: bounds.minX, y: center.y }));
-    const right = drag.map(toWorld({ x: bounds.maxX, y: center.y }));
-    const top = drag.map(toWorld({ x: center.x, y: bounds.minY }));
-    const bottom = drag.map(toWorld({ x: center.x, y: bounds.maxY }));
-    const nextCenter = drag.map(center);
-    const halfWidth = Math.hypot(right.x - left.x, right.y - left.y) / 2;
-    const halfHeight = Math.hypot(bottom.x - top.x, bottom.y - top.y) / 2;
-    drag.previewFrame = {
-      angle,
-      bounds: {
-        minX: nextCenter.x - halfWidth,
-        maxX: nextCenter.x + halfWidth,
-        minY: nextCenter.y - halfHeight,
-        maxY: nextCenter.y + halfHeight,
-      },
-    };
+    // A skew preview maps the original frame into a parallelogram. Rebuild
+    // axis-aligned bounds after applying it so the next gesture has clear axes.
+    if (drag.selection.skewMode && drag.handle !== "move") {
+      drag.previewFrame = drag.frame;
+    } else {
+      // Keep the same oriented frame, including for subsequent gestures.
+      const bounds = drag.frame.bounds;
+      const toWorld = (point: Position) =>
+        rotateTransformPoint(point, center, drag.frame.angle);
+      const left = drag.map(toWorld({ x: bounds.minX, y: center.y }));
+      const right = drag.map(toWorld({ x: bounds.maxX, y: center.y }));
+      const top = drag.map(toWorld({ x: center.x, y: bounds.minY }));
+      const bottom = drag.map(toWorld({ x: center.x, y: bounds.maxY }));
+      const nextCenter = drag.map(center);
+      const halfWidth = Math.hypot(right.x - left.x, right.y - left.y) / 2;
+      const halfHeight = Math.hypot(bottom.x - top.x, bottom.y - top.y) / 2;
+      drag.previewFrame = {
+        angle,
+        bounds: {
+          minX: nextCenter.x - halfWidth,
+          maxX: nextCenter.x + halfWidth,
+          minY: nextCenter.y - halfHeight,
+          maxY: nextCenter.y + halfHeight,
+        },
+      };
+    }
     const positions = drag.points.map(drag.map);
     this.dragHasChanges = positions.some(
       (point, index) =>
@@ -990,10 +1018,12 @@ export class SelectTool extends Tool<SelectToolState> {
       this.getState().setToolState(drag.selection);
     }
     if (commit) {
-      this.transformFrame = {
-        frame: drag.previewFrame,
-        points: this.getTransformPoints().map(clonePosition),
-      };
+      this.transformFrame = drag.selection.skewMode
+        ? null
+        : {
+            frame: drag.previewFrame,
+            points: this.getTransformPoints().map(clonePosition),
+          };
     }
     this.transformDrag = null;
     this.isDragging = false;
@@ -1008,8 +1038,11 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!frame) return [];
     const bounds = frame.bounds;
     const center = getTransformCenter(bounds);
-    const map = (point: Position) =>
-      rotateTransformPoint(point, center, frame.angle);
+    const map =
+      this.transformDrag?.selection.skewMode &&
+      typeof this.transformDrag.handle === "object"
+        ? this.transformDrag.map
+        : (point: Position) => rotateTransformPoint(point, center, frame.angle);
     const color = uiColors.boundsSelected;
     const width = uiStrokeWidths.boundsSelectedScreen / state.zoom;
     const hovered =
@@ -1031,7 +1064,7 @@ export class SelectTool extends Tool<SelectToolState> {
         width,
         layer: "top",
       },
-      ...getTransformHandles(bounds).map((handle) =>
+      ...this.getFrameHandles(bounds).map((handle) =>
         createSelectionHandleOverlay(
           map(handle.position),
           (typeof hovered === "object" &&

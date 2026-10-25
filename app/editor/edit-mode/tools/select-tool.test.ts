@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorStore } from "~/editor/editor-store";
-import { Clip, Gravity, type Position } from "~/editor/elma-types";
+import {
+  Clip,
+  Gravity,
+  type Apple,
+  type Picture,
+  type Position,
+} from "~/editor/elma-types";
 import { defaultTools } from "./default-tools";
 import { SelectTool, type SelectToolState } from "./select-tool";
 
@@ -388,5 +394,284 @@ describe("SelectTool marquee selection", () => {
     dragMarquee(tool, position(14, 14), position(20, 20));
 
     expect(getSelection(store)?.selectedPictures).toEqual([picturePosition]);
+  });
+});
+
+// Exercise the public pointer workflow so preview, cancellation and history
+// are checked together with the geometry.
+describe("SelectTool skewing", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  function createSkewTool() {
+    const result = createTool();
+    const { store, tool } = result;
+    const polygon = {
+      grass: false,
+      vertices: [
+        position(0, 0),
+        position(20, 0),
+        position(20, 30),
+        position(0, 30),
+      ],
+    };
+    store.getState().actions.setPolygons([polygon]);
+    store.getState().actions.setZoom(100);
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedVertices: polygon.vertices.map((vertex) => ({
+          polygon,
+          vertex,
+        })),
+      });
+    store.temporal.getState().clear();
+    tool.toggleTransform(true);
+    return { ...result, polygon };
+  }
+
+  const event = {
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+  } as PointerEvent;
+  const context = (worldPos: Position) => ({
+    worldPos,
+    screenX: 0,
+    screenY: 0,
+  });
+
+  it.each([
+    {
+      side: "top",
+      from: position(10, 0),
+      to: position(16, 9),
+      expected: [
+        position(6, 0),
+        position(26, 0),
+        position(20, 30),
+        position(0, 30),
+      ],
+      cursor: "ew-resize",
+    },
+    {
+      side: "bottom",
+      from: position(10, 30),
+      to: position(4, 39),
+      expected: [
+        position(0, 0),
+        position(20, 0),
+        position(14, 30),
+        position(-6, 30),
+      ],
+      cursor: "ew-resize",
+    },
+    {
+      side: "left",
+      from: position(0, 15),
+      to: position(9, 21),
+      expected: [
+        position(0, 6),
+        position(20, 0),
+        position(20, 30),
+        position(0, 36),
+      ],
+      cursor: "ns-resize",
+    },
+    {
+      side: "right",
+      from: position(20, 15),
+      to: position(29, 9),
+      expected: [
+        position(0, 0),
+        position(20, -6),
+        position(20, 24),
+        position(0, 30),
+      ],
+      cursor: "ns-resize",
+    },
+  ])(
+    "skews from the $side handle with the opposite edge fixed",
+    ({ from, to, expected, cursor }) => {
+      const { store, tool, polygon } = createSkewTool();
+      expect(tool.getCursor(context(from))).toBe(cursor);
+      tool.onPointerDown(event, context(from));
+      tool.onPointerMove(event, context(to));
+      expect(store.getState().polygons[0].vertices).toEqual(expected);
+      const overlays = tool.getWorldOverlays({
+        viewportRect: { minX: -100, minY: -100, maxX: 100, maxY: 100 },
+      });
+      expect(overlays.filter((item) => item.type === "rect")).toHaveLength(4);
+      expect(
+        overlays.some(
+          (item) =>
+            item.type === "polyline" &&
+            JSON.stringify(item.points) === JSON.stringify(expected),
+        ),
+      ).toBe(true);
+      expect(store.temporal.getState().pastStates).toHaveLength(0);
+      tool.onPointerUp(event, context(to));
+      expect(store.temporal.getState().pastStates).toHaveLength(1);
+      expect(getSelection(store)?.selectedVertices[0].polygon).toBe(
+        store.getState().polygons[0],
+      );
+      store.temporal.getState().undo();
+      expect(store.getState().polygons).toEqual([polygon]);
+      store.temporal.getState().redo();
+      expect(store.getState().polygons[0].vertices).toEqual(expected);
+    },
+  );
+
+  it.each(["Escape", "pointercancel"])(
+    "cancels the preview with %s without adding history",
+    (cancel) => {
+      const { store, tool, polygon } = createSkewTool();
+      tool.onPointerDown(event, context(position(10, 0)));
+      tool.onPointerMove(event, context(position(16, 0)));
+      if (cancel === "Escape") {
+        tool.onKeyDown(
+          { key: "Escape", preventDefault() {} } as KeyboardEvent,
+          context(position(16, 0)),
+        );
+      } else {
+        tool.onPointerUp(
+          { ...event, type: "pointercancel" } as PointerEvent,
+          context(position(16, 0)),
+        );
+      }
+      expect(store.getState().polygons).toEqual([polygon]);
+      expect(getSelection(store)?.selectedVertices[0].polygon).toBe(
+        store.getState().polygons[0],
+      );
+      expect(store.temporal.getState().pastStates).toHaveLength(0);
+      expect(store.temporal.getState().isTracking).toBe(true);
+    },
+  );
+
+  it("moves mixed selection positions without changing picture or object properties", () => {
+    const { store, tool, polygon, secondApple } = createSkewTool();
+    const apple: Apple = {
+      position: position(5, 15),
+      animation: 3,
+      gravity: Gravity.Up,
+    };
+    const picture: Picture = {
+      name: "tree",
+      texture: "",
+      mask: "",
+      position: position(5, 5),
+      distance: 500,
+      clip: Clip.Unclipped,
+    };
+    store
+      .getState()
+      .actions.setApples([
+        apple,
+        { position: secondApple, animation: 1, gravity: Gravity.None },
+      ]);
+    store.getState().actions.setPictures([picture]);
+    tool.setPictureDimensionsResolver(() => ({ width: 10, height: 10 }));
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [apple.position],
+        selectedPictures: [picture.position],
+      });
+    store.temporal.getState().clear();
+    dragMarquee(tool, position(10, 0), position(16, 0));
+    expect(store.getState().polygons[0].vertices[0]).toEqual(position(6, 0));
+    expect(store.getState().apples[0]).toEqual({
+      ...apple,
+      position: position(8, 15),
+    });
+    expect(store.getState().pictures[0]).toEqual({
+      ...picture,
+      position: position(9, 5),
+    });
+    expect(store.getState().apples[1].position).toEqual(secondApple);
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+    store.temporal.getState().undo();
+    expect(store.getState().polygons[0]).toEqual(polygon);
+    expect(store.getState().pictures[0]).toEqual(picture);
+    expect(store.getState().apples[0]).toEqual(apple);
+  });
+
+  it("does not add history for a perpendicular drag or a return to the starting point", () => {
+    const { store, tool, polygon } = createSkewTool();
+    dragMarquee(tool, position(10, 0), position(10, 9));
+    expect(store.getState().polygons).toEqual([polygon]);
+    tool.onPointerDown(event, context(position(10, 0)));
+    tool.onPointerMove(event, context(position(16, 0)));
+    tool.onPointerMove(event, context(position(10, 0)));
+    tool.onPointerUp(event, context(position(10, 0)));
+    expect(store.getState().polygons).toEqual([polygon]);
+    expect(store.temporal.getState().pastStates).toHaveLength(0);
+  });
+
+  it("rebuilds bounds for the next skew and switches cleanly to resize and rotate", () => {
+    const { store, tool } = createSkewTool();
+    dragMarquee(tool, position(10, 0), position(16, 0));
+    // New bounds are x=0..26; the next top handle is at x=13.
+    expect(tool.getCursor(context(position(13, 0)))).toBe("ew-resize");
+    dragMarquee(tool, position(13, 0), position(19, 0));
+    expect(store.getState().polygons[0].vertices[0]).toEqual(position(12, 0));
+    expect(store.temporal.getState().pastStates).toHaveLength(2);
+    tool.toggleTransform();
+    expect(getSelection(store)).toMatchObject({
+      transformMode: true,
+      skewMode: false,
+    });
+    expect(tool.getCursor(context(position(16, 0)))).toBe("ns-resize");
+    tool.toggleTransform(true);
+    expect(getSelection(store)).toMatchObject({
+      transformMode: true,
+      skewMode: true,
+    });
+    tool.toggleTransform(true);
+    expect(getSelection(store)?.transformMode).toBe(false);
+  });
+
+  it("moves the selection and its skew handles together", () => {
+    const { tool } = createSkewTool();
+    tool.onPointerDown(event, context(position(0, 0)));
+    tool.onPointerMove(event, context(position(3, 4)));
+    const handles = tool
+      .getWorldOverlays({
+        viewportRect: { minX: -100, minY: -100, maxX: 100, maxY: 100 },
+      })
+      .filter((item) => item.type === "rect")
+      .map((item) => ({
+        x: item.position.x + item.width / 2,
+        y: item.position.y + item.height / 2,
+      }));
+    expect(handles).toEqual([
+      position(13, 4),
+      position(13, 34),
+      position(3, 19),
+      position(23, 19),
+    ]);
+    tool.onPointerUp(event, context(position(3, 4)));
+  });
+
+  it("supports a collinear selection without dividing by zero", () => {
+    const { store, tool, polygon } = createSkewTool();
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedVertices: polygon.vertices
+          .slice(0, 2)
+          .map((vertex) => ({ polygon, vertex })),
+      });
+    dragMarquee(tool, position(20, 0), position(20, 10));
+    expect(store.getState().polygons[0].vertices).toEqual([
+      position(0, 0),
+      position(20, 10),
+      position(20, 30),
+      position(0, 30),
+    ]);
   });
 });

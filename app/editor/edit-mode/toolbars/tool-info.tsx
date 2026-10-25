@@ -68,6 +68,18 @@ export function ToolInfo() {
     activeTool?.name ??
     (activeToolId === "ai-chat" ? "AI Assistant" : activeToolId);
 
+  if (activeToolId === "select" && select?.transformMode && select.skewMode) {
+    return (
+      <CanvasTipGroup title="Skew" aria-label="Active tool info">
+        <CanvasTipSegment>Drag a side handle to skew</CanvasTipSegment>
+        <CanvasTipSegment>
+          Cancel
+          <CanvasTipKey>Esc</CanvasTipKey>
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
   if (activeToolId === "select" && select?.transformMode) {
     return (
       <CanvasTipGroup
