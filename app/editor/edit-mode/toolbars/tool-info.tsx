@@ -41,6 +41,18 @@ export function ToolInfo() {
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
 
+  if (activeToolId === "select" && select?.transformMode && select.skewMode) {
+    return (
+      <CanvasTipGroup title="Skew" aria-label="Active tool info">
+        <CanvasTipSegment>Drag a side handle to skew</CanvasTipSegment>
+        <CanvasTipSegment>
+          Cancel
+          <CanvasTipKey>Esc</CanvasTipKey>
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
   if (activeToolId === "select" && select?.transformMode) {
     return (
       <CanvasTipGroup title="Resize & Rotate" aria-label="Active tool info">

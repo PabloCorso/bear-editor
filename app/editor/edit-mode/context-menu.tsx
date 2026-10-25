@@ -294,7 +294,13 @@ export function EditorContextMenu() {
   toolbarSections.push(
     <SelectionActionsMenu
       canTransform={selectTool?.canTransformSelection() ?? false}
-      transforming={Boolean(selectToolState.transformMode)}
+      transforming={Boolean(
+        selectToolState.transformMode && !selectToolState.skewMode,
+      )}
+      skewing={Boolean(
+        selectToolState.transformMode && selectToolState.skewMode,
+      )}
+      onSkew={() => selectTool?.toggleTransform(true)}
       onTransform={() => selectTool?.toggleTransform()}
       onMirror={(direction) => selectTool?.mirrorSelection(direction)}
       canArrange={canArrange}
@@ -585,6 +591,8 @@ function useSelectionGroupIcons(): Record<
 function SelectionActionsMenu({
   canTransform,
   transforming,
+  skewing,
+  onSkew,
   onTransform,
   onMirror,
   canArrange,
@@ -596,6 +604,8 @@ function SelectionActionsMenu({
 }: {
   canTransform: boolean;
   transforming: boolean;
+  skewing: boolean;
+  onSkew: () => void;
   onTransform: () => void;
   onMirror: (direction: MirrorSelectionDirection) => void;
   canArrange: boolean;
@@ -621,6 +631,9 @@ function SelectionActionsMenu({
           onClick={onTransform}
         >
           {transforming ? "Exit resize & rotate" : "Resize & rotate"}
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canTransform} onClick={onSkew}>
+          {skewing ? "Exit skew" : "Skew"}
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={!canTransform} openOnHover>

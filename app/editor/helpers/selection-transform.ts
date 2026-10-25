@@ -108,3 +108,65 @@ export function getResizeTransform(
     y: anchor.y + (point.y - anchor.y) * scaleY,
   });
 }
+
+// Skew uses side handles only. A flat selection can skew along its nonzero axis.
+export function getSkewHandles(bounds: WorldRect): TransformHandle[] {
+  const center = getTransformCenter(bounds);
+  const handles: TransformHandle[] = [];
+  if (bounds.maxY > bounds.minY) {
+    handles.push(
+      {
+        x: 0,
+        y: -1,
+        position: { x: center.x, y: bounds.minY },
+        cursor: "ew-resize",
+      },
+      {
+        x: 0,
+        y: 1,
+        position: { x: center.x, y: bounds.maxY },
+        cursor: "ew-resize",
+      },
+    );
+  }
+  if (bounds.maxX > bounds.minX) {
+    handles.push(
+      {
+        x: -1,
+        y: 0,
+        position: { x: bounds.minX, y: center.y },
+        cursor: "ns-resize",
+      },
+      {
+        x: 1,
+        y: 0,
+        position: { x: bounds.maxX, y: center.y },
+        cursor: "ns-resize",
+      },
+    );
+  }
+  return handles;
+}
+
+export function getSkewTransform(
+  bounds: WorldRect,
+  handle: TransformHandle,
+  delta: Position,
+): (point: Position) => Position {
+  if (handle.y) {
+    const anchorY = handle.y < 0 ? bounds.maxY : bounds.minY;
+    const height = handle.position.y - anchorY;
+    if (!height) return (point) => point;
+    return (point) => ({
+      x: point.x + delta.x * ((point.y - anchorY) / height),
+      y: point.y,
+    });
+  }
+  const anchorX = handle.x < 0 ? bounds.maxX : bounds.minX;
+  const width = handle.position.x - anchorX;
+  if (!width) return (point) => point;
+  return (point) => ({
+    x: point.x,
+    y: point.y + delta.y * ((point.x - anchorX) / width),
+  });
+}
