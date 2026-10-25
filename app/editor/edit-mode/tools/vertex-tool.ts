@@ -67,6 +67,13 @@ import {
   MIN_FRAME_WIDTH_PX,
   MAX_FRAME_WIDTH_PX,
 } from "~/editor/helpers/frame";
+import {
+  DEFAULT_SMOOTH_AMOUNT,
+  MIN_SMOOTH_AMOUNT,
+  MAX_SMOOTH_AMOUNT,
+  transformSmoothPolygon,
+  type SmoothResult,
+} from "~/editor/helpers/smooth";
 export const DEFAULT_DRAW_EDGE_LENGTH_PX = 90;
 export const MIN_DRAW_EDGE_LENGTH_PX = 2;
 export const MAX_DRAW_EDGE_LENGTH_PX = 200;
@@ -82,7 +89,8 @@ export type VertexToolVariant =
   | "cutConnect"
   | "frame"
   | "draw"
-  | "brush";
+  | "brush"
+  | "smooth";
 
 function isFreehandVariant(variant?: VertexToolVariant) {
   return variant === "draw" || variant === "brush";
@@ -106,6 +114,7 @@ export type VertexToolState = {
   brushAppleMode?: PipeAppleMode;
   brushAppleDistance?: number;
   brushAppleCount?: number;
+  smoothAmount?: number;
   pipeStart?: boolean;
   pipeFlower?: boolean;
   pipeWidthPx?: number;
@@ -194,6 +203,11 @@ export class VertexTool extends Tool<VertexToolState> {
   private drawPointerStart?: { x: number; y: number };
   private drawDragged = false;
   private drawEndpoint?: Position;
+  private smoothCache?: {
+    source: Polygon;
+    amount: number;
+    result: SmoothResult;
+  };
 
   private pipeCountDigits = "";
   private lastPipeCountDigitAt = 0;
@@ -294,6 +308,44 @@ export class VertexTool extends Tool<VertexToolState> {
         Math.min(
           MAX_DRAW_EDGE_LENGTH_PX,
           (getDrawEdgeLength(toolState) ?? DEFAULT_DRAW_EDGE_LENGTH_PX) + delta,
+        ),
+      ),
+    });
+  }
+
+  getSmoothPreview(position?: Position) {
+    const { state, toolState } = this.getState();
+    if (toolState?.variant !== "smooth" || (!position && !state.mouseOnCanvas))
+      return null;
+    const source = findPolygonEdgeNearPosition(
+      position ?? state.mousePosition,
+      state.polygons,
+      selectionThresholds.polygonEdge / state.zoom,
+      (polygon) => polygon.vertices.length >= 3,
+    );
+    if (!source) return null;
+    const amount = toolState.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT;
+    if (
+      this.smoothCache?.source !== source ||
+      this.smoothCache.amount !== amount
+    ) {
+      this.smoothCache = {
+        source,
+        amount,
+        result: transformSmoothPolygon(source, amount),
+      };
+    }
+    return { source, ...this.smoothCache.result };
+  }
+
+  adjustSmoothAmount(delta: number): void {
+    const { toolState, setToolState } = this.getState();
+    setToolState({
+      smoothAmount: Math.max(
+        MIN_SMOOTH_AMOUNT,
+        Math.min(
+          MAX_SMOOTH_AMOUNT,
+          (toolState?.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT) + delta,
         ),
       ),
     });
@@ -697,6 +749,8 @@ export class VertexTool extends Tool<VertexToolState> {
       };
     }
 
+    if (toolState.variant === "smooth") return { polygons: [] };
+
     if (toolState.variant === "draw") {
       const vertices = this.getDrawVertices();
       return {
@@ -758,6 +812,17 @@ export class VertexTool extends Tool<VertexToolState> {
   onPointerDown(event: PointerEvent, context: EventContext): boolean {
     const { state, toolState, setToolState } = this.getState();
     if (!toolState) return false;
+
+    if (toolState.variant === "smooth") {
+      const preview = this.getSmoothPreview(context.worldPos);
+      if (preview && preview.polygon !== preview.source) {
+        this.runHistoryBatch(() =>
+          this.replacePolygon(preview.source, preview.polygon),
+        );
+      }
+      return true;
+    }
+
     // Freehand strokes remain continuous, including their first point.
     const worldPos = isFreehandVariant(toolState.variant)
       ? context.worldPos
@@ -1004,6 +1069,19 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (
+      toolState.variant === "smooth" &&
+      !toolState.previewAutoGrassAll &&
+      ["+", "=", "-", "_"].includes(event.key) &&
+      !event.isComposing &&
+      !event.metaKey &&
+      (!event.ctrlKey || event.getModifierState("AltGraph"))
+    ) {
+      this.adjustSmoothAmount(event.key === "+" || event.key === "=" ? 1 : -1);
+      event.preventDefault();
+      return true;
+    }
+
+    if (
       toolState.variant === "brush" &&
       [",", "."].includes(event.key) &&
       !event.metaKey &&
@@ -1124,7 +1202,11 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
-    if (["pipe", "frame", "draw", "brush"].includes(toolState?.variant ?? ""))
+    if (
+      ["pipe", "frame", "draw", "brush", "smooth"].includes(
+        toolState?.variant ?? "",
+      )
+    )
       return false;
 
     const polygon = findPolygonEdgeNearPosition(
@@ -1283,6 +1365,31 @@ export class VertexTool extends Tool<VertexToolState> {
           width: uiStrokeWidths.boundsHoverScreen / state.zoom,
           opacity: 0.75,
         },
+      ];
+    }
+
+    if (toolState.variant === "smooth") {
+      if (toolState.previewAutoGrassAll) return [];
+      const preview = this.getSmoothPreview();
+      if (!preview) return [];
+      const vertices = preview.polygon.vertices;
+      return [
+        {
+          type: "polyline",
+          points: [...vertices, vertices[0]],
+          color: uiColors.boundsSelected,
+          width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
+          opacity: 0.85,
+        },
+        ...vertices
+          .filter((vertex) => isPointVisible(vertex, viewportRect))
+          .map((vertex) =>
+            createDraftHandleOverlay(
+              vertex,
+              uiSelectionHandle.halfWidthPx / state.zoom,
+              uiSelectionHandle.strokeWidthPx / state.zoom,
+            ),
+          ),
       ];
     }
 

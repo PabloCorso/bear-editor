@@ -55,6 +55,11 @@ import {
   MIN_FRAME_WIDTH_PX,
   MAX_FRAME_WIDTH_PX,
 } from "~/editor/helpers/frame";
+import {
+  DEFAULT_SMOOTH_AMOUNT,
+  MIN_SMOOTH_AMOUNT,
+  MAX_SMOOTH_AMOUNT,
+} from "~/editor/helpers/smooth";
 
 export function ToolInfo() {
   const modifier = useModifier();
@@ -63,6 +68,9 @@ export function ToolInfo() {
   const registeredTools = useEditorRegisteredTools();
   const vertex = useEditorToolState<VertexToolState>("vertex");
   const select = useEditorToolState<SelectToolState>("select");
+  useEditor((state) => state.mousePosition);
+  useEditor((state) => state.mouseOnCanvas);
+  useEditor((state) => state.polygons);
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
   const activeTool = (
@@ -218,6 +226,37 @@ export function ToolInfo() {
             getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
           }
         />
+      </CanvasTipGroup>
+    );
+  }
+
+  if (vertex?.variant === "smooth" && !isAutoGrass) {
+    const amount = vertex.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT;
+    const preview = getActiveTool<VertexTool>()?.getSmoothPreview();
+    return (
+      <CanvasTipGroup title="Smooth" aria-label="Active tool info">
+        <CanvasTipNumberControl
+          label="Amount"
+          accessibleLabel="smoothing amount"
+          value={amount}
+          min={MIN_SMOOTH_AMOUNT}
+          max={MAX_SMOOTH_AMOUNT}
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustSmoothAmount(delta)
+          }
+        />
+        <CanvasTipSegment>
+          {amount > 0 ? "Round corners" : amount < 0 ? "Simplify" : "Unchanged"}
+        </CanvasTipSegment>
+        {preview && (
+          <CanvasTipSegment>
+            {preview.source.vertices.length} → {preview.polygon.vertices.length}{" "}
+            vertices
+          </CanvasTipSegment>
+        )}
+        {preview?.message && (
+          <CanvasTipSegment>{preview.message}</CanvasTipSegment>
+        )}
       </CanvasTipGroup>
     );
   }

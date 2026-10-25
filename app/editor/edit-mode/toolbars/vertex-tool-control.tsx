@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { BezierCurveIcon } from "@phosphor-icons/react/dist/ssr";
 export function getAutoGrassAllShortcut(modifier: string) {
   return `${modifier} + Shift + G`;
 }
@@ -37,8 +38,25 @@ export function VertexToolControl(props: ToolControlButtonProps) {
     <ToolControlMenu
       id={defaultTools.vertex.id}
       button={
-        <ToolControlButton {...defaultTools.vertex} {...props}>
-          <VertexIcon {...getVertexIconProps(vertexToolState?.variant)} />
+        <ToolControlButton
+          {...defaultTools.vertex}
+          {...props}
+          name={
+            vertexToolState?.variant === "smooth"
+              ? defaultTools.vertex.variants.smooth.name
+              : defaultTools.vertex.name
+          }
+          shortcut={
+            vertexToolState?.variant === "smooth"
+              ? undefined
+              : defaultTools.vertex.shortcut
+          }
+        >
+          {vertexToolState?.variant === "smooth" ? (
+            <BezierCurveIcon />
+          ) : (
+            <VertexIcon {...getVertexIconProps(vertexToolState?.variant)} />
+          )}
         </ToolControlButton>
       }
     >
@@ -138,6 +156,18 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         onClick={() => onVariantChange("brush")}
       >
         <VertexIcon {...getVertexIconProps("brush")} />
+      </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
+        name={defaultTools.vertex.variants.smooth.name}
+        shortcut={undefined}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "smooth"}
+        onClick={() => onVariantChange("smooth")}
+      >
+        <BezierCurveIcon />
       </ToolControlButton>
       <div
         role="separator"
