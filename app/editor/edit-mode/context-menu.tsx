@@ -1,3 +1,5 @@
+import { ShapeTool } from "./tools/shape-tool";
+import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
 import {
   useEditorToolState,
   useEditorActions,
@@ -90,7 +92,7 @@ type PointAnchor = {
 };
 
 export function EditorContextMenu() {
-  const { setApples, setPictures, setPolygons } = useEditorActions();
+  const { setApples, setPictures, setPolygons, getTool } = useEditorActions();
   const selectToolState = useEditorToolState<SelectToolState>(
     defaultTools.select.id,
   );
@@ -293,6 +295,14 @@ export function EditorContextMenu() {
   const selectionActionsIndex = toolbarSections.length;
   toolbarSections.push(
     <SelectionActionsMenu
+      canAddShape={
+        getCompleteSelectedPolygons(selectToolState, polygons).length > 0
+      }
+      onAddShape={() =>
+        getTool<ShapeTool>("shape")?.saveShape(
+          getCompleteSelectedPolygons(selectToolState, polygons),
+        )
+      }
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(selectToolState.transformMode)}
       onTransform={() => selectTool?.toggleTransform()}
@@ -583,6 +593,8 @@ function useSelectionGroupIcons(): Record<
 }
 
 function SelectionActionsMenu({
+  canAddShape,
+  onAddShape,
   canTransform,
   transforming,
   onTransform,
@@ -594,6 +606,8 @@ function SelectionActionsMenu({
   onDuplicate,
   onDelete,
 }: {
+  canAddShape: boolean;
+  onAddShape: () => void;
   canTransform: boolean;
   transforming: boolean;
   onTransform: () => void;
@@ -637,6 +651,9 @@ function SelectionActionsMenu({
             </DropdownMenuGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        <DropdownMenuItem disabled={!canAddShape} onClick={onAddShape}>
+          Add to shapes
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem

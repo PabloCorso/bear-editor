@@ -827,6 +827,7 @@ function LevelPresetPreview({
           store: createEditorStore({
             initialPreferences: {
               defaultLevelTitle: DEFAULT_LEVEL_TITLE,
+              customShapes: [],
               animateSprites: false,
               isUIVisible: true,
               levelVisibility: {

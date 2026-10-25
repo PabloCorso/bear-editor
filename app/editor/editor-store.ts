@@ -397,6 +397,7 @@ export function createEditorStore({
           initialPreferences?.playModeZoom ?? DEFAULT_PLAY_MODE_ZOOM,
 
         defaultLevelTitle,
+        customShapes: initialPreferences?.customShapes ?? [],
 
         // View settings
         animateSprites: initialPreferences?.animateSprites ?? true,
@@ -428,6 +429,7 @@ export function createEditorStore({
         levelFolder: new LevelFolder(store as EditorStore),
 
         actions: {
+          setCustomShapes: (customShapes) => set({ customShapes }),
           // Level data operations
           setDefaultLevelTitle: (title) =>
             set({ defaultLevelTitle: normalizeLevelTitle(title) }),

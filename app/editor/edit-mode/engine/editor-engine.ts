@@ -425,7 +425,11 @@ export class EditorEngine {
         pointerPos.x,
         pointerPos.y,
       );
-      this.dispatchToolPointerEvent("up", syntheticEvent);
+      if (this.store.getState().activeToolId === "shape") {
+        this.store.getState().actions.getActiveTool()?.clear?.();
+      } else {
+        this.dispatchToolPointerEvent("up", syntheticEvent);
+      }
     }
 
     this.activeTouchToolPointerId = null;
@@ -644,9 +648,7 @@ export class EditorEngine {
         this.store.getState().actions.setMouseOnCanvas(false);
         this.updateCanvasCursor();
       }
-    } else if (
-      this.store.getState().actions.getActiveTool() instanceof SelectTool
-    ) {
+    } else {
       this.dispatchToolPointerEvent("up", event);
     }
 
@@ -977,6 +979,10 @@ export class EditorEngine {
     this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.delete(event.code);
     const state = this.store.getState();
+    if (!state.isPlayMode && !isUserTyping())
+      state.actions
+        .getActiveTool()
+        ?.onKeyUp?.(event, this.getKeyboardEventContext(state));
     this.refreshSelectionHoverForModifierKeys(state, event);
   };
 
@@ -999,12 +1005,12 @@ export class EditorEngine {
   }
 
   public undo() {
-    this.discardPendingVertexEditBeforeHistory();
+    this.discardPendingToolDraftBeforeHistory();
     this.store.temporal.getState().undo();
   }
 
   public redo() {
-    this.discardPendingVertexEditBeforeHistory();
+    this.discardPendingToolDraftBeforeHistory();
     this.store.temporal.getState().redo();
   }
 
@@ -1041,8 +1047,12 @@ export class EditorEngine {
     });
   }
 
-  private discardPendingVertexEditBeforeHistory() {
+  private discardPendingToolDraftBeforeHistory() {
     const state = this.store.getState();
+    if (state.activeToolId === "shape") {
+      state.actions.getActiveTool()?.clear?.();
+      return;
+    }
     if (state.activeToolId !== "vertex") return;
 
     const toolState = state.actions.getToolState<VertexToolState>("vertex");
