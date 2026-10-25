@@ -1,3 +1,4 @@
+import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
 import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
@@ -53,7 +54,9 @@ export function ControlToolbar({
   );
   const drawingTools = orderedTools.filter(
     (tool) =>
-      !navigationTools.some((navigationTool) => navigationTool.id === tool.id),
+      !navigationTools.some(
+        (navigationTool) => navigationTool.id === tool.id,
+      ) && !isPolygonBooleanTool(tool.id),
   );
 
   return (

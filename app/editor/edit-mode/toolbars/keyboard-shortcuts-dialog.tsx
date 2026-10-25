@@ -444,6 +444,10 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: ["Esc", "Right click"],
+          label: "Cancel polygon operation",
+        },
+        {
           shortcut: defaultTools.vertex.variants.smooth.shortcut,
           label: "Smooth tool",
           icon: (

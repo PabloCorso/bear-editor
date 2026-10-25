@@ -1,4 +1,8 @@
 import {
+  isPolygonBooleanTool,
+  type PolygonBooleanTool,
+} from "../tools/polygon-boolean-tool";
+import {
   useEditor,
   useEditorActions,
   useEditorToolState,
@@ -65,6 +69,19 @@ import {
 } from "~/editor/helpers/smooth";
 
 export function ToolInfo() {
+  const polygonStatus = useEditor((state) => {
+    if (!isPolygonBooleanTool(state.activeToolId)) return null;
+    const interaction = state.actions
+      .getActiveTool<PolygonBooleanTool>()
+      ?.getInteraction();
+    const result = interaction?.result;
+    if (result?.status === "invalid") return "Cannot process these polygons";
+    if (result?.status === "no-overlap") return "Polygons must overlap";
+    if (result?.status === "ready" && result.polygons.length === 0) {
+      return "Result removes both polygons";
+    }
+    return null;
+  });
   const modifier = useModifier();
   const activeToolId = useEditor((state) => state.activeToolId);
   const hasPictures = useEditor((state) => state.pictures.length > 0);
@@ -138,6 +155,21 @@ export function ToolInfo() {
           Properties
           <CanvasTipKey>Right click</CanvasTipKey>
         </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
+  if (isPolygonBooleanTool(activeToolId)) {
+    return (
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        <CanvasTipSegment>
+          {activeToolId === "subtract"
+            ? "Remove the second polygon from the first"
+            : activeToolId === "union"
+              ? "Combine both polygon areas"
+              : "Keep only the overlapping area"}
+        </CanvasTipSegment>
+        {polygonStatus && <CanvasTipSegment>{polygonStatus}</CanvasTipSegment>}
       </CanvasTipGroup>
     );
   }

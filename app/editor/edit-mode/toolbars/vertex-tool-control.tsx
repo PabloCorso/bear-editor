@@ -1,3 +1,5 @@
+import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
+import { PolygonOperationIcon } from "./polygon-operation-icon";
 import {
   ToolControlButton,
   ToolControlMenu,
@@ -6,6 +8,7 @@ import {
 import { ToolButton } from "~/components/tool-button";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import {
+  useEditor,
   useEditorActions,
   useEditorToolState,
 } from "~/editor/use-editor-store";
@@ -27,7 +30,11 @@ export function getAutoGrassAllShortcut(modifier: string) {
   return `${modifier} + Shift + G`;
 }
 
+const polygonOperations = ["union", "subtract", "intersect"] as const;
+
 export function VertexToolControl(props: ToolControlButtonProps) {
+  const activeToolId = useEditor((state) => state.activeToolId);
+  const operation = isPolygonBooleanTool(activeToolId) ? activeToolId : null;
   const vertexToolState = useEditorToolState<VertexToolState>(
     defaultTools.vertex.id,
   );
@@ -36,22 +43,29 @@ export function VertexToolControl(props: ToolControlButtonProps) {
   return (
     <ToolControlMenu
       id={defaultTools.vertex.id}
+      activeToolIds={polygonOperations}
       button={
         <ToolControlButton
-          {...defaultTools.vertex}
+          {...(operation ? defaultTools[operation] : defaultTools.vertex)}
           {...props}
           name={
-            vertexToolState?.variant === "smooth"
+            operation
+              ? defaultTools[operation].name
+              : vertexToolState?.variant === "smooth"
               ? defaultTools.vertex.variants.smooth.name
               : defaultTools.vertex.name
           }
           shortcut={
-            vertexToolState?.variant === "smooth"
+            operation
+              ? defaultTools[operation].shortcut
+              : vertexToolState?.variant === "smooth"
               ? defaultTools.vertex.variants.smooth.shortcut
               : defaultTools.vertex.shortcut
           }
         >
-          {vertexToolState?.variant === "smooth" ? (
+          {operation ? (
+            <PolygonOperationIcon operation={operation} />
+          ) : vertexToolState?.variant === "smooth" ? (
             <VertexIcon {...getVertexIconProps("smooth")} />
           ) : (
             <VertexIcon {...getVertexIconProps(vertexToolState?.variant)} />
@@ -73,6 +87,8 @@ type VertexToolbarProps = ToolbarProps & {
 };
 
 function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
+  const activeToolId = useEditor((state) => state.activeToolId);
+  const isVertexActive = activeToolId === defaultTools.vertex.id;
   const vertexTool = useEditorToolState<VertexToolState>(
     defaultTools.vertex.id,
   );
@@ -86,7 +102,10 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={!vertexTool?.variant || vertexTool.variant === "normal"}
+        isActive={
+          isVertexActive &&
+          (!vertexTool?.variant || vertexTool.variant === "normal")
+        }
         onClick={() => onVariantChange("normal")}
       >
         <VertexIcon {...getVertexIconProps("normal")} />
@@ -98,7 +117,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "grass"}
+        isActive={isVertexActive && vertexTool?.variant === "grass"}
         onClick={() => onVariantChange("grass")}
       >
         <VertexIcon {...getVertexIconProps("grass")} />
@@ -110,7 +129,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "autoGrass"}
+        isActive={isVertexActive && vertexTool?.variant === "autoGrass"}
         onClick={() => onVariantChange("autoGrass")}
       >
         <VertexIcon {...getVertexIconProps("autoGrass")} />
@@ -127,7 +146,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "pipe"}
+        isActive={isVertexActive && vertexTool?.variant === "pipe"}
         onClick={() => onVariantChange("pipe")}
       >
         <VertexIcon {...getVertexIconProps("pipe")} />
@@ -139,7 +158,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "draw"}
+        isActive={isVertexActive && vertexTool?.variant === "draw"}
         onClick={() => onVariantChange("draw")}
       >
         <VertexIcon {...getVertexIconProps("draw")} />
@@ -151,7 +170,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "brush"}
+        isActive={isVertexActive && vertexTool?.variant === "brush"}
         onClick={() => onVariantChange("brush")}
       >
         <VertexIcon {...getVertexIconProps("brush")} />
@@ -163,11 +182,22 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "smooth"}
+        isActive={isVertexActive && vertexTool?.variant === "smooth"}
         onClick={() => onVariantChange("smooth")}
       >
         <VertexIcon {...getVertexIconProps("smooth")} />
       </ToolControlButton>
+      {polygonOperations.map((operation) => (
+        <ToolControlButton
+          key={operation}
+          {...defaultTools[operation]}
+          tooltipSide="right"
+          size="sm"
+          showLabel
+        >
+          <PolygonOperationIcon operation={operation} />
+        </ToolControlButton>
+      ))}
       <div
         role="separator"
         aria-orientation="horizontal"
@@ -180,7 +210,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "frame"}
+        isActive={isVertexActive && vertexTool?.variant === "frame"}
         onClick={() => onVariantChange("frame")}
       >
         <VertexIcon {...getVertexIconProps("frame")} />
@@ -192,7 +222,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "cutConnect"}
+        isActive={isVertexActive && vertexTool?.variant === "cutConnect"}
         onClick={() => onVariantChange("cutConnect")}
       >
         <VertexIcon {...getVertexIconProps("cutConnect")} />
