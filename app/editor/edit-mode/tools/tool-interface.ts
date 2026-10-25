@@ -41,6 +41,11 @@ export abstract class Tool<T extends ToolState = ToolState> {
     modifierPressed?: boolean;
   }): WorldRenderOverlayItem[];
 
+  // Non-destructive replacement preview, rendered with the level’s normal fill rules.
+  getPolygonPreview?():
+    | { replacedPolygons: Polygon[]; polygons: Polygon[] }
+    | undefined;
+
   // Draft elements for previewing while using the tool
   getDrafts?(): {
     polygons?: Polygon[];

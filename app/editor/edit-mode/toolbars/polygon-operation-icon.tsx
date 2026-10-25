@@ -1,0 +1,32 @@
+import type { ComponentPropsWithoutRef } from "react";
+import type { PolygonOperation } from "~/editor/helpers/polygon-boolean";
+
+const paths = {
+  union: "M3 3H15V9H21V21H9V15H3Z",
+  subtract: "M3 3H15V9H9V15H3Z",
+  intersect: "M9 9H15V15H9Z",
+};
+
+export function PolygonOperationIcon({
+  operation,
+  ...props
+}: ComponentPropsWithoutRef<"svg"> & { operation: PolygonOperation }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <path
+        d="M3 3H15V15H3Z M9 9H21V21H9Z"
+        stroke="currentColor"
+        strokeWidth="1"
+        opacity="0.35"
+      />
+      <path
+        d={paths[operation]}
+        fill="currentColor"
+        fillOpacity="0.3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
