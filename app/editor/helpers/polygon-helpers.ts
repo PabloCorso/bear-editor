@@ -202,7 +202,10 @@ function getPolygonCenter(vertices: Position[]): Position {
 }
 
 // Helper function to check if a point is inside a polygon with improved precision
-function isPointInPolygon(point: Position, vertices: Position[]): boolean {
+export function isPointInPolygon(
+  point: Position,
+  vertices: Position[],
+): boolean {
   if (vertices.length < 3) return false;
 
   let inside = false;

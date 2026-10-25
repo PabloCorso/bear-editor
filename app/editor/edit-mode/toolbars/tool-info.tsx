@@ -1,3 +1,4 @@
+import { ShapeToolInfo } from "./shape-tool-control";
 import {
   useEditor,
   useEditorActions,
@@ -40,6 +41,8 @@ export function ToolInfo() {
   const select = useEditorToolState<SelectToolState>("select");
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
+
+  if (activeToolId === "shape") return <ShapeToolInfo />;
 
   if (activeToolId === "select" && select?.transformMode) {
     return (

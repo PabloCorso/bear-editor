@@ -1,3 +1,4 @@
+import type { CustomShape } from "./helpers/shapes";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -84,6 +85,7 @@ export type EditorState = EditorLevel & {
   playModeZoom: number;
 
   defaultLevelTitle: string;
+  customShapes: CustomShape[];
 
   // View settings
   animateSprites: boolean;
@@ -127,6 +129,7 @@ export type EditorState = EditorLevel & {
     setFlowers: (flowers: Position[]) => void;
     setPictures: (pictures: Picture[]) => void;
 
+    setCustomShapes: (shapes: CustomShape[]) => void;
     setDefaultLevelTitle: (title: string) => void;
     setLevelName: (name: string) => void;
     setLgr: (lgr: string) => void;
