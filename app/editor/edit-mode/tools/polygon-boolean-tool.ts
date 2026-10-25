@@ -18,7 +18,12 @@ export type PolygonBooleanToolState = {
 };
 
 export function isPolygonBooleanTool(id: string): id is PolygonOperation {
-  return id === "union" || id === "subtract" || id === "intersect";
+  return (
+    id === "union" ||
+    id === "subtract" ||
+    id === "intersect" ||
+    id === "exclude"
+  );
 }
 
 export abstract class PolygonBooleanTool extends Tool<PolygonBooleanToolState> {
@@ -145,7 +150,7 @@ export abstract class PolygonBooleanTool extends Tool<PolygonBooleanToolState> {
 
   getDrafts() {
     const { source, target, result } = this.getInteraction();
-    if (!source || !target || result?.status !== "ready") return undefined;
+    if (!source || !target || result?.status !== "ready") return {};
     const { state } = this.getState();
     return {
       replacementPolygons: state.polygons.flatMap((polygon) =>
@@ -213,4 +218,9 @@ export class SubtractTool extends PolygonBooleanTool {
 export class IntersectTool extends PolygonBooleanTool {
   readonly meta = defaultTools.intersect;
   readonly operation = "intersect";
+}
+
+export class ExcludeTool extends PolygonBooleanTool {
+  readonly meta = defaultTools.exclude;
+  readonly operation = "exclude";
 }

@@ -3,9 +3,9 @@ import polygonClipping, {
 } from "polygon-clipping";
 import type { Polygon } from "~/editor/elma-types";
 
-export type PolygonOperation = "union" | "subtract" | "intersect";
+export type PolygonOperation = "union" | "subtract" | "intersect" | "exclude";
 export type PolygonOperationResult =
-  | { status: "ready"; polygons: Polygon[] }
+  | { status: "ready"; polygons: Polygon[]; touchingVertices?: boolean }
   | { status: "no-overlap" | "invalid" };
 
 /** Work on enclosed areas; Elma represents holes as separate nested rings. */
@@ -40,9 +40,33 @@ export function applyPolygonOperation(
         ? overlap
         : operation === "union"
           ? polygonClipping.union(a, b)
-          : polygonClipping.difference(a, b);
+          : operation === "exclude"
+            ? polygonClipping.xor(a, b)
+            : polygonClipping.difference(a, b);
+    // Exact XOR can produce contours that meet at the former intersections.
+    // Preserve the geometry and surface this before committing it.
+    const touchingVertices =
+      operation === "exclude" &&
+      result.some((polygon, i) =>
+        result
+          .slice(i + 1)
+          .some((other) =>
+            polygon.some((ring) =>
+              other.some((otherRing) =>
+                ring.some(([x, y]) =>
+                  otherRing.some(
+                    ([ox, oy]) =>
+                      Math.abs(x - ox) < 0.0000002 &&
+                      Math.abs(y - oy) < 0.0000002,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      );
     return {
       status: "ready",
+      ...(touchingVertices ? { touchingVertices: true } : {}),
       polygons: result.flatMap((polygon) =>
         polygon.map((ring) => ({
           grass: false,

@@ -30,7 +30,12 @@ export function getAutoGrassAllShortcut(modifier: string) {
   return `${modifier} + Shift + G`;
 }
 
-const polygonOperations = ["union", "subtract", "intersect"] as const;
+const polygonOperations = [
+  "union",
+  "subtract",
+  "intersect",
+  "exclude",
+] as const;
 
 export function VertexToolControl(props: ToolControlButtonProps) {
   const activeToolId = useEditor((state) => state.activeToolId);
@@ -52,15 +57,15 @@ export function VertexToolControl(props: ToolControlButtonProps) {
             operation
               ? defaultTools[operation].name
               : vertexToolState?.variant === "smooth"
-              ? defaultTools.vertex.variants.smooth.name
-              : defaultTools.vertex.name
+                ? defaultTools.vertex.variants.smooth.name
+                : defaultTools.vertex.name
           }
           shortcut={
             operation
               ? defaultTools[operation].shortcut
               : vertexToolState?.variant === "smooth"
-              ? defaultTools.vertex.variants.smooth.shortcut
-              : defaultTools.vertex.shortcut
+                ? defaultTools.vertex.variants.smooth.shortcut
+                : defaultTools.vertex.shortcut
           }
         >
           {operation ? (

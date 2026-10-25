@@ -80,6 +80,9 @@ export function ToolInfo() {
     if (result?.status === "ready" && result.polygons.length === 0) {
       return "Result removes both polygons";
     }
+    if (result?.status === "ready" && result.touchingVertices) {
+      return "Result has touching vertices";
+    }
     return null;
   });
   const modifier = useModifier();
@@ -167,7 +170,9 @@ export function ToolInfo() {
             ? "Remove the second polygon from the first"
             : activeToolId === "union"
               ? "Combine both polygon areas"
-              : "Keep only the overlapping area"}
+              : activeToolId === "exclude"
+                ? "Keep the non-overlapping areas"
+                : "Keep only the overlapping area"}
         </CanvasTipSegment>
         {polygonStatus && <CanvasTipSegment>{polygonStatus}</CanvasTipSegment>}
       </CanvasTipGroup>
