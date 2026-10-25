@@ -4,10 +4,7 @@ import {
 } from "~/editor/use-editor-store";
 import { cn } from "~/utils/misc";
 import { FloatingViewportToolbar } from "./floating-toolbar";
-import {
-  ToolButton,
-  type ToolButtonProps,
-} from "~/components/tool-button";
+import { ToolButton, type ToolButtonProps } from "~/components/tool-button";
 
 export type ToolControlButtonProps = ToolButtonProps & {
   id?: string;
@@ -50,15 +47,19 @@ export function ToolControlButton({
 
 export function ToolMenu({
   id,
+  activeToolIds,
   className,
   children,
   ...props
 }: React.ComponentPropsWithoutRef<"div"> & {
   id: string;
+  activeToolIds?: readonly string[];
   children: React.ReactNode;
 }) {
   const activeTool = useEditorActiveTool();
-  const isActive = activeTool?.meta.id === id;
+  const isActive =
+    activeTool?.meta.id === id ||
+    Boolean(activeTool && activeToolIds?.includes(activeTool.meta.id));
   if (!isActive) return null;
   return (
     <FloatingViewportToolbar className={className} {...props}>
@@ -69,19 +70,23 @@ export function ToolMenu({
 
 type ToolControlMenuProps = {
   id: string;
+  activeToolIds?: readonly string[];
   button: React.ReactNode;
   children: React.ReactNode;
 };
 
 export function ToolControlMenu({
   id,
+  activeToolIds,
   button,
   children,
 }: ToolControlMenuProps) {
   return (
     <>
       {button}
-      <ToolMenu id={id}>{children}</ToolMenu>
+      <ToolMenu id={id} activeToolIds={activeToolIds}>
+        {children}
+      </ToolMenu>
     </>
   );
 }

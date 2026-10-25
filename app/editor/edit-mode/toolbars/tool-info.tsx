@@ -1,4 +1,9 @@
 import {
+  isPolygonBooleanTool,
+  type PolygonBooleanTool,
+} from "../tools/polygon-boolean-tool";
+import { defaultTools } from "../tools/default-tools";
+import {
   useEditor,
   useEditorActions,
   useEditorToolState,
@@ -34,6 +39,24 @@ import {
 } from "~/editor/helpers/pipe";
 
 export function ToolInfo() {
+  const polygonMessage = useEditor((state) => {
+    if (!isPolygonBooleanTool(state.activeToolId)) return null;
+    const interaction = state.actions
+      .getActiveTool<PolygonBooleanTool>()
+      ?.getInteraction();
+    const result = interaction?.result;
+    return !interaction?.source
+      ? "Click the first polygon"
+      : result?.status === "invalid"
+        ? "Cannot process these polygons"
+        : result?.status === "no-overlap"
+          ? "Choose an overlapping polygon"
+          : result?.status === "ready" && result.polygons.length === 0
+            ? "Click to remove both polygons — the result is empty"
+            : result?.status === "ready" && result.touchingVertices
+              ? "Click to apply · Result has touching vertices"
+              : "Hover another polygon to preview · Click to apply";
+  });
   const modifier = useModifier();
   const activeToolId = useEditor((state) => state.activeToolId);
   const vertex = useEditorToolState<VertexToolState>("vertex");
@@ -69,6 +92,29 @@ export function ToolInfo() {
             <CanvasTipKey>Shift + Drag</CanvasTipKey>
           </CanvasTipSegment>
         )}
+      </CanvasTipGroup>
+    );
+  }
+
+  if (isPolygonBooleanTool(activeToolId)) {
+    return (
+      <CanvasTipGroup
+        title={defaultTools[activeToolId].name}
+        aria-label="Active tool info"
+      >
+        <CanvasTipSegment>{polygonMessage}</CanvasTipSegment>
+        <CanvasTipSegment>
+          {activeToolId === "subtract"
+            ? "Second removed from first"
+            : activeToolId === "union"
+              ? "Combine both areas"
+              : activeToolId === "exclude"
+                ? "Keep non-overlapping areas"
+                : "Keep only the overlap"}
+        </CanvasTipSegment>
+        <CanvasTipSegment>
+          Cancel<CanvasTipKey>Esc</CanvasTipKey>
+        </CanvasTipSegment>
       </CanvasTipGroup>
     );
   }

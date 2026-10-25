@@ -1,3 +1,9 @@
+import {
+  UnionTool,
+  SubtractTool,
+  IntersectTool,
+  ExcludeTool,
+} from "./tools/polygon-boolean-tool";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -113,6 +119,10 @@ export function useEditorView({
         SelectTool,
         HandTool,
         VertexTool,
+        UnionTool,
+        SubtractTool,
+        IntersectTool,
+        ExcludeTool,
         AppleTool,
         KillerTool,
         FlowerTool,
