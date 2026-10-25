@@ -42,7 +42,6 @@ Planned features and feedback for Bear Editor.
   - Chain level working areas: let different designers build separate parts, with optional locks to prevent edits by others and optional hiding to keep parts secret until revealed.
 - Version history info
 - Export to SVG
-- Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
 - Save start position
   - Checkpoints: create, move, select for play mode, and delete multiple translucent, distinctly colored bike markers without moving the actual level start. Editor-only and session-local (not stored in Elma level files), with per-designer test starts in the future multiplayer editor.
 - Import level

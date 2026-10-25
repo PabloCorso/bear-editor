@@ -24,6 +24,7 @@ export const defaultTools = {
   killer: { id: "killer", name: "Killer", shortcut: "K" },
   flower: { id: "flower", name: "Flower", shortcut: "F" },
   picture: { id: "picture", name: "Picture", shortcut: "P" },
+  textureFill: { id: "textureFill", name: "Texture Fill", shortcut: "" },
   texture: { id: "texture", name: "Texture", shortcut: "T" },
 } as const satisfies Record<string, ToolMeta>;
 
@@ -39,4 +40,5 @@ export const defaultToolOrder: string[] = [
   defaultTools.flower.id,
   defaultTools.picture.id,
   defaultTools.texture.id,
+  defaultTools.textureFill.id,
 ];

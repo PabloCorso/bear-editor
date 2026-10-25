@@ -49,5 +49,6 @@ export abstract class Tool<T extends ToolState = ToolState> {
     flowers?: Position[];
     start?: Position;
     pictures?: Picture[];
+    showPictureBounds?: boolean;
   };
 }

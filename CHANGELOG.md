@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-25
+
+- Add Texture Fill with automatic mask sizes, overlap, and polygon hover previews.
+
 ## 2026-10-24
 
 - Improve auto grass corners logic.
