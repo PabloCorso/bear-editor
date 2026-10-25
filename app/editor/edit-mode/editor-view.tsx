@@ -1,3 +1,4 @@
+import { TextTool } from "./tools/text-tool";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -113,6 +114,7 @@ export function useEditorView({
         SelectTool,
         HandTool,
         VertexTool,
+        TextTool,
         AppleTool,
         KillerTool,
         FlowerTool,
