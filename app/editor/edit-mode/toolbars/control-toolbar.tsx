@@ -1,3 +1,4 @@
+import { TextToolControl } from "./text-tool-control";
 import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
@@ -105,6 +106,7 @@ function RegisteredToolControl({
   if (meta.id === defaultTools.vertex.id) {
     return <VertexToolControl {...props} />;
   }
+  if (meta.id === defaultTools.text.id) return <TextToolControl {...props} />;
   if (meta.id === defaultTools.apple.id) {
     return <AppleToolControl {...props} />;
   }
