@@ -232,6 +232,14 @@ export class WebGLRenderContext {
     return texture;
   }
 
+  releaseTexture(sprite: ImageBitmap) {
+    const texture = this.textureCache.get(sprite);
+    if (!texture) return;
+    this.gl.deleteTexture(texture);
+    this.textures.delete(texture);
+    this.textureCache.delete(sprite);
+  }
+
   private getCanvasTexture(sprite: HTMLCanvasElement) {
     const cached = this.canvasTextureCache.get(sprite);
     const texture = cached ?? createTexture(this.gl, sprite);

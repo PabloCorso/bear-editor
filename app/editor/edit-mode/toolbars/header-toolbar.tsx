@@ -1,3 +1,4 @@
+import { importReferenceImage } from "~/editor/reference-images";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -37,6 +38,7 @@ import {
   FilePlusIcon,
   FloppyDiskIcon,
   FolderOpenIcon,
+  ImageIcon,
   GearIcon,
   WarningDiamondIcon,
   XIcon,
@@ -459,10 +461,37 @@ function MainDropdownMenu({
   actions: ReturnType<typeof useMainMenuActions>;
 }) {
   const { handleNew, handleOpenFile, handleSave, handleSaveAs } = actions;
+  const store = useEditorStore();
+  const imageInput = useRef<HTMLInputElement>(null);
   const modifier = useModifier();
 
   return (
     <>
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const canvas = document.querySelector("canvas");
+          if (!canvas) return;
+          try {
+            await importReferenceImage(store, file, {
+              width: canvas.clientWidth,
+              height: canvas.clientHeight,
+            });
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Could not import this image.",
+            );
+          }
+        }}
+      />
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger>
@@ -501,6 +530,12 @@ function MainDropdownMenu({
               }}
             >
               Open
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              iconBefore={<ImageIcon />}
+              onClick={() => imageInput.current?.click()}
+            >
+              Import image…
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />

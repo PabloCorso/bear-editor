@@ -51,6 +51,7 @@ export function buildEditorWorldScene({
   const scenePolygons = getScenePolygons(state);
 
   return {
+    referenceImages: state.referenceImages,
     clearColor: "#1a1a2e",
     ground: state.ground,
     sky: state.sky,

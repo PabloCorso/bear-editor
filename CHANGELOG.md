@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-25
+
+- Add Import image… for session reference images with move, resize, rotate, opacity, lock, and visibility controls.
+
 ## 2026-10-24
 
 - Improve auto grass corners logic.
