@@ -1,5 +1,4 @@
 import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
-import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
 import {
   defaultToolOrder,
@@ -11,8 +10,8 @@ import {
   ToolbarSeparator,
   type ToolbarProps,
 } from "~/components/ui/toolbar";
-import { useLgrAssets, useLgrSprite } from "~/components/use-lgr-assets";
-import { AppleToolControl } from "./apple-tool-control";
+import { useLgrAssets } from "~/components/use-lgr-assets";
+import { ObjectToolControl } from "./object-tool-control";
 import { PictureToolControl } from "./picture-tool-control";
 import { TextureToolControl } from "./texture-tool-control";
 import { VertexToolControl } from "./vertex-tool-control";
@@ -51,7 +50,9 @@ export function ControlToolbar({
   );
   const drawingTools = orderedTools.filter(
     (tool) =>
-      !navigationTools.some((navigationTool) => navigationTool.id === tool.id),
+      !navigationToolIds.has(tool.id) &&
+      tool.id !== defaultTools.killer.id &&
+      tool.id !== defaultTools.flower.id,
   );
 
   return (
@@ -106,13 +107,7 @@ function RegisteredToolControl({
     return <VertexToolControl {...props} />;
   }
   if (meta.id === defaultTools.apple.id) {
-    return <AppleToolControl {...props} />;
-  }
-  if (meta.id === defaultTools.killer.id) {
-    return <KillerToolControl {...props} />;
-  }
-  if (meta.id === defaultTools.flower.id) {
-    return <FlowerToolControl {...props} />;
+    return <ObjectToolControl {...props} />;
   }
   if (meta.id === defaultTools.picture.id) {
     return <PictureToolControl {...props} />;
@@ -137,32 +132,6 @@ function HandToolControl(props: ToolControlButtonProps) {
   return (
     <ToolControlButton {...defaultTools.hand} {...props}>
       <HandIcon weight="light" />
-    </ToolControlButton>
-  );
-}
-
-function KillerToolControl(props: ToolControlButtonProps) {
-  const killerSprite = useLgrSprite("qkiller");
-  return (
-    <ToolControlButton
-      isLoading={!killerSprite.src}
-      {...defaultTools.killer}
-      {...props}
-    >
-      <SpriteIcon src={killerSprite.src} />
-    </ToolControlButton>
-  );
-}
-
-function FlowerToolControl(props: ToolControlButtonProps) {
-  const flowerSprite = useLgrSprite("qexit");
-  return (
-    <ToolControlButton
-      isLoading={!flowerSprite.src}
-      {...defaultTools.flower}
-      {...props}
-    >
-      <SpriteIcon src={flowerSprite.src} />
     </ToolControlButton>
   );
 }
