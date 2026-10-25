@@ -385,6 +385,9 @@ export function createEditorStore({
           defaultLevelTitle,
         ),
 
+        referenceImages: [],
+        selectedReferenceImageId: null,
+
         // Editor state
         activeToolId: initialToolId,
         mousePosition: { x: 0, y: 0 },
@@ -515,7 +518,7 @@ export function createEditorStore({
             }
 
             // Update store with new tool
-            set({ activeToolId: toolId });
+            set({ activeToolId: toolId, selectedReferenceImageId: null });
             const tool = state.toolsMap.get(toolId);
             tool?.onActivate?.(variant);
           },
@@ -640,7 +643,10 @@ export function createEditorStore({
               document.level,
               defaultLevelTitle,
             );
+            for (const image of get().referenceImages) image.bitmap.close();
             set({
+              referenceImages: [],
+              selectedReferenceImageId: null,
               ...normalizedLevel,
               documentSession: createDocumentSession(
                 { ...document, level: normalizedLevel },

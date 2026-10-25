@@ -1,3 +1,4 @@
+import { ReferenceImagesOverlay } from "./edit-mode/reference-images-overlay";
 import { lazy, Suspense } from "react";
 import { useHotkeys } from "@mantine/hooks";
 import { ControlToolbar } from "~/editor/edit-mode/toolbars/control-toolbar";
@@ -45,6 +46,7 @@ export function EditorShell({
     <>
       <div className="relative flex-1">
         <EditorView ref={canvasRef} />
+        <ReferenceImagesOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
             <LazyPlayModeOverlay rendererBackend={rendererBackend} />

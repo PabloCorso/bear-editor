@@ -1,3 +1,4 @@
+import type { ReferenceImage } from "./reference-images";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -72,6 +73,8 @@ export type EditorDocumentInput = {
 
 export type EditorState = EditorLevel & {
   documentSession: EditorDocumentSession;
+  referenceImages: ReferenceImage[];
+  selectedReferenceImageId: string | null;
 
   // Editor state
   activeToolId: string;

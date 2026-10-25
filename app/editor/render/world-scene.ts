@@ -1,3 +1,4 @@
+import type { ReferenceImage } from "../reference-images";
 import type { BikeCoords } from "~/editor/kuski-geometry";
 import type { Gravity } from "~/editor/elma-types";
 import type { WorldRect } from "~/editor/render/world-geometry";
@@ -154,6 +155,7 @@ export type WorldRenderDrawItem =
   | WorldRenderBikeItem;
 
 export type WorldRenderScene = {
+  referenceImages?: ReferenceImage[];
   clearColor: string;
   ground: string;
   sky: string;

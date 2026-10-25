@@ -500,6 +500,32 @@ function getShortcutGroups(
       ],
     },
     {
+      title: "Reference images",
+      items: [
+        {
+          shortcut: "Drag",
+          label:
+            "Move image with Select; drag a corner to resize proportionally",
+        },
+        {
+          shortcut: "Shift + Drag",
+          label: "Snap image rotation to 15° with the rotation handle",
+        },
+        {
+          shortcut: ["Shift", "Alt"],
+          label: "Select level elements behind reference images",
+        },
+        {
+          shortcut: "Escape",
+          label: "Cancel image drag or deselect focused image",
+        },
+        {
+          shortcut: ["Delete", "Backspace"],
+          label: "Delete focused reference image",
+        },
+      ],
+    },
+    {
       title: "General",
       items: [
         {
