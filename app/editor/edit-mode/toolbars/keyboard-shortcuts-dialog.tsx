@@ -399,6 +399,25 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: defaultTools.vertex.variants.cutConnect.shortcut,
+          label: "Select Cut & Connect tool",
+          icon: (
+            <VertexIcon
+              {...getVertexIconProps("cutConnect")}
+              className="h-6 w-6"
+            />
+          ),
+          subItems: [
+            {
+              shortcut: "Drag / Click twice",
+              label: "Extend the starting sky or ground along the stroke",
+            },
+            { shortcut: ["-", "+"], label: "Adjust width" },
+            { shortcut: "Enter", label: "Apply at cursor" },
+            { shortcut: ["Esc", "Right click"], label: "Cancel stroke" },
+          ],
+        },
+        {
           shortcut: AUTO_GRASS_ALL_SHORTCUT,
           label: "AutoGrass all polygons",
           icon: (

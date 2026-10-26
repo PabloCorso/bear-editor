@@ -295,10 +295,12 @@ function getDrawItemQueue(
   ].sort((a, b) => b.distance - a.distance);
 }
 
-function getScenePolygons(state: EditorState) {
+function getScenePolygons(state: EditorState): ScenePolygon[] {
   const activeTool = state.actions.getActiveTool();
+  const drafts = activeTool?.getDrafts?.();
+  if (drafts?.replacementPolygons) return drafts.replacementPolygons;
   const draftPolygons: ScenePolygon[] =
-    activeTool?.getDrafts?.()?.polygons?.map((polygon) => ({
+    drafts?.polygons?.map((polygon) => ({
       ...polygon,
       opacity: DRAFT_PREVIEW_OPACITY,
     })) || [];

@@ -19,6 +19,7 @@ export const defaultTools = {
     variants: {
       grass: { name: "Grass", shortcut: "G" },
       pipe: { name: "Pipe", shortcut: "Shift + P" },
+      cutConnect: { name: "Cut & Connect", shortcut: "C" },
       autoGrass: { name: "AutoGrass", shortcut: "" },
     },
   },

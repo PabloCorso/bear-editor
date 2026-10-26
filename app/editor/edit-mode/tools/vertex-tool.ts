@@ -32,6 +32,13 @@ import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import { checkModifierKey } from "~/utils/misc";
 import fastDeepEqual from "fast-deep-equal";
+import {
+  cutAndConnect,
+  DEFAULT_CUT_CONNECT_WIDTH_PX,
+  MIN_CUT_CONNECT_WIDTH_PX,
+  MAX_CUT_CONNECT_WIDTH_PX,
+  type CutConnectResult,
+} from "~/editor/helpers/cut-and-connect";
 
 import {
   createPipePolygon,
@@ -57,7 +64,8 @@ export type VertexToolVariant =
   | "grass"
   | "both"
   | "autoGrass"
-  | "pipe";
+  | "pipe"
+  | "cutConnect";
 
 export type VertexToolState = {
   drawingPolygon: Polygon;
@@ -71,6 +79,8 @@ export type VertexToolState = {
   pipeAppleMode?: PipeAppleMode;
   pipeAppleDistance?: number;
   pipeAppleCount?: number;
+  cutConnectWidthPx?: number;
+  cutConnectError?: string;
 };
 
 export function canToggleVertexToolDirection(
@@ -124,12 +134,22 @@ export class VertexTool extends Tool<VertexToolState> {
 
   private pipeCountDigits = "";
   private lastPipeCountDigitAt = 0;
+  private cutPointer?: { id: number; x: number; y: number; dragged: boolean };
+  private cutPreview?: {
+    polygons: Polygon[];
+    start: Position;
+    end: Position;
+    width: number;
+    result: CutConnectResult;
+  };
 
   constructor(store: EditorStore) {
     super(store);
   }
 
   onActivate(variant?: VertexToolVariant): void {
+    this.cutPointer = undefined;
+    this.cutPreview = undefined;
     this.pipeCountDigits = "";
     const { toolState, setToolState } = this.getState();
     const nextVariant = variant ?? toolState?.variant ?? DEFAULT_VARIANT;
@@ -139,6 +159,7 @@ export class VertexTool extends Tool<VertexToolState> {
       editingPolygon: undefined,
       variant: nextVariant,
       previewAutoGrassAll: false,
+      cutConnectError: undefined,
       pipeStart: false,
       pipeFlower: false,
     });
@@ -153,6 +174,8 @@ export class VertexTool extends Tool<VertexToolState> {
   }
 
   clear(): void {
+    this.cutPointer = undefined;
+    this.cutPreview = undefined;
     this.pipeCountDigits = "";
     const { toolState, setToolState } = this.getState();
     // Preserve the current variant when clearing
@@ -163,6 +186,7 @@ export class VertexTool extends Tool<VertexToolState> {
       editPivot: undefined,
       variant: currentVariant,
       previewAutoGrassAll: false,
+      cutConnectError: undefined,
       pipeStart: false,
       pipeFlower: false,
     });
@@ -171,6 +195,90 @@ export class VertexTool extends Tool<VertexToolState> {
   togglePipeStart(): void {
     const { toolState, setToolState } = this.getState();
     setToolState({ pipeStart: !toolState?.pipeStart });
+  }
+
+  adjustCutConnectWidth(delta: number): void {
+    const { toolState, setToolState } = this.getState();
+    setToolState({
+      cutConnectWidthPx: Math.max(
+        MIN_CUT_CONNECT_WIDTH_PX,
+        Math.min(
+          MAX_CUT_CONNECT_WIDTH_PX,
+          (toolState?.cutConnectWidthPx ?? DEFAULT_CUT_CONNECT_WIDTH_PX) +
+            delta,
+        ),
+      ),
+    });
+  }
+
+  private getCutPreview(end?: Position): CutConnectResult | undefined {
+    const { state, toolState } = this.getState();
+    const start = toolState?.drawingPolygon.vertices[0];
+    if (!start || (!end && !state.mouseOnCanvas)) return undefined;
+    end ??= state.mousePosition;
+    const width =
+      (toolState?.cutConnectWidthPx ?? DEFAULT_CUT_CONNECT_WIDTH_PX) /
+      ELMA_PIXELS_PER_WORLD_UNIT;
+    const cached = this.cutPreview;
+    if (
+      cached &&
+      cached.polygons === state.polygons &&
+      cached.start === start &&
+      cached.end.x === end.x &&
+      cached.end.y === end.y &&
+      cached.width === width
+    ) {
+      return cached.result;
+    }
+    const result = cutAndConnect(state.polygons, start, end, width);
+    this.cutPreview = { polygons: state.polygons, start, end, width, result };
+    return result;
+  }
+
+  private commitCut(end: Position): void {
+    const { state } = this.getState();
+    const result = this.getCutPreview(end);
+    if (result && result.polygons !== state.polygons) {
+      this.runHistoryBatch(() => {
+        state.actions.setPolygons(result.polygons);
+        this.clear();
+      });
+    } else {
+      this.clear();
+      if (result?.error)
+        this.getState().setToolState({ cutConnectError: result.error });
+    }
+  }
+
+  onPointerMove(event: PointerEvent, context: EventContext): boolean {
+    if (!this.cutPointer || event.pointerId !== this.cutPointer.id)
+      return false;
+    if (
+      Math.hypot(
+        context.screenX - this.cutPointer.x,
+        context.screenY - this.cutPointer.y,
+      ) >= 4
+    ) {
+      this.cutPointer.dragged = true;
+    }
+    return true;
+  }
+
+  onPointerUp(event: PointerEvent, context: EventContext): boolean {
+    const pointer = this.cutPointer;
+    if (!pointer || event.pointerId !== pointer.id) return false;
+    this.cutPointer = undefined;
+    if (event.type === "pointercancel") {
+      this.clear();
+      return true;
+    }
+    if (
+      pointer.dragged ||
+      Math.hypot(context.screenX - pointer.x, context.screenY - pointer.y) >= 4
+    ) {
+      this.commitCut(context.worldPos);
+    }
+    return true;
   }
 
   togglePipeFlower(): void {
@@ -308,6 +416,11 @@ export class VertexTool extends Tool<VertexToolState> {
       };
     }
 
+    if (toolState.variant === "cutConnect") {
+      const preview = this.getCutPreview();
+      return { polygons: [], replacementPolygons: preview?.polygons };
+    }
+
     if (toolState.variant === "pipe") {
       const polygon = this.getPipePolygon(true);
       const flower = polygon ? this.getPipeFlower(true) : undefined;
@@ -363,6 +476,24 @@ export class VertexTool extends Tool<VertexToolState> {
     const worldPos = context.worldPos;
     const { state, toolState, setToolState } = this.getState();
     if (!toolState) return false;
+
+    if (toolState.variant === "cutConnect") {
+      if (toolState.drawingPolygon.vertices.length) {
+        this.commitCut(worldPos);
+      } else {
+        this.cutPointer = {
+          id: event.pointerId,
+          x: context.screenX,
+          y: context.screenY,
+          dragged: false,
+        };
+        setToolState({
+          drawingPolygon: { vertices: [worldPos], grass: false },
+          cutConnectError: undefined,
+        });
+      }
+      return true;
+    }
 
     if (
       toolState.variant === "autoGrass" &&
@@ -433,6 +564,45 @@ export class VertexTool extends Tool<VertexToolState> {
   onKeyDown(event: KeyboardEvent, _context: EventContext): boolean {
     const { toolState, setToolState } = this.getState();
     if (!toolState) return false;
+
+    if (toolState.variant === "cutConnect") {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.isComposing &&
+        ["+", "=", "-", "_"].includes(event.key)
+      ) {
+        this.adjustCutConnectWidth(
+          event.key === "+" || event.key === "=" ? 1 : -1,
+        );
+        event.preventDefault();
+        return true;
+      }
+      if (event.key === "Escape" && toolState.drawingPolygon.vertices.length) {
+        this.clear();
+        event.preventDefault();
+        return true;
+      }
+      if (event.key === "Enter" && toolState.drawingPolygon.vertices.length) {
+        if (this.getState().state.mouseOnCanvas)
+          this.commitCut(this.getState().state.mousePosition);
+        event.preventDefault();
+        return true;
+      }
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        ["g", "v"].includes(event.key.toLowerCase())
+      ) {
+        this.onActivate(event.key.toLowerCase() === "g" ? "grass" : "normal");
+        return true;
+      }
+      // Do not inherit vertex drawing commands (Space, G, V, Enter).
+      return false;
+    }
 
     if (
       toolState.variant === "pipe" &&
@@ -580,6 +750,10 @@ export class VertexTool extends Tool<VertexToolState> {
 
   onRightClick(_event: MouseEvent, context: EventContext): boolean {
     const { state, toolState } = this.getState();
+    if (toolState?.variant === "cutConnect") {
+      this.clear();
+      return true;
+    }
     const isDrawing = (toolState?.drawingPolygon.vertices.length ?? 0) > 0;
     if (isDrawing) {
       this.finalizeDrawingOrRestore();
@@ -676,6 +850,48 @@ export class VertexTool extends Tool<VertexToolState> {
   }): WorldRenderOverlayItem[] {
     const { state, toolState } = this.getState();
     if (!toolState) return [];
+
+    if (toolState.variant === "cutConnect") {
+      const start = toolState.drawingPolygon.vertices[0];
+      if (!start || !state.mouseOnCanvas) return [];
+      const preview = this.getCutPreview();
+      const stroke = createPipePolygon(
+        [start, state.mousePosition],
+        (toolState.cutConnectWidthPx ?? DEFAULT_CUT_CONNECT_WIDTH_PX) /
+          ELMA_PIXELS_PER_WORLD_UNIT,
+      );
+      const outlines = [
+        ...(preview?.changedPolygons ?? []),
+        ...(stroke ? [stroke] : []),
+      ];
+      return [
+        ...outlines.map(
+          (polygon): WorldRenderOverlayItem => ({
+            type: "polyline",
+            points: polygon.vertices,
+            closed: true,
+            color: uiColors.boundsSelected,
+            width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
+            opacity: 0.75,
+          }),
+        ),
+        {
+          type: "line",
+          from: start,
+          to: state.mousePosition,
+          color: uiColors.boundsSelected,
+          width: 1 / state.zoom,
+          opacity: 0.5,
+        },
+        ...[start, state.mousePosition].map((point) =>
+          createDraftHandleOverlay(
+            point,
+            uiSelectionHandle.halfWidthPx / state.zoom,
+            uiSelectionHandle.strokeWidthPx / state.zoom,
+          ),
+        ),
+      ];
+    }
 
     if (toolState.variant === "pipe") {
       const polygon = this.getPipePolygon(true);
@@ -830,6 +1046,12 @@ export class VertexTool extends Tool<VertexToolState> {
   private finalizeDrawingOrRestore(): boolean {
     const { toolState } = this.getState();
     if (!toolState) return false;
+
+    if (toolState.variant === "cutConnect") {
+      const pending = toolState.drawingPolygon.vertices.length > 0;
+      this.clear();
+      return pending;
+    }
 
     if (toolState.variant === "pipe") {
       const polygon = this.getPipePolygon(false);
