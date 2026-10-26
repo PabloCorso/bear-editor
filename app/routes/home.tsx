@@ -3,11 +3,7 @@ import { useEffect } from "react";
 import { EditorProvider, useEditor } from "../editor/use-editor-store";
 import { DefaultLevelPresetProvider } from "../editor/edit-mode/default-level-preset";
 import { EditorDocumentGuardProvider } from "~/editor/session/document-guard";
-import {
-  isSameLevelLgrName,
-  LgrAssetsProvider,
-  useLgrAssets,
-} from "~/components/use-lgr-assets";
+import { LgrAssetsProvider, useLgrAssets } from "~/components/use-lgr-assets";
 import { EditorShell } from "~/editor/app-shell";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
@@ -46,16 +42,13 @@ export default function Home({ params, loaderData }: Route.ComponentProps) {
 
 function LevelLgrSync() {
   const levelLgrName = useEditor((state) => state.lgr);
-  const lgrAssets = useLgrAssets();
+  const { selectLgr } = useLgrAssets();
 
   useEffect(
-    function syncCachedLgrWithLevel() {
-      if (!levelLgrName || isSameLevelLgrName(levelLgrName, "default")) return;
-      if (isSameLevelLgrName(lgrAssets.lgr?.levelName, levelLgrName)) return;
-
-      void lgrAssets.loadCachedLgr(levelLgrName);
+    function syncLgrWithLevel() {
+      void selectLgr(levelLgrName || "default");
     },
-    [levelLgrName, lgrAssets],
+    [levelLgrName, selectLgr],
   );
 
   return null;

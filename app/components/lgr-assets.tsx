@@ -1,10 +1,11 @@
 import defaultLgr from "../assets/lgr/Default.lgr?url";
 import { decodeLgrSpritePixels } from "~/editor/helpers/pcx-loader";
-import { ElmaLGR, type AppleAnimation } from "~/editor/elma-types";
+import { Clip, ElmaLGR, Mask, type AppleAnimation } from "~/editor/elma-types";
 import { standardSprites } from "./standard-sprites";
 import type { DecodedLgrSprite, WorkerResponse } from "./lgr-assets.worker";
 
 type LoadedSprite = {
+  declaration?: DecodedLgrSprite["declaration"];
   bitmap: ImageBitmap;
   pixels: Uint8ClampedArray;
   width: number;
@@ -79,6 +80,7 @@ export class LgrAssets {
         new ImageData(pixels, sprite.width, sprite.height),
       );
       this.lgrSprites[sprite.name] = {
+        declaration: sprite.declaration,
         bitmap,
         pixels,
         width: sprite.width,
@@ -189,27 +191,73 @@ export class LgrAssets {
     return this.getSprite("qexit");
   }
 
+  private getPictures() {
+    const pictures = new Map(standardSprites.pictures.map((p) => [p.name, p]));
+    for (const [name, sprite] of Object.entries(this.lgrSprites)) {
+      const declaration = sprite.declaration;
+      if (
+        declaration?.pictureType !== 100 ||
+        /^(q[12]|qfood|qup_|qdown_|qgrass$|qkiller$|qexit$|qflag$|qframe$|qcolors$)/i.test(
+          name,
+        )
+      )
+        continue;
+      pictures.set(name, {
+        name,
+        distance: declaration.distance,
+        clip: declaration.clipping as Clip,
+      });
+    }
+    return [...pictures.values()];
+  }
+
   getPictureSprites() {
-    return standardSprites.pictures.map((picture) => ({
-      picture,
-      sprite: this.getSprite(picture.name),
-      src: this.getSpritePreview(picture.name),
-    }));
+    return this.getPictures()
+      .filter((p) => !/^zz[0-9a-f]{6}$/i.test(p.name))
+      .map((picture) => ({
+        picture,
+        sprite: this.getSprite(picture.name),
+        src: this.getSpritePreview(picture.name),
+      }));
   }
 
   getTextureSprites() {
-    return standardSprites.textures.map((texture) => ({
+    const textures = new Map(
+      standardSprites.textures.map((t) => [t.texture, t]),
+    );
+    for (const [name, sprite] of Object.entries(this.lgrSprites)) {
+      const declaration = sprite.declaration;
+      if (declaration?.pictureType !== 101) continue;
+      textures.set(name, {
+        texture: name,
+        mask: Mask.Big,
+        distance: declaration.distance,
+        clip: declaration.clipping as Clip,
+      });
+    }
+    return [...textures.values()].map((texture) => ({
       texture,
       sprite: this.getSprite(texture.texture),
       src: this.getSpritePreview(texture.texture),
     }));
   }
 
+  getTextureMasks(): string[] {
+    return [
+      ...new Set<string>([
+        ...standardSprites.textureMasks,
+        ...Object.entries(this.lgrSprites)
+          .filter(([, sprite]) => sprite.declaration?.pictureType === 102)
+          .map(([name]) => name),
+      ]),
+    ];
+  }
+
   getTextureMaskSprites() {
     const textureSprites = this.getTextureSprites();
 
     return textureSprites.flatMap(({ texture }) =>
-      standardSprites.textureMasks.map((mask) => ({
+      this.getTextureMasks().map((mask) => ({
         texture,
         mask,
         maskSprite: this.getSprite(mask),
@@ -384,6 +432,7 @@ async function decodeLgrSpritesOnMainThread(data: ArrayBuffer) {
     const decoded = decodeLgrSpritePixels(picture, declaration);
     sprites.push({
       name,
+      declaration,
       pixels: decoded.pixels,
       width: decoded.width,
       height: decoded.height,

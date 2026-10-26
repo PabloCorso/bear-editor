@@ -9,6 +9,7 @@ import {
 } from "react";
 import { LgrAssets } from "./lgr-assets";
 import { loadStoredLgr, loadStoredLgrs, saveStoredLgr } from "./lgr-storage";
+import { listLgrFiles, loadLgrFolder, saveLgrFolder } from "./lgr-folder";
 import type { AppleAnimation } from "~/editor/elma-types";
 
 const DEFAULT_APPLE_ANIMATIONS: AppleAnimation[] = [1, 2];
@@ -16,19 +17,21 @@ const DEFAULT_LGR_OPTION: LgrOption = {
   name: "Default.lgr",
   levelName: "default",
 };
-
-export type LgrOption = {
-  name: string;
-  levelName: string;
-};
+export type LgrOption = { name: string; levelName: string };
 
 type LgrContextType = {
-  lgr: LgrAssets | null;
+  lgr: LgrAssets;
   currentLgrData: ArrayBuffer | null;
   lgrOptions: LgrOption[];
   error?: string;
+  status?: string;
   isLoaded: boolean;
-  loadCachedLgr: (levelName: string) => Promise<boolean>;
+  folderName?: string;
+  folderNeedsAccess: boolean;
+  folderError?: string;
+  pickFolder: () => Promise<void>;
+  reconnectFolder: () => Promise<void>;
+  forgetFolder: () => Promise<void>;
   loadLgrFile: (file: File) => Promise<{ levelName: string } | null>;
   selectLgr: (levelName: string) => Promise<boolean>;
 };
@@ -36,202 +39,284 @@ type LgrContextType = {
 const LgrContext = createContext<LgrContextType | null>(null);
 
 export function LgrAssetsProvider({ children }: { children: React.ReactNode }) {
-  // Create the default loader during render so consumers, including the editor
-  // engine, share its in-flight load rather than each starting their own.
-  const [lgrLoader, setLgrLoader] = useState<LgrAssets>(() => new LgrAssets());
+  const [lgr, setLgr] = useState(() => new LgrAssets());
+  const activeLgr = useRef(lgr);
+  const activeData = useRef<ArrayBuffer | null>(null);
   const [currentLgrData, setCurrentLgrData] = useState<ArrayBuffer | null>(
     null,
   );
-  const [storedLgrOptions, setStoredLgrOptions] = useState<LgrOption[]>([]);
+  const [storedOptions, setStoredOptions] = useState<LgrOption[]>([]);
+  const [folder, setFolder] = useState<FileSystemDirectoryHandle | null>(null);
+  const [folderFiles, setFolderFiles] = useState<FileSystemFileHandle[]>([]);
+  const [folderNeedsAccess, setFolderNeedsAccess] = useState(false);
+  const [folderError, setFolderError] = useState<string>();
+  const [initialized, setInitialized] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-  const lgrRequestIdRef = useRef(0);
-  const initialLgrLoaderRef = useRef(lgrLoader);
+  const [error, setError] = useState<string>();
+  const [status, setStatus] = useState<string>();
+  const [revision, setRevision] = useState(0);
+  const requestId = useRef(0);
+  const lastRequest = useRef<{ key: string; promise: Promise<boolean> } | null>(
+    null,
+  );
 
-  useEffect(function kickOffLgrLoading() {
+  useEffect(function cancelPendingLgrRequestsOnUnmount() {
+    const requests = requestId;
+    return function cancelPendingLgrRequests() {
+      ++requests.current;
+    };
+  }, []);
+
+  useEffect(function restoreLgrSources() {
     let cancelled = false;
-    let lgr = initialLgrLoaderRef.current;
-    let activated = false;
-
-    async function loadInitialLgr() {
-      try {
-        await lgr.load();
-        const storedLgrs = await loadStoredLgrs();
-        if (cancelled) return;
-        setStoredLgrOptions(toLgrOptions(storedLgrs));
-
-        if (cancelled) return;
-        activated = true;
-        setIsLoaded(true);
-        setError(undefined);
-      } catch (loadError) {
-        console.error("Failed to load LGR:", loadError);
-        if (cancelled) return;
-        setError("Failed to load LGR.");
-        lgr.destroy();
-        lgr = new LgrAssets();
-        await lgr.load();
-        if (cancelled) return;
-        activated = true;
-        setLgrLoader(lgr);
-        setIsLoaded(true);
+    async function restore() {
+      // Storage failure must not prevent the bundled default from working.
+      const [stored, savedFolder] = await Promise.allSettled([
+        loadStoredLgrs(),
+        loadLgrFolder(),
+      ]);
+      if (cancelled) return;
+      if (stored.status === "fulfilled")
+        setStoredOptions(toLgrOptions(stored.value));
+      if (savedFolder.status === "fulfilled" && savedFolder.value) {
+        const handle = savedFolder.value;
+        try {
+          const granted =
+            (await handle.queryPermission({ mode: "read" })) === "granted";
+          const files = granted ? await listLgrFiles(handle) : [];
+          if (cancelled) return;
+          setFolder(handle);
+          setFolderFiles(files);
+          setFolderNeedsAccess(!granted);
+        } catch {
+          if (cancelled) return;
+          setFolder(handle);
+          setFolderNeedsAccess(true);
+        }
       }
+      if (!cancelled) setInitialized(true);
     }
-
-    void loadInitialLgr();
-
-    return function cleanupLgrLoader() {
+    void restore();
+    return function cancelRestore() {
       cancelled = true;
-      if (!activated) lgr.destroy();
     };
   }, []);
 
   useEffect(
-    function cleanupActiveLgr() {
-      return function destroyActiveLgr() {
-        lgrLoader?.destroy();
+    function disposeLgr() {
+      return function destroyLgr() {
+        lgr.destroy();
       };
     },
-    [lgrLoader],
-  );
-
-  const loadCachedLgr = useCallback(
-    async (levelName: string) => {
-      const normalizedLevelName = getLevelLgrName(levelName);
-      if (
-        isSameLevelLgrName(normalizedLevelName, "default") ||
-        isSameLevelLgrName(lgrLoader?.levelName, normalizedLevelName)
-      ) {
-        return false;
-      }
-
-      const requestId = ++lgrRequestIdRef.current;
-      const storedLgr = await loadStoredLgr(normalizedLevelName);
-      if (!storedLgr) return false;
-
-      const nextLgr = new LgrAssets(storedLgr.name, storedLgr.levelName);
-      try {
-        await nextLgr.loadFromBytes(storedLgr.data.slice(0));
-      } catch (loadError) {
-        console.error("Failed to load cached LGR:", loadError);
-        nextLgr.destroy();
-        if (requestId !== lgrRequestIdRef.current) return false;
-        setError("Could not load cached LGR.");
-        return false;
-      }
-
-      if (requestId !== lgrRequestIdRef.current) {
-        nextLgr.destroy();
-        return false;
-      }
-
-      setLgrLoader(nextLgr);
-      setCurrentLgrData(storedLgr.data.slice(0));
-      setIsLoaded(true);
-      setError(undefined);
-      return true;
-    },
-    [lgrLoader?.levelName],
+    [lgr],
   );
 
   const selectLgr = useCallback(
-    async (levelName: string) => {
-      const normalizedLevelName = getLevelLgrName(levelName);
-      if (isSameLevelLgrName(normalizedLevelName, "default")) {
-        if (isSameLevelLgrName(lgrLoader?.levelName, "default")) {
+    (levelName: string): Promise<boolean> => {
+      if (!initialized) return Promise.resolve(false);
+      const name = getLevelLgrName(levelName);
+      const key = `${revision}:${normalizeLevelLgrName(name)}`;
+      if (lastRequest.current?.key === key) return lastRequest.current.promise;
+      const id = ++requestId.current;
+      const promise = (async () => {
+        let next: LgrAssets | undefined;
+        let data: ArrayBuffer | null = null;
+        let message: string | undefined;
+        try {
+          const entry = folderFiles.find((f) =>
+            isSameLevelLgrName(f.name, name),
+          );
+          if (entry) {
+            try {
+              data = await (await entry.getFile()).arrayBuffer();
+              next = new LgrAssets(entry.name, name);
+              await next.loadFromBytes(data.slice(0));
+            } catch (cause) {
+              console.error("Could not load folder LGR", cause);
+              if (
+                id === requestId.current &&
+                cause instanceof DOMException &&
+                cause.name === "NotAllowedError"
+              ) {
+                setFolderNeedsAccess(true);
+              }
+              next?.destroy();
+              next = undefined;
+              data = null;
+            }
+          }
+
+          if (!next) {
+            const stored = await loadStoredLgr(name).catch(() => null);
+            if (stored) {
+              data = stored.data.slice(0);
+              next = new LgrAssets(stored.name, name);
+              await next.loadFromBytes(data.slice(0));
+            }
+          }
+
+          if (!next) {
+            if (!isSameLevelLgrName(name, "default")) {
+              message = `${name}.lgr unavailable. Preview uses bundled Default.lgr.`;
+            }
+            next =
+              activeLgr.current.levelName === "default" && !activeData.current
+                ? activeLgr.current
+                : new LgrAssets();
+            await next.load();
+          }
+        } catch (cause) {
+          console.error("Could not load LGR", cause);
+          if (
+            id === requestId.current &&
+            cause instanceof DOMException &&
+            cause.name === "NotAllowedError"
+          ) {
+            setFolderNeedsAccess(true);
+          }
+          if (next && next !== activeLgr.current) next.destroy();
+          message = `Could not load ${name}.lgr. Preview uses bundled Default.lgr.`;
+          data = null;
+          next = new LgrAssets();
+          try {
+            await next.load();
+          } catch {
+            next.destroy();
+            if (id === requestId.current) {
+              setError("Could not load LGR graphics.");
+              setIsLoaded(false);
+            }
+            return false;
+          }
+        }
+        if (id !== requestId.current) {
+          if (next !== activeLgr.current) next.destroy();
           return false;
         }
-
-        const requestId = ++lgrRequestIdRef.current;
-        const nextLgr = new LgrAssets();
-        await nextLgr.load();
-        if (requestId !== lgrRequestIdRef.current) {
-          nextLgr.destroy();
-          return false;
-        }
-
-        setLgrLoader(nextLgr);
-        setCurrentLgrData(null);
-        setIsLoaded(true);
+        activeLgr.current = next;
+        activeData.current = data;
+        setLgr(next);
+        setCurrentLgrData(data);
+        setStatus(message);
         setError(undefined);
-        return true;
-      }
-
-      return loadCachedLgr(normalizedLevelName);
+        setIsLoaded(true);
+        return !message;
+      })();
+      lastRequest.current = { key, promise };
+      return promise;
     },
-    [lgrLoader?.levelName, loadCachedLgr],
+    [initialized, folderFiles, revision],
   );
 
-  const loadLgrFile = useCallback(async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".lgr")) {
+  async function updateFolder(handle: FileSystemDirectoryHandle) {
+    const files = await listLgrFiles(handle);
+    await saveLgrFolder(handle);
+    ++requestId.current;
+    setFolder(handle);
+    setFolderFiles(files);
+    setFolderNeedsAccess(false);
+    setFolderError(undefined);
+    setRevision((r) => r + 1);
+  }
+
+  async function pickFolder() {
+    try {
+      const handle = await window.showDirectoryPicker({
+        id: "elma-lgr-folder",
+        mode: "read",
+      });
+      await updateFolder(handle);
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setFolderError("Could not read that LGR folder.");
+    }
+  }
+
+  async function reconnectFolder() {
+    if (!folder) return;
+    try {
+      if ((await folder.requestPermission({ mode: "read" })) !== "granted") {
+        setFolderError("Allow read access to use this LGR folder.");
+        return;
+      }
+      await updateFolder(folder);
+    } catch {
+      setFolderError("Could not read that LGR folder. Choose it again.");
+    }
+  }
+
+  async function forgetFolder() {
+    try {
+      await saveLgrFolder(null);
+      ++requestId.current;
+      setFolder(null);
+      setFolderFiles([]);
+      setFolderNeedsAccess(false);
+      setFolderError(undefined);
+      setRevision((r) => r + 1);
+    } catch {
+      setFolderError("Could not forget the LGR folder.");
+    }
+  }
+
+  async function loadLgrFile(file: File) {
+    if (!/\.lgr$/i.test(file.name)) {
       setError("Choose a .lgr file.");
       return null;
     }
-
-    const data = await file.arrayBuffer();
     const levelName = getLevelLgrName(file.name);
-    const requestId = ++lgrRequestIdRef.current;
-    const nextLgr = new LgrAssets(file.name, levelName);
-
+    const next = new LgrAssets(file.name, levelName);
     try {
-      await nextLgr.loadFromBytes(data.slice(0));
-    } catch (loadError) {
-      console.error("Failed to load LGR:", loadError);
-      nextLgr.destroy();
-      if (requestId !== lgrRequestIdRef.current) return null;
-      setError("Could not load that LGR file.");
+      const data = await file.arrayBuffer();
+      await next.loadFromBytes(data.slice(0));
+      await saveStoredLgr({ name: file.name, levelName, data });
+      next.destroy();
+      setStoredOptions((options) =>
+        upsertLgrOption(options, { name: file.name, levelName }),
+      );
+      setError(undefined);
+      setRevision((r) => r + 1);
+      return { levelName };
+    } catch {
+      next.destroy();
+      setError("Could not import that LGR file.");
       return null;
     }
+  }
 
-    if (requestId !== lgrRequestIdRef.current) {
-      nextLgr.destroy();
-      return null;
-    }
+  const lgrOptions = [
+    DEFAULT_LGR_OPTION,
+    ...toLgrOptions([
+      ...storedOptions,
+      ...folderFiles.map((f) => ({
+        name: f.name,
+        levelName: getLevelLgrName(f.name),
+      })),
+    ]),
+  ];
 
-    await saveStoredLgr({
-      name: file.name,
-      levelName,
-      data: data.slice(0),
-    });
-    setStoredLgrOptions((options) =>
-      upsertLgrOption(options, { name: file.name, levelName }),
-    );
-    setLgrLoader(nextLgr);
-    setCurrentLgrData(data.slice(0));
-    setIsLoaded(true);
-    setError(undefined);
-    return { levelName };
-  }, []);
-
-  const lgrOptions = useMemo(
-    () => [DEFAULT_LGR_OPTION, ...storedLgrOptions],
-    [storedLgrOptions],
+  return (
+    <LgrContext.Provider
+      value={{
+        lgr,
+        currentLgrData,
+        lgrOptions,
+        isLoaded,
+        error,
+        status,
+        folderName: folder?.name,
+        folderNeedsAccess,
+        folderError,
+        pickFolder,
+        reconnectFolder,
+        forgetFolder,
+        loadLgrFile,
+        selectLgr,
+      }}
+    >
+      {children}
+    </LgrContext.Provider>
   );
-
-  const value = useMemo(
-    () => ({
-      lgr: lgrLoader,
-      currentLgrData,
-      lgrOptions,
-      error,
-      isLoaded,
-      loadCachedLgr,
-      loadLgrFile,
-      selectLgr,
-    }),
-    [
-      currentLgrData,
-      error,
-      isLoaded,
-      lgrOptions,
-      lgrLoader,
-      loadCachedLgr,
-      loadLgrFile,
-      selectLgr,
-    ],
-  );
-
-  return <LgrContext.Provider value={value}>{children}</LgrContext.Provider>;
 }
 
 export function getLevelLgrName(name: string) {

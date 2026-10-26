@@ -34,7 +34,7 @@ export type ElmaPicture = InstanceType<typeof elmajs.Picture>;
 export type Picture = {
   name: string;
   texture: string;
-  mask: Mask | "";
+  mask: string;
   position: Position;
   distance: number;
   clip: Clip;

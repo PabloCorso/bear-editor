@@ -2,7 +2,6 @@ import { useState } from "react";
 import { ToolbarButton } from "~/components/ui/toolbar";
 import { cn } from "~/utils/misc";
 import { useLgrAssets, useTextureSprites } from "~/components/use-lgr-assets";
-import { standardSprites } from "~/components/standard-sprites";
 import { PictureIcon } from "~/components/sprite-icon";
 import {
   Tooltip,
@@ -26,13 +25,28 @@ export function LevelPropertiesControl() {
   const lgrAssets = useLgrAssets();
 
   const textureSprites = useTextureSprites();
-  const allTextures = Array.from(
-    new Set(standardSprites.textures.map(({ texture }) => texture)),
-  );
-
   const groundTexture = useEditor((state) => state.ground);
   const levelLgrName = useEditor((state) => state.lgr);
   const skyTexture = useEditor((state) => state.sky);
+  const pictures = useEditor((state) => state.pictures);
+  const allTextures = [
+    ...new Set([
+      ...textureSprites.map(({ texture }) => texture.texture),
+      groundTexture,
+      skyTexture,
+    ]),
+  ];
+  const missingAssets = lgrAssets.isLoaded
+    ? [
+        ...new Set(
+          [
+            groundTexture,
+            skyTexture,
+            ...pictures.flatMap((p) => [p.name, p.texture, p.mask]),
+          ].filter((name) => name && !lgrAssets.lgr.getSprite(name)),
+        ),
+      ]
+    : [];
   const groundTextureSprite = textureSprites.find(
     ({ texture }) => texture.texture === groundTexture,
   );
@@ -64,7 +78,7 @@ export function LevelPropertiesControl() {
 
   const skySrc = skyTextureSprite?.maskedSrc ?? skyTextureSprite?.src;
   const groundSrc = groundTextureSprite?.maskedSrc ?? groundTextureSprite?.src;
-  const isLoading = !skySrc || !groundSrc;
+  const isLoading = !lgrAssets.isLoaded;
   return (
     <FloatingToolbar open={open} onOpenChange={setOpen}>
       <FloatingToolbarAnchor>
@@ -118,6 +132,21 @@ export function LevelPropertiesControl() {
               {lgrAssets.error}
             </p>
           ) : null}
+          {lgrAssets.status && (
+            <p role="status" className="max-w-72 text-xs text-secondary">
+              {lgrAssets.status}
+            </p>
+          )}
+          {missingAssets.length > 0 && (
+            <p
+              className="max-w-72 text-xs text-secondary"
+              title={missingAssets.join(", ")}
+            >
+              {missingAssets.length} missing{" "}
+              {missingAssets.length === 1 ? "asset" : "assets"} in preview.
+              References are kept.
+            </p>
+          )}
         </FloatingToolbarPanel>
       </FloatingToolbarContent>
     </FloatingToolbar>
@@ -171,7 +200,7 @@ function TexturePickerRow({
   return (
     <div className="flex min-w-max items-start gap-3">
       <div className="w-12 self-center text-xs font-semibold">{label}</div>
-      <div className="flex flex-nowrap gap-2">
+      <div className="flex max-h-48 max-w-80 flex-wrap gap-2 overflow-y-auto">
         {textures.map((textureName) => {
           const textureSprite = textureSprites.find(
             ({ texture }) => texture.texture === textureName,

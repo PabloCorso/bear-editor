@@ -127,11 +127,11 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   );
 }
 
-function getTexturePreviewClassName(mask: Mask | "") {
+function getTexturePreviewClassName(mask: string) {
   return mask === Mask.Litt ? "h-3 w-3" : "h-full w-full";
 }
 
-function formatMaskTitle(mask: Mask | "") {
+function formatMaskTitle(mask: string) {
   switch (mask) {
     case Mask.Big:
       return "big";
@@ -142,6 +142,6 @@ function formatMaskTitle(mask: Mask | "") {
     case Mask.Top:
       return "top";
     default:
-      return "";
+      return mask;
   }
 }

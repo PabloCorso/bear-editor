@@ -1,5 +1,6 @@
 import {
   useEditorActions,
+  useEditor,
   useEditorToolState,
 } from "~/editor/use-editor-store";
 import { PictureIcon } from "~/components/sprite-icon";
@@ -9,7 +10,11 @@ import {
   type ToolControlButtonProps,
 } from "./tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
-import { useLgrSprite, usePictureSprites } from "~/components/use-lgr-assets";
+import {
+  useLgrAssets,
+  useLgrSprite,
+  usePictureSprites,
+} from "~/components/use-lgr-assets";
 import {
   defaultPictureState,
   type PictureToolState,
@@ -24,10 +29,29 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     defaultTools.picture.id,
   );
   const { setToolState } = useEditorActions();
+  const pictures = useEditor((state) => state.pictures);
+  const lgrAssets = useLgrAssets();
 
   const selectedPictureName = pictureTool?.name ?? defaultPictureState.name;
   const sprite = useLgrSprite(selectedPictureName);
-  const pictureSprites = usePictureSprites();
+  const pictureSprites = [...usePictureSprites()];
+  for (const picture of pictures) {
+    if (
+      !picture.name ||
+      pictureSprites.some((s) => s.picture.name === picture.name)
+    )
+      continue;
+    pictureSprites.push({
+      picture: {
+        name: picture.name,
+        distance: picture.distance,
+        clip: picture.clip,
+      },
+      src: undefined,
+      width: 0,
+      height: 0,
+    });
+  }
   const maxPictureSpriteDimension = Math.max(
     ...pictureSprites.map(({ width = 0, height = 0 }) =>
       Math.max(width, height),
@@ -92,7 +116,7 @@ export function PictureToolControl(props: ToolControlButtonProps) {
       id={defaultTools.picture.id}
       button={
         <ToolControlButton
-          isLoading={!sprite.src}
+          isLoading={!lgrAssets.isLoaded}
           {...defaultTools.picture}
           {...props}
         >

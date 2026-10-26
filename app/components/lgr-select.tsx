@@ -50,9 +50,6 @@ export function LgrSelect({
           }
 
           onValueChange(nextValue);
-          void afterNextPaint().then(function selectLgrAfterPaint() {
-            return lgrAssets.selectLgr(nextValue);
-          });
         }}
       >
         <SelectTrigger className={className} aria-label={ariaLabel}>
@@ -116,17 +113,4 @@ function getVisibleOptions({
 
 function isSameOptionValue(left: string, right: string) {
   return left.toLowerCase() === right.toLowerCase();
-}
-
-function afterNextPaint() {
-  return new Promise<void>((resolve) => {
-    if (typeof requestAnimationFrame !== "undefined") {
-      requestAnimationFrame(function resolveAfterNextPaint() {
-        resolve();
-      });
-      return;
-    }
-
-    setTimeout(resolve, 0);
-  });
 }

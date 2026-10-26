@@ -17,7 +17,6 @@ declare global {
   }
 
   interface FileSystemDirectoryHandle {
-    entries?: any;
     queryPermission?: any;
     requestPermission?: any;
   }

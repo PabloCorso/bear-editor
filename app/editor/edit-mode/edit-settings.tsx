@@ -229,7 +229,7 @@ function SettingsSectionHeading({
 }: {
   id?: string;
   title: string;
-  description: string;
+  description?: string;
   children?: ReactNode;
   className?: string;
 }) {
@@ -241,7 +241,7 @@ function SettingsSectionHeading({
         </h2>
         {children}
       </div>
-      <p className="text-sm text-secondary">{description}</p>
+      {description && <p className="text-sm text-secondary">{description}</p>}
     </div>
   );
 }
@@ -253,6 +253,7 @@ function GeneralSettingsPanel({
 }) {
   const store = useEditorStore();
   const levelFolderName = useEditorLevelFolderName();
+  const lgrAssets = useLgrAssets();
   const forceUpdate = useForceUpdate();
   const canPickFolder =
     supportsFilePickers() && "showDirectoryPicker" in window;
@@ -260,103 +261,137 @@ function GeneralSettingsPanel({
   return (
     <TabsContent value="general" className="flex flex-col gap-6">
       <section
-        aria-labelledby="level-folder-heading"
+        aria-labelledby="folders-heading"
         className="flex flex-col gap-3"
       >
         <SettingsSectionHeading
-          id="level-folder-heading"
-          title="Level folder"
-          description={
-            canPickFolder
-              ? "Set your Elasto Mania lev folder."
-              : "Levels are saved as downloads in this browser."
-          }
+          id="folders-heading"
+          title="Elasto Mania folders"
         >
           <Tooltip>
             <TooltipTrigger>
               <button
                 type="button"
-                aria-label="About level folders and browser support"
+                aria-label="About folders and browser support"
                 className="flex size-6 cursor-pointer items-center justify-center rounded-md text-secondary transition-colors hover:bg-primary hover:text-primary focus-visible:focus-ring"
               >
                 <InfoIcon aria-hidden className="size-4" />
               </button>
             </TooltipTrigger>
             <TooltipContent className="max-w-96 text-pretty" side="top">
-              Choose a folder to save levels in place. Folder access requires a
-              supported Chrome or Edge browser. Other browsers download a copy
-              instead.
+              Choose your lev folder to save levels in place and your lgr folder
+              to use its graphics. Folder access requires a supported Chrome or
+              Edge browser. Other browsers download levels and let you import
+              individual LGR files. Default graphics are included.
             </TooltipContent>
           </Tooltip>
-          {canPickFolder && levelFolderName && (
-            <Tooltip>
-              <TooltipTrigger>
-                <Button
-                  type="button"
-                  aria-label="Reset level folder"
-                  className="ml-auto h-6 px-2"
-                  size="sm"
-                  iconBefore={<ArrowCounterClockwiseIcon aria-hidden />}
-                  onClick={async () => {
-                    await store.getState().levelFolder?.forget();
-                    forceUpdate();
-                  }}
-                >
-                  Reset
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                Forget folder. Your files stay on your device.
-              </TooltipContent>
-            </Tooltip>
-          )}
         </SettingsSectionHeading>
 
-        {canPickFolder ? (
-          <div className="flex items-center gap-2">
-            <button
-              id="settings-level-folder"
-              type="button"
-              onClick={async () => {
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[
+            {
+              id: "level",
+              title: "Level folder",
+              name: levelFolderName,
+              pick: async () => {
                 await store.getState().levelFolder?.pickFolder();
                 forceUpdate();
-              }}
-              aria-label={
-                levelFolderName
-                  ? `Change level folder: ${levelFolderName}`
-                  : "Choose level folder"
-              }
-              className={cn(
-                "group relative flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl border border-separator bg-primary/30 p-4 text-left transition-colors hover:border-accent/60 hover:bg-primary/70 focus-visible:focus-ring",
-                highlightLevelFolder &&
-                  !levelFolderName &&
-                  "after:pointer-events-none after:absolute after:-inset-px after:rounded-[inherit] after:border after:border-accent after:bg-(--primary)/12 after:opacity-0 after:shadow-[0_0_16px_color-mix(in_srgb,var(--primary)_20%,transparent)] motion-safe:after:animate-folder-highlight",
-              )}
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary text-secondary transition-colors group-hover:text-primary">
-                <FolderIcon aria-hidden className="size-6" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">
-                  {levelFolderName || "No folder selected"}
-                </span>
-                <span className="mt-0.5 block text-xs text-secondary">
-                  {levelFolderName ? "Change folder" : "Choose a folder"}
-                </span>
-              </span>
-              {levelFolderName && (
-                <span className="shrink-0 text-green-500">
-                  <CheckIcon aria-hidden className="size-5" />
-                  <span className="sr-only">Folder selected</span>
-                </span>
-              )}
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 rounded-xl border border-separator bg-primary/20 p-4 text-secondary">
-            <FolderIcon aria-hidden className="size-6 shrink-0" />
-            <p className="text-sm">Folder access unavailable</p>
-          </div>
+              },
+              forget: async () => {
+                await store.getState().levelFolder?.forget();
+                forceUpdate();
+              },
+              needsAccess: false,
+            },
+            {
+              id: "lgr",
+              title: "LGR folder",
+              name: lgrAssets.folderName,
+              pick: lgrAssets.pickFolder,
+              forget: lgrAssets.forgetFolder,
+              needsAccess: lgrAssets.folderNeedsAccess,
+            },
+          ].map((folder) => (
+            <div key={folder.id} className="flex min-w-0 flex-col gap-1.5">
+              <div className="flex h-6 items-center justify-between gap-2">
+                <label
+                  htmlFor={`settings-${folder.id}-folder`}
+                  className="text-sm font-medium"
+                >
+                  {folder.title}
+                </label>
+                {canPickFolder && folder.name && (
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Button
+                        type="button"
+                        aria-label={`Reset ${folder.title === "LGR folder" ? "LGR" : "level"} folder`}
+                        className="h-6 px-2"
+                        size="sm"
+                        iconBefore={<ArrowCounterClockwiseIcon aria-hidden />}
+                        onClick={() => void folder.forget()}
+                      >
+                        Reset
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Forget folder. Your files stay on your device.
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+              </div>
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  id={`settings-${folder.id}-folder`}
+                  type="button"
+                  disabled={!canPickFolder}
+                  onClick={() => void folder.pick()}
+                  aria-label={`${folder.name ? "Change" : "Choose"} ${folder.id === "lgr" ? "LGR" : "level"} folder${folder.name ? `: ${folder.name}` : ""}`}
+                  title={folder.name || undefined}
+                  className={cn(
+                    "group relative flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg border border-separator bg-primary/30 px-3 py-2.5 text-left transition-colors hover:border-accent/60 hover:bg-primary/70 focus-visible:focus-ring disabled:cursor-default disabled:opacity-50",
+                    folder.id === "level" &&
+                      highlightLevelFolder &&
+                      !folder.name &&
+                      "after:pointer-events-none after:absolute after:-inset-px after:rounded-[inherit] after:border after:border-accent after:bg-(--primary)/12 after:opacity-0 after:shadow-[0_0_16px_color-mix(in_srgb,var(--primary)_20%,transparent)] motion-safe:after:animate-folder-highlight",
+                  )}
+                >
+                  <FolderIcon
+                    aria-hidden
+                    className="size-5 shrink-0 text-secondary"
+                  />
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 truncate text-sm",
+                      !folder.name && "text-secondary",
+                    )}
+                  >
+                    {canPickFolder
+                      ? folder.name || "Choose folder"
+                      : "Folder access unavailable"}
+                  </span>
+                  {folder.name && !folder.needsAccess && (
+                    <CheckIcon
+                      aria-hidden
+                      className="size-4 shrink-0 text-green-500"
+                    />
+                  )}
+                </button>
+                {canPickFolder && folder.needsAccess && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void lgrAssets.reconnectFolder()}
+                  >
+                    Reconnect
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {lgrAssets.folderError && (
+          <p className="text-sm text-secondary">{lgrAssets.folderError}</p>
         )}
       </section>
 

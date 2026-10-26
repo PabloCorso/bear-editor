@@ -7,6 +7,7 @@ type WorkerRequest = {
 
 export type DecodedLgrSprite = {
   name: string;
+  declaration?: { pictureType: number; distance: number; clipping: number };
   pixels: Uint8ClampedArray;
   width: number;
   height: number;
@@ -46,6 +47,7 @@ self.addEventListener("message", function handleDecodeLgrMessage(event) {
       const decoded = decodeLgrSpritePixels(picture, declaration);
       sprites.push({
         name,
+        declaration,
         pixels: decoded.pixels,
         width: decoded.width,
         height: decoded.height,
