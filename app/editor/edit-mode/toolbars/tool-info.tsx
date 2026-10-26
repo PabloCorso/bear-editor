@@ -40,6 +40,13 @@ import {
   MAX_PIPE_APPLE_COUNT,
 } from "~/editor/helpers/pipe";
 
+import {
+  FRAME_MODE_LABELS,
+  DEFAULT_FRAME_WIDTH_PX,
+  MIN_FRAME_WIDTH_PX,
+  MAX_FRAME_WIDTH_PX,
+} from "~/editor/helpers/frame";
+
 export function ToolInfo() {
   const modifier = useModifier();
   const activeToolId = useEditor((state) => state.activeToolId);
@@ -106,6 +113,39 @@ export function ToolInfo() {
 
   if (activeToolId !== "vertex") {
     return <CanvasTipGroup title={toolName} aria-label="Active tool info" />;
+  }
+
+  if (vertex?.variant === "frame" && !vertex.previewAutoGrassAll) {
+    return (
+      <CanvasTipSections aria-label="Active tool info">
+        <CanvasTipGroup title="Frame" aria-label="Frame width">
+          <CanvasTipNumberControl
+            label="Width"
+            accessibleLabel="frame width"
+            value={vertex.frameWidthPx ?? DEFAULT_FRAME_WIDTH_PX}
+            min={MIN_FRAME_WIDTH_PX}
+            max={MAX_FRAME_WIDTH_PX}
+            onAdjust={(delta) =>
+              getActiveTool<VertexTool>()?.adjustFrameWidth(delta)
+            }
+          />
+        </CanvasTipGroup>
+        <CanvasTipSection aria-label="Frame mode">
+          <CanvasTipSegment>
+            <span className="mr-1">
+              Mode: {FRAME_MODE_LABELS[vertex.frameMode ?? "inside"]}
+            </span>
+            <CanvasTipKeyButton
+              aria-label="Change frame mode"
+              title="Cycle Inside / Outside / Centered (Space)"
+              onClick={() => getActiveTool<VertexTool>()?.cycleFrameMode()}
+            >
+              space
+            </CanvasTipKeyButton>
+          </CanvasTipSegment>
+        </CanvasTipSection>
+      </CanvasTipSections>
+    );
   }
 
   const isAutoGrass =

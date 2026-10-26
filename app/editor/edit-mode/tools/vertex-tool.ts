@@ -57,6 +57,16 @@ import {
   MAX_PIPE_WIDTH_PX,
 } from "~/editor/helpers/pipe";
 
+import {
+  createFramePolygons,
+  isPointInsideFramePolygon,
+  FRAME_MODES,
+  type FrameMode,
+  DEFAULT_FRAME_WIDTH_PX,
+  MIN_FRAME_WIDTH_PX,
+  MAX_FRAME_WIDTH_PX,
+} from "~/editor/helpers/frame";
+
 const DEFAULT_VARIANT: VertexToolVariant = "normal";
 
 export type VertexToolVariant =
@@ -65,7 +75,8 @@ export type VertexToolVariant =
   | "both"
   | "autoGrass"
   | "pipe"
-  | "cutConnect";
+  | "cutConnect"
+  | "frame";
 
 export type VertexToolState = {
   drawingPolygon: Polygon;
@@ -73,6 +84,8 @@ export type VertexToolState = {
   editPivot?: Position;
   variant?: VertexToolVariant;
   previewAutoGrassAll?: boolean;
+  frameMode?: FrameMode;
+  frameWidthPx?: number;
   pipeStart?: boolean;
   pipeFlower?: boolean;
   pipeWidthPx?: number;
@@ -132,6 +145,14 @@ export function getToggledVertexToolState(
 export class VertexTool extends Tool<VertexToolState> {
   readonly meta = defaultTools.vertex;
 
+  private frameTarget?: Polygon;
+  private framePreviewCache?: {
+    target: Polygon;
+    width: number;
+    mode: FrameMode;
+    polygons: Polygon[] | null;
+  };
+  private frameCandidatesCache?: { polygons: Polygon[]; candidates: Polygon[] };
   private pipeCountDigits = "";
   private lastPipeCountDigitAt = 0;
   private cutPointer?: { id: number; x: number; y: number; dragged: boolean };
@@ -150,6 +171,7 @@ export class VertexTool extends Tool<VertexToolState> {
   onActivate(variant?: VertexToolVariant): void {
     this.cutPointer = undefined;
     this.cutPreview = undefined;
+    this.frameTarget = undefined;
     this.pipeCountDigits = "";
     const { toolState, setToolState } = this.getState();
     const nextVariant = variant ?? toolState?.variant ?? DEFAULT_VARIANT;
@@ -166,6 +188,7 @@ export class VertexTool extends Tool<VertexToolState> {
   }
 
   onDeactivate(): void {
+    this.frameTarget = undefined;
     this.pipeCountDigits = "";
     const finalized = this.finalizeDrawingOrRestore();
     if (!finalized) {
@@ -190,6 +213,74 @@ export class VertexTool extends Tool<VertexToolState> {
       pipeStart: false,
       pipeFlower: false,
     });
+  }
+
+  cycleFrameMode(): void {
+    const { toolState, setToolState } = this.getState();
+    const index = FRAME_MODES.indexOf(toolState?.frameMode ?? "inside");
+    setToolState({ frameMode: FRAME_MODES[(index + 1) % FRAME_MODES.length] });
+  }
+
+  adjustFrameWidth(delta: number): void {
+    const { toolState, setToolState } = this.getState();
+    setToolState({
+      frameWidthPx: Math.max(
+        MIN_FRAME_WIDTH_PX,
+        Math.min(
+          MAX_FRAME_WIDTH_PX,
+          (toolState?.frameWidthPx ?? DEFAULT_FRAME_WIDTH_PX) + delta,
+        ),
+      ),
+    });
+  }
+
+  private findFrameTarget(position: Position): Polygon | undefined {
+    const { state } = this.getState();
+    if (this.frameCandidatesCache?.polygons !== state.polygons) {
+      this.frameCandidatesCache = {
+        polygons: state.polygons,
+        candidates: state.polygons
+          .filter((polygon) => !polygon.grass)
+          .sort((a, b) => frameTargetArea(a) - frameTargetArea(b)),
+      };
+    }
+    const { candidates } = this.frameCandidatesCache;
+    return (
+      findPolygonEdgeNearPosition(
+        position,
+        candidates,
+        selectionThresholds.polygonEdge / state.zoom,
+      ) ??
+      candidates.find((polygon) =>
+        isPointInsideFramePolygon(position, polygon.vertices),
+      )
+    );
+  }
+
+  private getFramePreview() {
+    const { state, toolState } = this.getState();
+    // Keep the last hovered target while operating the bottom-left controls.
+    const target = state.mouseOnCanvas
+      ? this.findFrameTarget(state.mousePosition)
+      : this.frameTarget;
+    if (!target || !state.polygons.includes(target)) return undefined;
+    const width =
+      (toolState?.frameWidthPx ?? DEFAULT_FRAME_WIDTH_PX) /
+      ELMA_PIXELS_PER_WORLD_UNIT;
+    const mode = toolState?.frameMode ?? "inside";
+    if (
+      this.framePreviewCache?.target !== target ||
+      this.framePreviewCache.width !== width ||
+      this.framePreviewCache.mode !== mode
+    ) {
+      this.framePreviewCache = {
+        target,
+        width,
+        mode,
+        polygons: createFramePolygons(target, width, mode),
+      };
+    }
+    return this.framePreviewCache;
   }
 
   togglePipeStart(): void {
@@ -251,6 +342,11 @@ export class VertexTool extends Tool<VertexToolState> {
   }
 
   onPointerMove(event: PointerEvent, context: EventContext): boolean {
+    const { toolState } = this.getState();
+    if (toolState?.variant === "frame") {
+      this.frameTarget = this.findFrameTarget(context.worldPos);
+      return false;
+    }
     if (!this.cutPointer || event.pointerId !== this.cutPointer.id)
       return false;
     if (
@@ -421,6 +517,14 @@ export class VertexTool extends Tool<VertexToolState> {
       return { polygons: [], replacementPolygons: preview?.polygons };
     }
 
+    if (toolState.variant === "frame") {
+      const preview = this.getFramePreview();
+      return {
+        polygons: preview?.polygons ?? [],
+        hiddenPolygons: preview?.polygons ? [preview.target] : [],
+      };
+    }
+
     if (toolState.variant === "pipe") {
       const polygon = this.getPipePolygon(true);
       const flower = polygon ? this.getPipeFlower(true) : undefined;
@@ -508,6 +612,28 @@ export class VertexTool extends Tool<VertexToolState> {
       if (!polygon) return false;
 
       return this.autoGrassPolygons([polygon]);
+    }
+
+    if (toolState.variant === "frame") {
+      if (event.button !== 0) return false;
+      const target = this.findFrameTarget(worldPos);
+      if (!target) return true;
+      const polygons = createFramePolygons(
+        target,
+        (toolState.frameWidthPx ?? DEFAULT_FRAME_WIDTH_PX) /
+          ELMA_PIXELS_PER_WORLD_UNIT,
+        toolState.frameMode ?? "inside",
+      );
+      if (polygons)
+        this.runHistoryBatch(() => {
+          state.actions.setPolygons(
+            state.polygons.flatMap((polygon) =>
+              polygon === target ? polygons : [polygon],
+            ),
+          );
+        });
+      this.frameTarget = undefined;
+      return true;
     }
 
     if (toolState.variant === "pipe") {
@@ -654,6 +780,24 @@ export class VertexTool extends Tool<VertexToolState> {
 
     this.pipeCountDigits = "";
 
+    if (
+      toolState.variant === "frame" &&
+      !toolState.previewAutoGrassAll &&
+      !event.metaKey &&
+      (!event.ctrlKey || event.getModifierState("AltGraph"))
+    ) {
+      if (["+", "=", "-", "_"].includes(event.key)) {
+        this.adjustFrameWidth(event.key === "+" || event.key === "=" ? 1 : -1);
+        event.preventDefault();
+        return true;
+      }
+      if (!event.altKey && (event.key === " " || event.key === "Space")) {
+        if (!event.repeat) this.cycleFrameMode();
+        event.preventDefault();
+        return true;
+      }
+    }
+
     // Hovering All makes AutoGrass the target of shared size shortcuts.
     if (
       (toolState.variant === "autoGrass" || toolState.previewAutoGrassAll) &&
@@ -760,7 +904,8 @@ export class VertexTool extends Tool<VertexToolState> {
       return true;
     }
 
-    if (toolState?.variant === "pipe") return false;
+    if (toolState?.variant === "pipe" || toolState?.variant === "frame")
+      return false;
 
     const polygon = findPolygonEdgeNearPosition(
       context.worldPos,
@@ -891,6 +1036,21 @@ export class VertexTool extends Tool<VertexToolState> {
           ),
         ),
       ];
+    }
+
+    if (toolState.variant === "frame") {
+      if (toolState.previewAutoGrassAll) return [];
+      const preview = this.getFramePreview();
+      if (!preview) return [];
+      return (preview.polygons ?? [preview.target]).map((polygon) => ({
+        type: "polyline" as const,
+        points: [...polygon.vertices, polygon.vertices[0]],
+        color: preview.polygons
+          ? uiColors.boundsSelected
+          : uiColors.boundsHover,
+        width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
+        opacity: 0.75,
+      }));
     }
 
     if (toolState.variant === "pipe") {
@@ -1256,4 +1416,14 @@ function createDottedLineOverlays({
   }
 
   return overlays;
+}
+
+// Choose the innermost polygon when multiple nested interiors are hit.
+function frameTargetArea(polygon: Polygon): number {
+  return Math.abs(
+    polygon.vertices.reduce((sum, point, index, all) => {
+      const next = all[(index + 1) % all.length];
+      return sum + point.x * next.y - next.x * point.y;
+    }, 0),
+  );
 }

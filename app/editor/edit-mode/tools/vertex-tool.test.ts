@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { EditorState } from "~/editor/editor-state";
-import type { EditorStore } from "~/editor/editor-store";
+import { createEditorStore, type EditorStore } from "~/editor/editor-store";
 import type { Polygon, Position } from "~/editor/elma-types";
 import { defaultAutoGrassOptions } from "~/editor/helpers/auto-grass";
+import { createFramePolygons, FRAME_MODES } from "~/editor/helpers/frame";
 import { ELMA_PIXEL_SCALE } from "~/editor/constants";
-import { createEditorStore } from "~/editor/editor-store";
 import { cutAndConnect } from "~/editor/helpers/cut-and-connect";
 import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
 import { validateLevelTopology } from "~/editor/helpers/level-topology";
@@ -454,7 +454,7 @@ describe("VertexTool", () => {
     },
   );
 
-  it.each(["normal", "grass", "both", "pipe"] as const)(
+  it.each(["normal", "grass", "both", "pipe", "frame"] as const)(
     "prioritizes AutoGrass shortcuts over %s while previewing all polygons",
     (variant) => {
       const tool = createVertexTool({
@@ -669,7 +669,14 @@ describe("VertexTool", () => {
     expect(tool.getDrafts().polygons).toEqual([]);
   });
 
-  it.each<VertexToolVariant>(["normal", "grass", "both", "autoGrass", "pipe"])(
+  it.each<VertexToolVariant>([
+    "normal",
+    "grass",
+    "both",
+    "autoGrass",
+    "pipe",
+    "frame",
+  ])(
     "prioritizes the All hover preview over %s drafts and restores them on leave",
     (variant) => {
       const ground = polygon([
@@ -735,5 +742,178 @@ describe("VertexTool", () => {
     tool.clear();
     expect(tool.getDrafts().polygons).toEqual([]);
     expect(tool.getToolState().previewAutoGrassAll).toBe(false);
+  });
+});
+
+describe("Frame tool", () => {
+  const square = polygon([
+    position(0, 0),
+    position(10, 0),
+    position(10, 10),
+    position(0, 10),
+  ]);
+
+  it.each(FRAME_MODES)(
+    "offsets %s by the total width for either winding",
+    (mode) => {
+      for (const source of [
+        square,
+        { ...square, vertices: [...square.vertices].reverse() },
+      ]) {
+        const result = createFramePolygons(source, 2, mode)!;
+        const bounds = result.map((p) => [
+          Math.min(...p.vertices.map((v) => v.x)),
+          Math.max(...p.vertices.map((v) => v.x)),
+        ]);
+        expect(bounds).toEqual(
+          mode === "inside"
+            ? [
+                [0, 10],
+                [2, 8],
+              ]
+            : mode === "outside"
+              ? [
+                  [-2, 12],
+                  [0, 10],
+                ]
+              : [
+                  [-1, 11],
+                  [1, 9],
+                ],
+        );
+        if (mode !== "centered") expect(result).toContain(source);
+      }
+      expect(square.vertices[0]).toEqual(position(0, 0));
+    },
+  );
+
+  it.each(FRAME_MODES)(
+    "applies %s in one undoable click and keeps preview changes out of history",
+    (mode) => {
+      const store = createEditorStore({ historyUpdateThrottle: 0 });
+      const tool = new VertexTool(store);
+      store.getState().actions.setPolygons([square]);
+      store.temporal.getState().clear();
+      tool.onActivate("frame");
+      store.getState().actions.setToolState<VertexToolState>("vertex", {
+        frameMode: mode,
+        frameWidthPx: 20,
+      });
+      tool.adjustFrameWidth(1);
+      expect(store.temporal.getState().pastStates).toHaveLength(0);
+      const expected = createFramePolygons(square, 21 * ELMA_PIXEL_SCALE, mode);
+      tool.onPointerDown({ button: 0 } as PointerEvent, {
+        worldPos: position(5, 5),
+        screenX: 0,
+        screenY: 0,
+      });
+      expect(store.getState().polygons).toEqual(expected);
+      expect(store.temporal.getState().pastStates).toHaveLength(1);
+      store.temporal.getState().undo();
+      expect(store.getState().polygons).toEqual([square]);
+      store.temporal.getState().redo();
+      expect(store.getState().polygons).toEqual(expected);
+    },
+  );
+
+  it("retains the hovered frame while adjusting controls off canvas", () => {
+    const store = createEditorStore({ historyUpdateThrottle: 0 });
+    const tool = new VertexTool(store);
+    store.getState().actions.setPolygons([square]);
+    tool.onActivate("frame");
+    store.setState({ mouseOnCanvas: true, mousePosition: position(5, 5) });
+    expect(
+      tool.onPointerMove({} as PointerEvent, {
+        worldPos: position(5, 5),
+        screenX: 0,
+        screenY: 0,
+      }),
+    ).toBe(false);
+    const before = tool.getDrafts().polygons;
+    store.setState({ mouseOnCanvas: false });
+    expect(tool.getDrafts().polygons).toBe(before);
+    tool.adjustFrameWidth(1);
+    expect(tool.getDrafts().hiddenPolygons).toEqual([square]);
+    expect(tool.getDrafts().polygons).not.toEqual(before);
+    tool.cycleFrameMode();
+    expect(tool.getDrafts().polygons).toEqual(
+      createFramePolygons(square, 26 * ELMA_PIXEL_SCALE, "outside"),
+    );
+    tool.onActivate("cutConnect");
+    expect(tool.getDrafts().replacementPolygons).toBeUndefined();
+    tool.onActivate("frame");
+    expect(tool.getDrafts().polygons).toEqual([]);
+  });
+
+  it("rejects collapsed, self-intersecting, grass and non-finite offsets", () => {
+    expect(createFramePolygons(square, 5, "inside")).toBeNull();
+    expect(createFramePolygons(square, 6, "inside")).toBeNull();
+    expect(createFramePolygons(square, NaN, "inside")).toBeNull();
+    expect(
+      createFramePolygons({ ...square, grass: true }, 1, "inside"),
+    ).toBeNull();
+    expect(
+      createFramePolygons(
+        polygon([
+          position(0, 0),
+          position(10, 10),
+          position(10, 0),
+          position(0, 10),
+        ]),
+        1,
+        "outside",
+      ),
+    ).toBeNull();
+  });
+
+  it("handles concave corners and rejects offsets that close a narrow notch", () => {
+    const concave = polygon([
+      position(0, 0),
+      position(10, 0),
+      position(10, 10),
+      position(6, 10),
+      position(6, 4),
+      position(4, 4),
+      position(4, 10),
+      position(0, 10),
+    ]);
+    expect(createFramePolygons(concave, 0.5, "inside")).not.toBeNull();
+    expect(createFramePolygons(concave, 0.5, "outside")).not.toBeNull();
+    expect(createFramePolygons(concave, 2, "outside")).toBeNull();
+  });
+
+  it("previews nested polygons and updates both outlines from keyboard controls", () => {
+    const inner = polygon([
+      position(3, 3),
+      position(7, 3),
+      position(7, 7),
+      position(3, 7),
+    ]);
+    const tool = createVertexTool({
+      polygons: [square, inner],
+      mousePosition: position(5, 5),
+      toolState: {
+        variant: "frame",
+        drawingPolygon: polygon([]),
+        frameWidthPx: 10,
+      },
+    });
+    expect(tool.getDrafts().hiddenPolygons).toEqual([inner]);
+    const before = tool.getDrafts().polygons;
+    const key = (value: string, repeat = false) =>
+      tool.onKeyDown(
+        { key: value, repeat, preventDefault() {} } as KeyboardEvent,
+        {} as Parameters<VertexTool["onKeyDown"]>[1],
+      );
+    expect(key("+")).toBe(true);
+    expect(tool.getDrafts().polygons).not.toEqual(before);
+    expect(key(" ")).toBe(true);
+    expect(tool.getToolState().frameMode).toBe("outside");
+    key(" ", true);
+    expect(tool.getToolState().frameMode).toBe("outside");
+    key(" ");
+    expect(tool.getToolState().frameMode).toBe("centered");
+    key(" ");
+    expect(tool.getToolState().frameMode).toBe("inside");
   });
 });

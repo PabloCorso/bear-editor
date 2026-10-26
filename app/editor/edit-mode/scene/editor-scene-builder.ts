@@ -310,5 +310,11 @@ function getScenePolygons(state: EditorState): ScenePolygon[] {
         (polygon) => polygon !== vertexToolState.editingPolygon,
       )
     : state.polygons;
-  return [...scenePolygons, ...draftPolygons];
+  return [
+    ...scenePolygons.filter(
+      (polygon) =>
+        !drafts?.hiddenPolygons?.some((hidden) => hidden === polygon),
+    ),
+    ...draftPolygons,
+  ];
 }
