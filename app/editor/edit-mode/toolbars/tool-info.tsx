@@ -144,9 +144,6 @@ export function ToolInfo() {
             </CanvasTipKeyButton>
           </CanvasTipSegment>
         </CanvasTipSection>
-        <CanvasTipSection>
-          <CanvasTipSegment>Click a polygon to frame it</CanvasTipSegment>
-        </CanvasTipSection>
       </CanvasTipSections>
     );
   }
