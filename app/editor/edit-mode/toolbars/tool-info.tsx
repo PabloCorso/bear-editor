@@ -172,15 +172,6 @@ export function ToolInfo() {
             }
           />
         </CanvasTipGroup>
-        <CanvasTipSection>
-          <CanvasTipSegment>Drag or click two points</CanvasTipSegment>
-          <CanvasTipSegment>
-            Start in sky to cut, ground to connect
-          </CanvasTipSegment>
-          <CanvasTipSegment>
-            Cancel <CanvasTipKey>Esc</CanvasTipKey>
-          </CanvasTipSegment>
-        </CanvasTipSection>
         {vertex.cutConnectError && (
           <CanvasTipSection role="status">
             {vertex.cutConnectError}

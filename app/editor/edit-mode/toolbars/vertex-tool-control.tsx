@@ -452,7 +452,7 @@ export function VertexIcon({
           <path
             d={
               corridor === "narrow"
-                ? "M-3 23L23-3L27 1L1 27Z"
+                ? "M-3 24L24-3L27 0L0 27Z"
                 : "M-3 20L20-3L27 4L4 27Z"
             }
             fill={sky}
@@ -525,7 +525,12 @@ export function getVertexIconProps(
   variant?: VertexToolVariant,
 ): VertexIconProps {
   if (variant === "cutConnect") {
-    return { corridor: "narrow", badge: "C" };
+    return {
+      corridor: "narrow",
+      badge: "C",
+      sky: colors.ground,
+      ground: colors.sky,
+    };
   }
   if (variant === "frame") return { frame: true };
 
