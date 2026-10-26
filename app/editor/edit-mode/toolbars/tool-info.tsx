@@ -2,7 +2,9 @@ import {
   useEditor,
   useEditorActions,
   useEditorToolState,
+  useEditorRegisteredTools,
 } from "~/editor/use-editor-store";
+import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import {
   canToggleVertexToolDirection,
   getToggledVertexToolState,
@@ -36,14 +38,25 @@ import {
 export function ToolInfo() {
   const modifier = useModifier();
   const activeToolId = useEditor((state) => state.activeToolId);
+  const hasPictures = useEditor((state) => state.pictures.length > 0);
+  const registeredTools = useEditorRegisteredTools();
   const vertex = useEditorToolState<VertexToolState>("vertex");
   const select = useEditorToolState<SelectToolState>("select");
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
+  const activeTool = (
+    registeredTools.length ? registeredTools : Object.values(defaultTools)
+  ).find((tool) => tool.id === activeToolId);
+  const toolName =
+    activeTool?.name ??
+    (activeToolId === "ai-chat" ? "AI Assistant" : activeToolId);
 
   if (activeToolId === "select" && select?.transformMode) {
     return (
-      <CanvasTipGroup title="Resize & Rotate" aria-label="Active tool info">
+      <CanvasTipGroup
+        title={`${toolName} · Resize & Rotate`}
+        aria-label="Active tool info"
+      >
         <CanvasTipSegment>
           Resize proportionally
           <CanvasTipKey>{modifier}</CanvasTipKey>
@@ -58,11 +71,13 @@ export function ToolInfo() {
 
   if (activeToolId === "select") {
     return (
-      <CanvasTipGroup title="Select" aria-label="Active tool info">
-        <CanvasTipSegment>
-          Pick behind images
-          <CanvasTipKey>Shift / Alt + Click</CanvasTipKey>
-        </CanvasTipSegment>
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        {hasPictures && (
+          <CanvasTipSegment>
+            Pick behind images
+            <CanvasTipKey>Shift / Alt + Click</CanvasTipKey>
+          </CanvasTipSegment>
+        )}
         {!!select?.selectedVertices.length && (
           <CanvasTipSegment>
             Slide along edge
@@ -75,7 +90,7 @@ export function ToolInfo() {
 
   if (["picture", "texture", "color"].includes(activeToolId)) {
     return (
-      <CanvasTipGroup title="Placement" aria-label="Active tool info">
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
         <CanvasTipSegment>
           Properties
           <CanvasTipKey>Right click</CanvasTipKey>
@@ -84,7 +99,9 @@ export function ToolInfo() {
     );
   }
 
-  if (activeToolId !== "vertex") return null;
+  if (activeToolId !== "vertex") {
+    return <CanvasTipGroup title={toolName} aria-label="Active tool info" />;
+  }
 
   const isAutoGrass =
     vertex?.variant === "autoGrass" || vertex?.previewAutoGrassAll;
@@ -92,7 +109,6 @@ export function ToolInfo() {
   const pipeWidth = vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
   const pipeAppleMode = vertex?.pipeAppleMode ?? "none";
   const canChangeDirection = canToggleVertexToolDirection(vertex);
-  if (!isAutoGrass && !isPipe && !canChangeDirection) return null;
 
   if (isPipe) {
     return (
@@ -180,7 +196,7 @@ export function ToolInfo() {
     );
   }
 
-  const toolName = isAutoGrass
+  const vertexToolName = isAutoGrass
     ? "AutoGrass"
     : vertex?.variant === "grass"
       ? "Grass"
@@ -189,7 +205,7 @@ export function ToolInfo() {
         : "Vertex";
 
   return (
-    <CanvasTipGroup title={toolName} aria-label="Active tool info">
+    <CanvasTipGroup title={vertexToolName} aria-label="Active tool info">
       {isAutoGrass ? (
         <>
           {(
