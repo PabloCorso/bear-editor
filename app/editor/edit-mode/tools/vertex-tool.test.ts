@@ -837,7 +837,7 @@ describe("Frame tool", () => {
     expect(tool.getDrafts().polygons).not.toEqual(before);
     tool.cycleFrameMode();
     expect(tool.getDrafts().polygons).toEqual(
-      createFramePolygons(square, 21 * ELMA_PIXEL_SCALE, "outside"),
+      createFramePolygons(square, 26 * ELMA_PIXEL_SCALE, "outside"),
     );
     tool.onActivate("cutConnect");
     expect(tool.getDrafts().replacementPolygons).toBeUndefined();

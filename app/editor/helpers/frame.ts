@@ -7,7 +7,7 @@ export const FRAME_MODE_LABELS: Record<FrameMode, string> = {
   outside: "Outside",
   centered: "Centered",
 };
-export const DEFAULT_FRAME_WIDTH_PX = 20;
+export const DEFAULT_FRAME_WIDTH_PX = 25;
 export const MIN_FRAME_WIDTH_PX = 1;
 export const MAX_FRAME_WIDTH_PX = 2000;
 const EPSILON = 1e-8;
