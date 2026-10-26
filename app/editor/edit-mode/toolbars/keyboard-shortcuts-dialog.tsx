@@ -1,5 +1,9 @@
 import type { DialogProps } from "~/components/ui/dialog";
-import { CursorIcon, HandIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  CursorIcon,
+  HandIcon,
+  PaintBucketIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import {
   Dialog,
   DialogBody,
@@ -451,6 +455,11 @@ function getShortcutGroups(
           ),
         },
         {
+          shortcut: defaultTools.color.shortcut,
+          label: defaultTools.color.name,
+          icon: <PaintBucketIcon className="h-5 w-5" weight="fill" />,
+        },
+        {
           shortcut: defaultTools.texture.shortcut,
           label: defaultTools.texture.name,
           icon: (
@@ -463,11 +472,60 @@ function getShortcutGroups(
       ],
     },
     {
+      title: "Tool panels",
+      items: [
+        {
+          shortcut: "Tool key",
+          label:
+            "Switch tools using the current choice; press again to toggle its panel",
+        },
+        {
+          shortcut: "Enter",
+          label:
+            "Accept the focused choice or keep the current choice and close the panel",
+        },
+        {
+          shortcut: "Esc",
+          label: "Close the panel and keep the tool active",
+        },
+      ],
+    },
+    {
+      title: "Picture, texture, and color placement",
+      items: [
+        {
+          shortcut: "Right click",
+          label: "Open placement properties at the cursor",
+        },
+        {
+          shortcut: "Esc",
+          label: "Close placement properties and resume placement",
+        },
+      ],
+    },
+    {
+      title: "Picture distance field",
+      items: [
+        {
+          shortcut: ["↑", "↓"],
+          label: "Increase / decrease distance by 1 while focused",
+        },
+        {
+          shortcut: ["Home", "End"],
+          label: "Set distance to 0 / 999 while focused",
+        },
+        {
+          shortcut: "Enter",
+          label: "Commit distance and leave the field",
+        },
+      ],
+    },
+    {
       title: "Play mode",
       items: [
         {
           shortcut: "Enter",
-          label: "Start / restart run (outside dialogs)",
+          label: "Start / restart run (outside dialogs and tool panels)",
         },
         {
           shortcut: formatShortcutCode(toolIcons.playKeyBindings.throttle),

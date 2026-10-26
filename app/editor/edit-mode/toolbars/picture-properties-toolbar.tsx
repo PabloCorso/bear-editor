@@ -1,22 +1,10 @@
-import {
-  ArrowCounterClockwiseIcon,
-  XIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { Input } from "~/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectTriggerIcon,
-  SelectValue,
-} from "~/components/ui/select";
-import { Button, IconButton } from "~/components/ui/button";
+import { useState } from "react";
+import { NumberInput } from "~/components/ui/number-input";
+import { Button } from "~/components/ui/button";
 import {
   Popover,
-  PopoverClose,
-  PopoverContent,
   PopoverTrigger,
+  type PopoverContentProps,
 } from "~/components/ui/popover";
 import {
   Toolbar,
@@ -31,6 +19,11 @@ import {
 import { Clip } from "~/editor/elma-types";
 import { cn } from "~/utils/misc";
 
+import {
+  SettingsPopoverContent,
+  SettingsPopoverFields,
+} from "./settings-popover";
+
 const MIN_DISTANCE = 0;
 const MAX_DISTANCE = 999;
 const MIXED_VALUE = "mixed";
@@ -43,7 +36,14 @@ type PicturePropertiesToolbarProps = Omit<ToolbarProps, "children"> & {
   defaultDistance?: number;
   defaultClip?: Clip;
   isSelected?: boolean;
-  variant?: "inline" | "stacked" | "compact-inline" | "summary-popover";
+  variant?:
+    | "inline"
+    | "stacked"
+    | "compact-inline"
+    | "summary-popover"
+    | "popover-content";
+  popoverContentProps?: PopoverContentProps;
+  propertiesTitle?: string;
   onActivate?: () => void;
   onDistanceChange: (distance: number) => void;
   onClipChange: (clip: Clip) => void;
@@ -61,6 +61,8 @@ export function PicturePropertiesToolbar({
   onDistanceChange,
   onClipChange,
   onResetDefaults,
+  popoverContentProps,
+  propertiesTitle = "Picture properties",
   className,
   ...props
 }: PicturePropertiesToolbarProps) {
@@ -80,7 +82,7 @@ export function PicturePropertiesToolbar({
           onActivate={onActivate}
           onCommit={onDistanceChange}
         />
-        <ClipSelect
+        <ClipButtons
           clip={clip}
           isSelected={isSelected}
           onActivate={onActivate}
@@ -90,7 +92,7 @@ export function PicturePropertiesToolbar({
     );
   }
 
-  if (variant === "summary-popover") {
+  if (variant === "summary-popover" || variant === "popover-content") {
     const hasDefaults =
       normalizedDefaultDistance !== undefined && defaultClip !== undefined;
     const distanceLabel = getDistanceLabel(distance);
@@ -101,6 +103,52 @@ export function PicturePropertiesToolbar({
       normalizedDistance === normalizedDefaultDistance &&
       clip !== MIXED_VALUE &&
       clip === defaultClip;
+
+    const content = (
+      <SettingsPopoverContent
+        title={propertiesTitle}
+        closeLabel={`Close ${propertiesTitle.toLowerCase()}`}
+        {...popoverContentProps}
+        isDefault={isDefault}
+        onReset={
+          onResetDefaults && hasDefaults
+            ? (event) => {
+                event.stopPropagation();
+                onActivate?.();
+                onResetDefaults();
+              }
+            : undefined
+        }
+      >
+        <SettingsPopoverFields>
+          <div
+            className="contents"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="text-xs font-bold text-secondary">Distance</span>
+            <DistanceInput
+              className="justify-self-end"
+              distance={normalizedDistance}
+              isSelected={isSelected}
+              onActivate={onActivate}
+              onCommit={onDistanceChange}
+            />
+          </div>
+          <div className="contents">
+            <span className="text-xs font-bold text-secondary">Clip</span>
+            <ClipButtons
+              className="justify-self-end"
+              clip={clip}
+              isSelected={isSelected}
+              onActivate={onActivate}
+              onChange={onClipChange}
+            />
+          </div>
+        </SettingsPopoverFields>
+      </SettingsPopoverContent>
+    );
+
+    if (variant === "popover-content") return content;
 
     return (
       <Popover modal={false}>
@@ -123,87 +171,7 @@ export function PicturePropertiesToolbar({
             </span>
           </button>
         </PopoverTrigger>
-        <PopoverContent
-          side="right"
-          align="center"
-          sideOffset={8}
-          collisionPadding={16}
-          positionerClassName="z-60"
-          className="relative z-50 rounded-lg border border-default bg-screen px-2 py-1.5 shadow-xl outline-hidden"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <div className="flex items-center gap-1.5 pb-1.5">
-            <p className="flex-1 text-xs font-bold text-primary">
-              Picture properties
-            </p>
-            {onResetDefaults && hasDefaults ? (
-              <Tooltip>
-                <TooltipTrigger>
-                  <IconButton
-                    type="button"
-                    size="sm"
-                    iconSize="sm"
-                    className="h-4 w-4 text-secondary hover:text-primary"
-                    aria-label="Reset defaults"
-                    disabled={isDefault}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onActivate?.();
-                      onResetDefaults();
-                    }}
-                  >
-                    <ArrowCounterClockwiseIcon aria-hidden="true" />
-                  </IconButton>
-                </TooltipTrigger>
-                <TooltipContent side="top">Reset defaults</TooltipContent>
-              </Tooltip>
-            ) : null}
-            <Tooltip>
-              <TooltipTrigger>
-                <PopoverClose>
-                  <IconButton
-                    type="button"
-                    size="sm"
-                    iconSize="sm"
-                    className="h-4 w-4 text-secondary hover:text-primary"
-                    aria-label="Close picture properties"
-                  >
-                    <XIcon aria-hidden="true" />
-                  </IconButton>
-                </PopoverClose>
-              </TooltipTrigger>
-              <TooltipContent side="top">Close</TooltipContent>
-            </Tooltip>
-          </div>
-          <Toolbar
-            orientation="vertical"
-            className="grid min-w-40 grid-cols-[max-content_1fr] items-center gap-x-2 gap-y-1 rounded-md border-0 bg-transparent p-0 shadow-none"
-          >
-            <label
-              className="contents"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <span className="text-xs font-bold text-secondary">Distance</span>
-              <DistanceInput
-                className="justify-self-end"
-                distance={normalizedDistance}
-                isSelected={isSelected}
-                onActivate={onActivate}
-                onCommit={onDistanceChange}
-              />
-            </label>
-            <div className="contents">
-              <span className="text-xs font-bold text-secondary">Clip</span>
-              <ClipSelect
-                className="justify-self-end"
-                clip={clip}
-                isSelected={isSelected}
-                onActivate={onActivate}
-                onChange={onClipChange}
-              />
-            </div>
-          </Toolbar>
-        </PopoverContent>
+        {content}
       </Popover>
     );
   }
@@ -215,32 +183,12 @@ export function PicturePropertiesToolbar({
         className={cn("gap-1 rounded-md p-1", className)}
         {...props}
       >
-        <div className="flex gap-0.5">
-          <ClipButton
-            compact
-            label="U"
-            title="Unclipped"
-            isActive={clip === Clip.Unclipped}
-            isSelected={isSelected}
-            onClick={() => onClipChange(Clip.Unclipped)}
-          />
-          <ClipButton
-            compact
-            label="G"
-            title="Ground"
-            isActive={clip === Clip.Ground}
-            isSelected={isSelected}
-            onClick={() => onClipChange(Clip.Ground)}
-          />
-          <ClipButton
-            compact
-            label="S"
-            title="Sky"
-            isActive={clip === Clip.Sky}
-            isSelected={isSelected}
-            onClick={() => onClipChange(Clip.Sky)}
-          />
-        </div>
+        <ClipButtons
+          clip={clip}
+          isSelected={isSelected}
+          onActivate={onActivate}
+          onChange={onClipChange}
+        />
         <DistanceInput
           distance={normalizedDistance}
           isSelected={isSelected}
@@ -260,26 +208,11 @@ export function PicturePropertiesToolbar({
         onCommit={onDistanceChange}
       />
       <ToolbarSeparator />
-      <ClipButton
-        label="U"
-        title="Unclipped"
-        isActive={clip === Clip.Unclipped}
+      <ClipButtons
+        clip={clip}
         isSelected={isSelected}
-        onClick={() => onClipChange(Clip.Unclipped)}
-      />
-      <ClipButton
-        label="G"
-        title="Ground"
-        isActive={clip === Clip.Ground}
-        isSelected={isSelected}
-        onClick={() => onClipChange(Clip.Ground)}
-      />
-      <ClipButton
-        label="S"
-        title="Sky"
-        isActive={clip === Clip.Sky}
-        isSelected={isSelected}
-        onClick={() => onClipChange(Clip.Sky)}
+        onActivate={onActivate}
+        onChange={onClipChange}
       />
     </Toolbar>
   );
@@ -298,54 +231,63 @@ function DistanceInput({
   onActivate?: () => void;
   onCommit: (distance: number) => void;
 }) {
-  const commitInput = (input: HTMLInputElement) => {
-    const nextDistance = parseDistance(
-      input.value,
-      distance === MIXED_VALUE ? null : distance,
-    );
+  const [draft, setDraft] = useState({
+    source: distance,
+    value: distance === MIXED_VALUE ? null : distance,
+  });
 
-    if (nextDistance === null) {
-      input.value = distance === MIXED_VALUE ? "" : String(distance);
-      return;
-    }
+  // External changes (selection, reset, undo) replace any pending edit.
+  if (draft.source !== distance) {
+    setDraft({
+      source: distance,
+      value: distance === MIXED_VALUE ? null : distance,
+    });
+  }
 
-    input.value = String(nextDistance);
-    if (distance === MIXED_VALUE || nextDistance !== distance) {
-      onCommit(nextDistance);
-    }
-  };
   return (
-    <Input
-      size="sm"
-      key={`${distance}`}
+    <NumberInput
       aria-label="Picture distance"
-      className={cn(
-        "w-12 text-center",
-        isSelected ? "text-white" : "text-secondary",
-        className,
-      )}
-      defaultValue={distance === MIXED_VALUE ? "" : distance}
-      placeholder={distance === MIXED_VALUE ? "Mixed" : undefined}
-      inputMode="numeric"
-      type="number"
+      size="sm"
+      value={draft.value}
       min={MIN_DISTANCE}
       max={MAX_DISTANCE}
-      step={1}
-      onClick={(event) => {
-        event.stopPropagation();
-        onActivate?.();
+      step={10}
+      smallStep={10}
+      largeStep={10}
+      keyboardStep={1}
+      snapOnStep={false}
+      format={{ maximumFractionDigits: 0, useGrouping: false }}
+      onValueChange={(value) => setDraft({ source: distance, value })}
+      onValueCommitted={(value) => {
+        const nextDistance =
+          value === null
+            ? distance === MIXED_VALUE
+              ? null
+              : distance
+            : normalizeDistance(value);
+        setDraft({ source: distance, value: nextDistance });
+        if (
+          nextDistance !== null &&
+          (distance === MIXED_VALUE || nextDistance !== distance)
+        ) {
+          onCommit(nextDistance);
+        }
       }}
-      onFocus={() => onActivate?.()}
-      onChange={(event) => {
-        event.stopPropagation();
-      }}
-      onBlur={(event) => commitInput(event.currentTarget)}
-      onKeyDown={(event) => {
-        event.stopPropagation();
-        if (event.key !== "Enter") return;
-        event.preventDefault();
-        commitInput(event.currentTarget);
-        event.currentTarget.blur();
+      className={cn(isSelected ? "text-white" : "text-secondary", className)}
+      onPointerDownCapture={() => onActivate?.()}
+      onFocusCapture={() => onActivate?.()}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      inputProps={{
+        placeholder: distance === MIXED_VALUE ? "Mixed" : undefined,
+        inputMode: "numeric",
+        onChange: (event) => event.stopPropagation(),
+        onKeyDown: (event) => {
+          event.stopPropagation();
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          event.currentTarget.blur();
+        },
       }}
     />
   );
@@ -356,14 +298,12 @@ function ClipButton({
   title,
   isActive,
   isSelected,
-  compact = false,
   onClick,
 }: {
   label: string;
   title: string;
   isActive: boolean;
   isSelected: boolean;
-  compact?: boolean;
   onClick: () => void;
 }) {
   const button = (
@@ -371,7 +311,7 @@ function ClipButton({
       type="button"
       size="sm"
       className={cn(
-        compact ? "h-6 min-w-5 px-1.5 text-xs leading-none" : "w-8 px-0",
+        "h-6 min-w-6 px-1.5 text-xs leading-none",
         isSelected ? "text-primary" : "text-secondary",
         isActive &&
           (isSelected
@@ -397,7 +337,7 @@ function ClipButton({
   );
 }
 
-function ClipSelect({
+function ClipButtons({
   clip,
   isSelected,
   className,
@@ -411,47 +351,41 @@ function ClipSelect({
   onChange: (clip: Clip) => void;
 }) {
   return (
-    <Select
-      value={String(clip)}
-      items={[
-        { value: MIXED_VALUE, label: "Mixed" },
-        { value: String(Clip.Sky), label: "Sky" },
-        { value: String(Clip.Ground), label: "Ground" },
-        { value: String(Clip.Unclipped), label: "Unclipped" },
-      ]}
-      onValueChange={(value) => {
-        if (value !== null) onChange(parseClip(value, clip));
-      }}
+    <div
+      role="group"
+      aria-label={
+        clip === MIXED_VALUE ? "Picture clipping: mixed" : "Picture clipping"
+      }
+      className={cn("inline-flex items-center gap-0.5", className)}
+      onKeyDown={(event) => event.stopPropagation()}
     >
-      <SelectTrigger
-        aria-label="Picture clipping"
-        className={cn(
-          "h-6 w-fit min-w-0 gap-1 justify-self-end px-1.5 py-0.5 text-xs font-normal",
-          isSelected ? "text-white" : "text-secondary",
-          className,
-        )}
-        onClick={(event) => {
-          event.stopPropagation();
-          onActivate?.();
-        }}
-        onFocus={() => onActivate?.()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <SelectValue />
-        <SelectTriggerIcon className="ml-0" />
-      </SelectTrigger>
-      <SelectContent
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <SelectItem value={MIXED_VALUE} disabled>
-          Mixed
-        </SelectItem>
-        <SelectItem value={String(Clip.Sky)}>Sky</SelectItem>
-        <SelectItem value={String(Clip.Ground)}>Ground</SelectItem>
-        <SelectItem value={String(Clip.Unclipped)}>Unclipped</SelectItem>
-      </SelectContent>
-    </Select>
+      {clip === MIXED_VALUE && (
+        <>
+          <span className="px-1 text-xs text-secondary">Mixed</span>
+          <span
+            aria-hidden="true"
+            className="mx-1 h-4 w-px border-l border-default"
+          />
+        </>
+      )}
+      {[
+        { value: Clip.Sky, label: "S", title: "Sky" },
+        { value: Clip.Ground, label: "G", title: "Ground" },
+        { value: Clip.Unclipped, label: "U", title: "Unclipped" },
+      ].map(({ value, label, title }) => (
+        <ClipButton
+          key={value}
+          label={label}
+          title={title}
+          isActive={clip === value}
+          isSelected={isSelected}
+          onClick={() => {
+            onActivate?.();
+            onChange(value);
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -460,30 +394,8 @@ export function normalizeDistance(distance: number) {
   return Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, Math.round(distance)));
 }
 
-function parseDistance(value: string, fallback: number | null): number | null {
-  if (value.trim() === "") return fallback;
-
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return fallback;
-
-  return normalizeDistance(parsed);
-}
-
-function parseClip(value: string, fallback: Clip | typeof MIXED_VALUE) {
-  const parsed = Number(value);
-  if (
-    parsed === Clip.Unclipped ||
-    parsed === Clip.Ground ||
-    parsed === Clip.Sky
-  ) {
-    return parsed;
-  }
-
-  return fallback === MIXED_VALUE ? Clip.Unclipped : fallback;
-}
-
 function getClipCode(clip: Clip | typeof MIXED_VALUE) {
-  if (clip === MIXED_VALUE) return "M";
+  if (clip === MIXED_VALUE) return "Mixed";
   if (clip === Clip.Unclipped) return "U";
   if (clip === Clip.Ground) return "G";
   return "S";

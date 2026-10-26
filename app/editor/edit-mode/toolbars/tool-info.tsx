@@ -73,6 +73,17 @@ export function ToolInfo() {
     );
   }
 
+  if (["picture", "texture", "color"].includes(activeToolId)) {
+    return (
+      <CanvasTipGroup title="Placement" aria-label="Active tool info">
+        <CanvasTipSegment>
+          Properties
+          <CanvasTipKey>Right click</CanvasTipKey>
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
   if (activeToolId !== "vertex") return null;
 
   const isAutoGrass =

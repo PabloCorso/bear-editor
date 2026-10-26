@@ -37,7 +37,11 @@
   --background-primary-active: var(--color-slate-400);
 
   --border-default: var(--color-slate-800);
-  --border-separator: var(--color-slate-600);
+  --border-separator: color-mix(
+    in oklab,
+    var(--color-slate-600) 80%,
+    transparent
+  );
   --border-accent: var(--primary);
 }
 
@@ -79,4 +83,58 @@
 
 @utility focus-ring {
   @apply ring-2 ring-primary outline-none;
+}
+
+/* Draw each picture-row divider from its first cell across the whole grid. */
+@layer components {
+  .picture-picker-grid > li {
+    position: relative;
+  }
+
+  .picture-picker-grid > li::before {
+    content: "";
+    position: absolute;
+    inset-block-start: -0.75rem;
+    inset-inline-start: 0;
+    width: 100cqw;
+    border-block-start: 1px solid var(--border-separator);
+    pointer-events: none;
+    display: none;
+  }
+
+  @container (width < 200px) {
+    .picture-picker-grid > li:nth-child(1n + 2)::before {
+      display: block;
+    }
+  }
+
+  @container (200px <= width < 304px) {
+    .picture-picker-grid > li:nth-child(2n + 3)::before {
+      display: block;
+    }
+  }
+
+  @container (304px <= width < 408px) {
+    .picture-picker-grid > li:nth-child(3n + 4)::before {
+      display: block;
+    }
+  }
+
+  @container (408px <= width < 512px) {
+    .picture-picker-grid > li:nth-child(4n + 5)::before {
+      display: block;
+    }
+  }
+
+  @container (512px <= width < 616px) {
+    .picture-picker-grid > li:nth-child(5n + 6)::before {
+      display: block;
+    }
+  }
+
+  @container (width >= 616px) {
+    .picture-picker-grid > li:nth-child(6n + 7)::before {
+      display: block;
+    }
+  }
 }

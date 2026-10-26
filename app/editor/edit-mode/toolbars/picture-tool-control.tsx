@@ -38,6 +38,7 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   for (const picture of pictures) {
     if (
       !picture.name ||
+      /^zz[0-9a-f]{6}$/i.test(picture.name) ||
       pictureSprites.some((s) => s.picture.name === picture.name)
     )
       continue;

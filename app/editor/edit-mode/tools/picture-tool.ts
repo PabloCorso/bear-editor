@@ -1,17 +1,18 @@
 import type { EditorStore } from "~/editor/editor-store";
 import type { EventContext } from "~/editor/helpers/event-handler";
-import { defaultTools } from "./default-tools";
-import { Tool } from "./tool-interface";
+import { defaultTools, type ToolMeta } from "./default-tools";
+import { Tool, type PlacementPropertiesMenuState } from "./tool-interface";
 import { type Picture } from "~/editor/elma-types";
 import { standardSprites } from "~/components/standard-sprites";
 
-export type PictureToolState = Pick<Picture, "name" | "distance" | "clip">;
+export type PictureToolState = Pick<Picture, "name" | "distance" | "clip"> &
+  PlacementPropertiesMenuState;
 
 export const defaultPictureState: PictureToolState =
   standardSprites.pictures[0];
 
 export class PictureTool extends Tool<PictureToolState> {
-  readonly meta = defaultTools.picture;
+  readonly meta: ToolMeta = defaultTools.picture;
 
   constructor(store: EditorStore) {
     super(store);
@@ -24,8 +25,29 @@ export class PictureTool extends Tool<PictureToolState> {
     }
   }
 
+  onRightClick(event: MouseEvent, context: EventContext): boolean {
+    const { state, toolState, setToolState } = this.getState();
+    if (!toolState?.name) return false;
+    state.actions.setToolMenuOpen(false);
+    setToolState({
+      propertiesMenu: {
+        clientPosition: { x: event.clientX, y: event.clientY },
+        worldPosition: context.worldPos,
+      },
+    });
+    return true;
+  }
+
+  onDeactivate() {
+    this.getState().setToolState({ propertiesMenu: undefined });
+  }
+
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
-    const { state, toolState } = this.getState();
+    const { state, toolState, setToolState } = this.getState();
+    if (toolState?.propertiesMenu) {
+      setToolState({ propertiesMenu: undefined });
+      return true;
+    }
     if (!toolState?.name) return false;
 
     const position = context.worldPos;
@@ -34,7 +56,8 @@ export class PictureTool extends Tool<PictureToolState> {
       defaultPictureState;
     state.actions.addPicture({
       ...defaults,
-      ...toolState,
+      distance: toolState.distance,
+      clip: toolState.clip,
       name: toolState.name,
       texture: "",
       mask: "",
@@ -45,18 +68,20 @@ export class PictureTool extends Tool<PictureToolState> {
 
   getDrafts() {
     const { state, toolState } = this.getState();
-    if (!toolState?.name || !state.mouseOnCanvas) return {};
+    if (!toolState?.name || (!state.mouseOnCanvas && !toolState.propertiesMenu))
+      return {};
 
     const defaults =
       standardSprites.pictures.find((pic) => pic.name === toolState.name) ||
       defaultPictureState;
     const picture: Picture = {
       ...defaults,
-      ...toolState,
+      distance: toolState.distance,
+      clip: toolState.clip,
       name: toolState.name,
       texture: "",
       mask: "",
-      position: state.mousePosition,
+      position: toolState.propertiesMenu?.worldPosition ?? state.mousePosition,
     };
 
     return {

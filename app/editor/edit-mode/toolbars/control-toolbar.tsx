@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/toolbar";
 import { useLgrAssets, useLgrSprite } from "~/components/use-lgr-assets";
 import { AppleToolControl } from "./apple-tool-control";
+import { ColorToolControl } from "./color-tool-control";
 import { PictureToolControl } from "./picture-tool-control";
 import { TextureToolControl } from "./texture-tool-control";
 import { VertexToolControl } from "./vertex-tool-control";
@@ -25,6 +26,7 @@ const SPRITE_TOOL_IDS = new Set<string>([
   defaultTools.killer.id,
   defaultTools.flower.id,
   defaultTools.picture.id,
+  defaultTools.color.id,
   defaultTools.texture.id,
 ]);
 
@@ -116,6 +118,9 @@ function RegisteredToolControl({
   }
   if (meta.id === defaultTools.picture.id) {
     return <PictureToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.color.id) {
+    return <ColorToolControl {...props} />;
   }
   if (meta.id === defaultTools.texture.id) {
     return <TextureToolControl {...props} />;

@@ -1,9 +1,9 @@
-import { Fragment } from "react";
 import { PictureIcon } from "~/components/sprite-icon";
 import { Toolbar } from "~/components/ui/toolbar";
 import { Clip } from "~/editor/elma-types";
 import { cn } from "~/utils/misc";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
+import { useToolSelection } from "./tool";
 
 export const pickerColumnClassName = "w-[96px]";
 const pickerLabelClassName = "max-w-[96px]";
@@ -29,110 +29,206 @@ type PictureTexturePickerItem = {
   previewClassName?: string;
   width?: number;
   height?: number;
+  isSelected: boolean;
+  onActivate: () => void;
+};
+
+type PickerItemProperties = {
   distance: number;
   clip: Clip;
   defaultDistance: number;
   defaultClip: Clip;
-  isSelected: boolean;
-  onActivate: () => void;
   onDistanceChange: (distance: number) => void;
   onClipChange: (clip: Clip) => void;
   onResetDefaults: () => void;
 };
 
+type PickerItem = PictureTexturePickerItem &
+  (PickerItemProperties | Partial<Record<keyof PickerItemProperties, never>>);
+
 type PictureTexturePickerProps = {
-  items: PictureTexturePickerItem[];
+  items: PickerItem[];
   maxSpriteDimension: number;
+  header?: React.ReactNode;
+  compact?: boolean;
+  placementSettings?: React.ReactNode;
+  rowHeaders?: Record<string, React.ReactNode>;
+  maxColumns?: 4 | 6;
 };
 
 export function PictureTexturePicker({
   items,
   maxSpriteDimension,
+  header,
+  compact = false,
+  placementSettings,
+  rowHeaders,
+  maxColumns = 6,
 }: PictureTexturePickerProps) {
-  return (
-    <div className="pointer-events-auto max-h-full overflow-y-auto">
-      <Toolbar orientation="vertical" className="gap-0 p-1">
-        <ul className="flex w-full flex-col items-stretch">
-          {items.map((item, index) => (
-            <Fragment key={item.key}>
-              <li
-                ref={
-                  item.isSelected ? scrollSelectedPickerItemIntoView : undefined
-                }
-                className="flex flex-col items-center py-1.5"
+  const onSelect = useToolSelection();
+
+  function renderGrid(gridItems: PickerItem[]) {
+    return (
+      <ul
+        className={cn(
+          "grid w-full items-stretch gap-x-2",
+          compact ? "gap-y-4" : "gap-y-6",
+          !compact && !rowHeaders && "picture-picker-grid",
+          compact
+            ? "grid-cols-3 @min-[280px]:grid-cols-4"
+            : "grid-cols-1 @min-[200px]:grid-cols-2 @min-[304px]:grid-cols-3 @min-[408px]:grid-cols-4",
+          maxColumns === 6 &&
+            (compact
+              ? "@min-[400px]:grid-cols-6"
+              : "@min-[512px]:grid-cols-5 @min-[616px]:grid-cols-6"),
+        )}
+      >
+        {gridItems.map((item) => (
+          <li
+            key={item.key}
+            ref={item.isSelected ? scrollSelectedPickerItemIntoView : undefined}
+            className="flex min-w-0 flex-col items-center gap-1"
+          >
+            <button
+              className={cn(
+                "group flex cursor-pointer flex-col items-center rounded hover:bg-primary-hover/50 hover:text-primary",
+                compact ? "w-full gap-1" : `${pickerColumnClassName} pt-1`,
+                item.isSelected && "bg-primary-hover/50 text-primary",
+              )}
+              type="button"
+              aria-label={item.title ?? item.label}
+              aria-pressed={item.isSelected}
+              onClick={() => {
+                item.onActivate();
+                onSelect?.();
+              }}
+            >
+              <span
+                title={item.title}
+                className={cn(
+                  "flex items-baseline justify-between gap-1 text-[10px] leading-3",
+                  pickerLabelClassName,
+                )}
               >
-                <button
+                <span
                   className={cn(
-                    "group flex cursor-pointer flex-col items-center gap-0.5 rounded py-0.5 hover:bg-primary-hover/50 hover:text-primary",
-                    pickerColumnClassName,
-                    item.isSelected && "bg-primary-hover/50 text-primary",
+                    "min-w-0 flex-1 truncate text-left font-medium text-secondary group-hover:text-primary",
+                    item.isSelected && "text-primary",
                   )}
-                  type="button"
-                  aria-pressed={item.isSelected}
-                  onClick={item.onActivate}
                 >
+                  {item.label}
+                </span>
+                {item.secondaryLabel ? (
                   <span
-                    title={item.title}
                     className={cn(
-                      "flex items-baseline justify-between gap-1 text-[10px] leading-3",
-                      pickerLabelClassName,
+                      "shrink-0 text-right text-[9px] font-normal text-secondary/70 group-hover:text-primary/70",
+                      item.isSelected && "text-primary/70",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "min-w-0 flex-1 truncate text-left font-medium text-secondary group-hover:text-primary",
-                        item.isSelected && "text-primary",
-                      )}
-                    >
-                      {item.label}
-                    </span>
-                    {item.secondaryLabel ? (
-                      <span
-                        className={cn(
-                          "shrink-0 text-right text-[9px] font-normal text-secondary/70 group-hover:text-primary/70",
-                          item.isSelected && "text-primary/70",
-                        )}
-                      >
-                        {item.secondaryLabel}
-                      </span>
-                    ) : null}
+                    {item.secondaryLabel}
                   </span>
-                  <span
-                    className="inline-flex items-center justify-center rounded"
-                    style={getPreviewFrameStyle({
-                      width: item.width,
-                      height: item.height,
-                      maxSpriteDimension,
-                    })}
-                  >
-                    <PictureIcon
-                      className={item.previewClassName ?? "h-full w-full"}
-                      src={item.previewSrc}
-                    />
-                  </span>
-                </button>
-                <div className="mt-0.5 max-w-full">
-                  <PicturePropertiesToolbar
-                    variant="summary-popover"
-                    className={pickerColumnClassName}
-                    distance={item.distance}
-                    clip={item.clip}
-                    defaultDistance={item.defaultDistance}
-                    defaultClip={item.defaultClip}
-                    isSelected={item.isSelected}
-                    onActivate={item.onActivate}
-                    onDistanceChange={item.onDistanceChange}
-                    onClipChange={item.onClipChange}
-                    onResetDefaults={item.onResetDefaults}
+                ) : null}
+              </span>
+              <span
+                className={cn(
+                  "inline-flex items-center justify-center rounded",
+                  compact &&
+                    (maxColumns === 6
+                      ? "aspect-square w-full max-w-12"
+                      : "aspect-square w-full max-w-16"),
+                  !compact && "h-[86px] w-[96px]",
+                )}
+              >
+                <span
+                  className="inline-flex items-center justify-center"
+                  style={
+                    compact
+                      ? { width: "100%", height: "100%" }
+                      : getPreviewFrameStyle({
+                          width: item.width,
+                          height: item.height,
+                          maxSpriteDimension,
+                        })
+                  }
+                >
+                  <PictureIcon
+                    className={item.previewClassName ?? "h-full w-full"}
+                    src={item.previewSrc}
                   />
+                </span>
+              </span>
+            </button>
+            {item.distance !== undefined && item.clip !== undefined && (
+              <div className="max-w-full">
+                <PicturePropertiesToolbar
+                  variant="summary-popover"
+                  className={pickerColumnClassName}
+                  distance={item.distance}
+                  clip={item.clip}
+                  defaultDistance={item.defaultDistance}
+                  defaultClip={item.defaultClip}
+                  isSelected={item.isSelected}
+                  onActivate={item.onActivate}
+                  onDistanceChange={item.onDistanceChange}
+                  onClipChange={item.onClipChange}
+                  onResetDefaults={item.onResetDefaults}
+                />
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  const groups: {
+    key: string;
+    header: React.ReactNode;
+    items: PickerItem[];
+  }[] = [];
+  if (rowHeaders) {
+    for (const item of items) {
+      if (rowHeaders[item.key])
+        groups.push({ key: item.key, header: rowHeaders[item.key], items: [] });
+      groups.at(-1)?.items.push(item);
+    }
+  }
+
+  return (
+    <Toolbar
+      orientation="vertical"
+      className={cn(
+        "pointer-events-auto max-h-[calc(100dvh-var(--toolbar-space)-1rem)] min-h-0 overflow-hidden p-0",
+        "max-w-[calc(100vw-6rem)]",
+        !compact && maxColumns === 6 ? "w-[640px]" : "w-[432px]",
+      )}
+    >
+      <div className="@container min-h-0 w-full overflow-x-hidden overflow-y-auto p-2 [scrollbar-width:thin]">
+        {(placementSettings || header) && (
+          <div className="mb-3 flex w-full flex-wrap items-center gap-x-2 gap-y-2">
+            {header}
+            {placementSettings && (
+              <div className="ml-auto">{placementSettings}</div>
+            )}
+          </div>
+        )}
+        {rowHeaders ? (
+          <div className="flex flex-col gap-3">
+            {groups.map((group, index) => (
+              <section key={group.key} className="flex flex-col gap-3">
+                {index > 0 && <div className="h-px bg-separator" />}
+                <div className="flex flex-wrap items-center gap-2 pl-1.5">
+                  {group.header}
                 </div>
-              </li>
-              {index < items.length - 1 ? <PickerSeparator /> : null}
-            </Fragment>
-          ))}
-        </ul>
-      </Toolbar>
-    </div>
+                {renderGrid(group.items)}
+              </section>
+            ))}
+          </div>
+        ) : (
+          renderGrid(items)
+        )}
+      </div>
+    </Toolbar>
   );
 }
 
@@ -143,14 +239,6 @@ function scrollSelectedPickerItemIntoView(node: HTMLLIElement | null) {
     block: "center",
     inline: "nearest",
   });
-}
-
-function PickerSeparator() {
-  return (
-    <li aria-hidden="true" className="w-full px-1.5">
-      <div className="h-px bg-separator" />
-    </li>
-  );
 }
 
 function getPreviewFrameStyle({

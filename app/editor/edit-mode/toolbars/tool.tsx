@@ -1,13 +1,18 @@
 import {
+  useEditor,
   useEditorActiveTool,
   useEditorActions,
 } from "~/editor/use-editor-store";
 import { cn } from "~/utils/misc";
 import { FloatingViewportToolbar } from "./floating-toolbar";
-import {
-  ToolButton,
-  type ToolButtonProps,
-} from "~/components/tool-button";
+import { ToolButton, type ToolButtonProps } from "~/components/tool-button";
+import { createContext, useContext } from "react";
+
+const ToolSelectionContext = createContext<(() => void) | undefined>(undefined);
+
+export function useToolSelection() {
+  return useContext(ToolSelectionContext);
+}
 
 export type ToolControlButtonProps = ToolButtonProps & {
   id?: string;
@@ -26,6 +31,7 @@ export function ToolControlButton({
 }: ToolControlButtonProps) {
   const activeTool = useEditorActiveTool();
   const { activateTool } = useEditorActions();
+  const onSelect = useToolSelection();
   const isActive = isActiveProp ?? (id ? activeTool?.meta.id === id : false);
   return (
     <ToolButton
@@ -38,8 +44,9 @@ export function ToolControlButton({
       )}
       isLoading={isLoading}
       onClick={(event) => {
-        if (id) activateTool(id);
+        if (id && activeTool?.meta.id !== id) activateTool(id);
         onClick?.(event);
+        onSelect?.();
       }}
       {...props}
     >
@@ -78,10 +85,32 @@ export function ToolControlMenu({
   button,
   children,
 }: ToolControlMenuProps) {
+  const isOpen = useEditor((state) => state.openToolMenuId === id);
+  const { setToolMenuOpen } = useEditorActions();
+
   return (
     <>
-      {button}
-      <ToolMenu id={id}>{children}</ToolMenu>
+      <ToolSelectionContext.Provider value={() => setToolMenuOpen(!isOpen)}>
+        {button}
+      </ToolSelectionContext.Provider>
+      {isOpen && (
+        <ToolSelectionContext.Provider value={() => setToolMenuOpen(false)}>
+          <ToolMenu
+            id={id}
+            onKeyDown={(event) => {
+              // Let Enter click the focused choice, without reaching canvas shortcuts.
+              if (
+                event.key === "Enter" &&
+                event.target instanceof HTMLButtonElement
+              ) {
+                event.stopPropagation();
+              }
+            }}
+          >
+            {children}
+          </ToolMenu>
+        </ToolSelectionContext.Provider>
+      )}
     </>
   );
 }

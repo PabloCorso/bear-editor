@@ -387,6 +387,7 @@ export function createEditorStore({
 
         // Editor state
         activeToolId: initialToolId,
+        openToolMenuId: null,
         mousePosition: { x: 0, y: 0 },
         mouseOnCanvas: false,
 
@@ -491,6 +492,14 @@ export function createEditorStore({
           setPolygons: (polygons) => set({ polygons }),
 
           // Tools
+          setToolMenuOpen: (open) => {
+            const state = get();
+            const tool = state.toolsMap.get(state.activeToolId);
+            set({
+              openToolMenuId:
+                open && tool?.meta.hasMenu ? state.activeToolId : null,
+            });
+          },
           registerTool: (tool) =>
             set((prev) => {
               const toolsMap = new Map(prev.toolsMap);
@@ -515,7 +524,7 @@ export function createEditorStore({
             }
 
             // Update store with new tool
-            set({ activeToolId: toolId });
+            set({ activeToolId: toolId, openToolMenuId: null });
             const tool = state.toolsMap.get(toolId);
             tool?.onActivate?.(variant);
           },

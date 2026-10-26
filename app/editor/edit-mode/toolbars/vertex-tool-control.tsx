@@ -1,8 +1,4 @@
-import {
-  ArrowCounterClockwiseIcon,
-  GearIcon,
-  XIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { GearIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   ToolControlButton,
   ToolControlMenu,
@@ -32,14 +28,8 @@ import {
   defaultAutoGrassOptions,
   type AutoGrassOptions,
 } from "~/editor/helpers/auto-grass";
-import {
-  Popover,
-  PopoverClose,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverTrigger } from "~/components/ui/popover";
 import { Input } from "~/components/ui/input";
-import { IconButton } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,10 +37,9 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+  SettingsPopoverContent,
+  SettingsPopoverFields,
+} from "./settings-popover";
 
 export const AUTO_GRASS_ALL_SHORTCUT = "Shift + G";
 
@@ -58,7 +47,7 @@ export function VertexToolControl(props: ToolControlButtonProps) {
   const vertexToolState = useEditorToolState<VertexToolState>(
     defaultTools.vertex.id,
   );
-  const { setToolState } = useEditorActions();
+  const { activateTool, setToolMenuOpen } = useEditorActions();
 
   return (
     <ToolControlMenu
@@ -71,9 +60,10 @@ export function VertexToolControl(props: ToolControlButtonProps) {
     >
       <VertexToolbar
         onVariantChange={(variant: VertexToolVariant) => {
-          setToolState<VertexToolState>(defaultTools.vertex.id, {
-            variant,
-          });
+          activateTool(defaultTools.vertex.id, variant);
+          // Settings triggers need the panel to stay mounted. Choice buttons
+          // close it through ToolControlMenu after this callback returns.
+          setToolMenuOpen(true);
         }}
       />
     </ToolControlMenu>
@@ -229,55 +219,16 @@ function AutoGrassSettingsTrigger({
           <GearIcon />
         </ToolButton>
       </PopoverTrigger>
-      <PopoverContent
-        side="right"
-        align="center"
-        sideOffset={8}
-        collisionPadding={16}
-        positionerClassName="z-60"
-        className="relative z-50 rounded-lg border border-default bg-screen px-3 py-2 shadow-xl outline-hidden"
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-        }}
+      <SettingsPopoverContent
+        title="AutoGrass"
+        closeLabel="Close AutoGrass settings"
+        resetLabel="Reset AutoGrass defaults"
+        isDefault={isDefault}
+        onReset={() => onChange(defaultAutoGrassOptions)}
+        onKeyDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-1.5 pb-2">
-          <p className="flex-1 text-xs font-bold text-primary">AutoGrass</p>
-          <Tooltip>
-            <TooltipTrigger>
-              <IconButton
-                type="button"
-                size="sm"
-                iconSize="sm"
-                className="h-4 w-4 text-secondary hover:text-primary"
-                aria-label="Reset AutoGrass defaults"
-                disabled={isDefault}
-                onClick={() => onChange(defaultAutoGrassOptions)}
-              >
-                <ArrowCounterClockwiseIcon aria-hidden="true" />
-              </IconButton>
-            </TooltipTrigger>
-            <TooltipContent side="top">Reset defaults</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger>
-              <PopoverClose>
-                <IconButton
-                  type="button"
-                  size="sm"
-                  iconSize="sm"
-                  className="h-4 w-4 text-secondary hover:text-primary"
-                  aria-label="Close AutoGrass settings"
-                >
-                  <XIcon aria-hidden="true" />
-                </IconButton>
-              </PopoverClose>
-            </TooltipTrigger>
-            <TooltipContent side="top">Close</TooltipContent>
-          </Tooltip>
-        </div>
         <AutoGrassOptionsControl options={options} onChange={onChange} />
-      </PopoverContent>
+      </SettingsPopoverContent>
     </Popover>
   );
 }
@@ -290,10 +241,7 @@ function AutoGrassOptionsControl({
   onChange: (options: Partial<AutoGrassOptions>) => void;
 }) {
   return (
-    <Toolbar
-      orientation="vertical"
-      className="grid grid-cols-[max-content_max-content] items-center gap-x-3 gap-y-1.5 rounded-md border-0 bg-transparent p-0 shadow-none"
-    >
+    <SettingsPopoverFields>
       <AutoGrassNumberSetting
         label="Height"
         value={worldToPixelValue(options.depth)}
@@ -310,7 +258,7 @@ function AutoGrassOptionsControl({
           onChange({ endInset: pixelToWorldValue(insetPx) })
         }
       />
-    </Toolbar>
+    </SettingsPopoverFields>
   );
 }
 

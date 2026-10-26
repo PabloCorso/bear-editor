@@ -8,6 +8,13 @@ import type { ToolMeta } from "./default-tools";
 export type ToolState<T = unknown> = Record<string, T>;
 export type ToolCursor = string;
 
+export type PlacementPropertiesMenuState = {
+  propertiesMenu?: {
+    clientPosition: Position;
+    worldPosition: Position;
+  };
+};
+
 export abstract class Tool<T extends ToolState = ToolState> {
   abstract readonly meta: ToolMeta;
 

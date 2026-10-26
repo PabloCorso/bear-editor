@@ -3,12 +3,13 @@ import type { EditorStore } from "~/editor/editor-store";
 import type { Picture } from "~/editor/elma-types";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import { defaultTools } from "./default-tools";
-import { Tool } from "./tool-interface";
+import { Tool, type PlacementPropertiesMenuState } from "./tool-interface";
 
 export type TextureToolState = Pick<
   Picture,
   "texture" | "mask" | "distance" | "clip"
->;
+> &
+  PlacementPropertiesMenuState;
 
 export const defaultTextureState: TextureToolState = {
   ...standardSprites.textures[0],
@@ -29,8 +30,29 @@ export class TextureTool extends Tool<TextureToolState> {
     }
   }
 
+  onRightClick(event: MouseEvent, context: EventContext): boolean {
+    const { state, toolState, setToolState } = this.getState();
+    if (!toolState?.texture) return false;
+    state.actions.setToolMenuOpen(false);
+    setToolState({
+      propertiesMenu: {
+        clientPosition: { x: event.clientX, y: event.clientY },
+        worldPosition: context.worldPos,
+      },
+    });
+    return true;
+  }
+
+  onDeactivate() {
+    this.getState().setToolState({ propertiesMenu: undefined });
+  }
+
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
-    const { state, toolState } = this.getState();
+    const { state, toolState, setToolState } = this.getState();
+    if (toolState?.propertiesMenu) {
+      setToolState({ propertiesMenu: undefined });
+      return true;
+    }
     if (!toolState?.texture) return false;
 
     const position = context.worldPos;
@@ -43,7 +65,8 @@ export class TextureTool extends Tool<TextureToolState> {
 
     state.actions.addPicture({
       ...defaults,
-      ...toolState,
+      distance: toolState.distance,
+      clip: toolState.clip,
       name: "",
       texture: toolState.texture,
       mask,
@@ -55,7 +78,11 @@ export class TextureTool extends Tool<TextureToolState> {
 
   getDrafts() {
     const { state, toolState } = this.getState();
-    if (!toolState?.texture || !state.mouseOnCanvas) return {};
+    if (
+      !toolState?.texture ||
+      (!state.mouseOnCanvas && !toolState.propertiesMenu)
+    )
+      return {};
 
     const maskName = toolState.mask || standardSprites.textureMasks[0];
     const defaults =
@@ -64,11 +91,12 @@ export class TextureTool extends Tool<TextureToolState> {
       ) || defaultTextureState;
     const picture: Picture = {
       ...defaults,
-      ...toolState,
+      distance: toolState.distance,
+      clip: toolState.clip,
       name: "",
       texture: toolState.texture,
       mask: maskName,
-      position: state.mousePosition,
+      position: toolState.propertiesMenu?.worldPosition ?? state.mousePosition,
     };
 
     return {

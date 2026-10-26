@@ -4,6 +4,7 @@ export type ToolMeta = {
   id: string;
   name: string;
   shortcut: string;
+  hasMenu?: boolean;
   variants?: Record<string, DefaultToolVariant>;
 };
 
@@ -13,6 +14,7 @@ export const defaultTools = {
   vertex: {
     id: "vertex",
     name: "Vertex",
+    hasMenu: true,
     shortcut: "V",
     variants: {
       grass: { name: "Grass", shortcut: "G" },
@@ -20,11 +22,12 @@ export const defaultTools = {
       autoGrass: { name: "AutoGrass", shortcut: "" },
     },
   },
-  apple: { id: "apple", name: "Apple", shortcut: "A" },
+  apple: { hasMenu: true, id: "apple", name: "Apple", shortcut: "A" },
   killer: { id: "killer", name: "Killer", shortcut: "K" },
   flower: { id: "flower", name: "Flower", shortcut: "F" },
-  picture: { id: "picture", name: "Picture", shortcut: "P" },
-  texture: { id: "texture", name: "Texture", shortcut: "T" },
+  picture: { hasMenu: true, id: "picture", name: "Picture", shortcut: "P" },
+  color: { hasMenu: true, id: "color", name: "Color", shortcut: "C" },
+  texture: { hasMenu: true, id: "texture", name: "Texture", shortcut: "T" },
 } as const satisfies Record<string, ToolMeta>;
 
 export type DefaultToolId = keyof typeof defaultTools;
@@ -39,4 +42,5 @@ export const defaultToolOrder: string[] = [
   defaultTools.flower.id,
   defaultTools.picture.id,
   defaultTools.texture.id,
+  defaultTools.color.id,
 ];

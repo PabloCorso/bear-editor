@@ -15,6 +15,7 @@ import {
   getBuiltinLevel,
   getDefaultLevel,
 } from "~/editor/helpers/level-parser";
+import { ColorTool } from "~/editor/edit-mode/tools/color-tool";
 import { PictureTool } from "~/editor/edit-mode/tools/picture-tool";
 import { HandTool } from "~/editor/edit-mode/tools/hand-tool";
 import { TextureTool } from "~/editor/edit-mode/tools/texture-tool";
@@ -117,6 +118,7 @@ export function useEditorView({
         KillerTool,
         FlowerTool,
         PictureTool,
+        ColorTool,
         TextureTool,
       ];
 

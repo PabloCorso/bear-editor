@@ -267,6 +267,30 @@ export class LgrAssets {
     );
   }
 
+  getColorSprites() {
+    return this.getPictures()
+      .filter((picture) => /^zz[0-9a-f]{6}$/i.test(picture.name))
+      .map((picture) => {
+        const sprite = this.lgrSprites[picture.name];
+        const pixels = sprite.pixels;
+        let color = "transparent";
+        let rgb: [number, number, number] = [0, 0, 0];
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (!pixels[i + 3]) continue;
+          rgb = [pixels[i]!, pixels[i + 1]!, pixels[i + 2]!];
+          color = `rgb(${pixels[i]} ${pixels[i + 1]} ${pixels[i + 2]})`;
+          break;
+        }
+        return {
+          picture,
+          color,
+          rgb,
+          width: sprite.width,
+          height: sprite.height,
+        };
+      });
+  }
+
   getGrassSprites() {
     const qgrass = this.getSprite("qgrass");
     const variants = this.getSpriteEntries()
@@ -454,10 +478,6 @@ function normalizeSpriteName(name: string) {
     .replace(/\.pcx$/, "");
 }
 
-const PNG_SIGNATURE = new Uint8Array([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-]);
-
 function createImageUrlFromRgba({
   width,
   height,
@@ -467,126 +487,19 @@ function createImageUrlFromRgba({
   height: number;
   pixels: Uint8ClampedArray;
 }) {
-  if (typeof URL === "undefined") return undefined;
-  const png = encodePngRgba({ width, height, pixels });
-  return URL.createObjectURL(new Blob([png], { type: "image/png" }));
-}
+  if (typeof document === "undefined") return undefined;
 
-function encodePngRgba({
-  width,
-  height,
-  pixels,
-}: {
-  width: number;
-  height: number;
-  pixels: Uint8ClampedArray;
-}) {
-  const rowStride = width * 4;
-  const raw = new Uint8Array(height * (rowStride + 1));
-  for (let y = 0; y < height; y += 1) {
-    const rawOffset = y * (rowStride + 1);
-    raw[rawOffset] = 0;
-    raw.set(
-      pixels.subarray(y * rowStride, y * rowStride + rowStride),
-      rawOffset + 1,
-    );
-  }
-
-  const ihdr = new Uint8Array(13);
-  writeUint32(ihdr, 0, width);
-  writeUint32(ihdr, 4, height);
-  ihdr[8] = 8;
-  ihdr[9] = 6;
-  ihdr[10] = 0;
-  ihdr[11] = 0;
-  ihdr[12] = 0;
-
-  return concatBytes([
-    PNG_SIGNATURE,
-    createPngChunk("IHDR", ihdr),
-    createPngChunk("IDAT", encodeZlibStore(raw)),
-    createPngChunk("IEND", new Uint8Array(0)),
-  ]);
-}
-
-function encodeZlibStore(data: Uint8Array) {
-  const chunks: Uint8Array[] = [new Uint8Array([0x78, 0x01])];
-  let offset = 0;
-
-  while (offset < data.length) {
-    const remaining = data.length - offset;
-    const blockLength = Math.min(0xffff, remaining);
-    const isFinal = offset + blockLength >= data.length;
-    const header = new Uint8Array(5);
-    header[0] = isFinal ? 0x01 : 0x00;
-    header[1] = blockLength & 0xff;
-    header[2] = (blockLength >> 8) & 0xff;
-    const invertedLength = ~blockLength & 0xffff;
-    header[3] = invertedLength & 0xff;
-    header[4] = (invertedLength >> 8) & 0xff;
-    chunks.push(header, data.subarray(offset, offset + blockLength));
-    offset += blockLength;
-  }
-
-  const checksum = adler32(data);
-  const trailer = new Uint8Array(4);
-  writeUint32(trailer, 0, checksum);
-  chunks.push(trailer);
-  return concatBytes(chunks);
-}
-
-function createPngChunk(type: string, data: Uint8Array) {
-  const typeBytes = new TextEncoder().encode(type);
-  const chunk = new Uint8Array(12 + data.length);
-  writeUint32(chunk, 0, data.length);
-  chunk.set(typeBytes, 4);
-  chunk.set(data, 8);
-  writeUint32(
-    chunk,
-    chunk.length - 4,
-    crc32(chunk.subarray(4, chunk.length - 4)),
-  );
-  return chunk;
-}
-
-function concatBytes(chunks: Uint8Array[]) {
-  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return bytes;
-}
-
-function writeUint32(buffer: Uint8Array, offset: number, value: number) {
-  buffer[offset] = (value >>> 24) & 0xff;
-  buffer[offset + 1] = (value >>> 16) & 0xff;
-  buffer[offset + 2] = (value >>> 8) & 0xff;
-  buffer[offset + 3] = value & 0xff;
-}
-
-function adler32(data: Uint8Array) {
-  let a = 1;
-  let b = 0;
-  for (let index = 0; index < data.length; index += 1) {
-    a = (a + data[index]!) % 65521;
-    b = (b + a) % 65521;
-  }
-  return ((b << 16) | a) >>> 0;
-}
-
-function crc32(data: Uint8Array) {
-  let crc = 0xffffffff;
-  for (let index = 0; index < data.length; index += 1) {
-    crc ^= data[index]!;
-    for (let bit = 0; bit < 8; bit += 1) {
-      const mask = -(crc & 1);
-      crc = (crc >>> 1) ^ (0xedb88320 & mask);
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
+  // Native PNG encoding avoids building and checksumming large uncompressed
+  // PNGs in JavaScript when a picker first requests many sprite previews.
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return undefined;
+  const image = context.createImageData(width, height);
+  image.data.set(pixels);
+  context.putImageData(image, 0, 0);
+  return canvas.toDataURL("image/png");
 }
 
 function getNow() {

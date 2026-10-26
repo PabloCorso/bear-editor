@@ -17,7 +17,10 @@ import {
   uiStrokeWidths,
   selectionThresholds,
 } from "~/editor/constants";
-import type { Tool } from "~/editor/edit-mode/tools/tool-interface";
+import type {
+  Tool,
+  PlacementPropertiesMenuState,
+} from "~/editor/edit-mode/tools/tool-interface";
 import type { Widget } from "~/editor/edit-mode/widgets/widget-interface";
 import { createEditorStore, type EditorStore } from "~/editor/editor-store";
 import type { DefaultLevelPreset } from "~/editor/helpers/level-parser";
@@ -820,9 +823,19 @@ export class EditorEngine {
   private handleKeyDown = (event: KeyboardEvent) => {
     this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.add(event.code);
-    if (isUserTyping()) return;
-
     const state = this.store.getState();
+    const placementState =
+      state.actions.getToolState<PlacementPropertiesMenuState>(
+        state.activeToolId,
+      );
+    if (event.key === "Escape" && placementState?.propertiesMenu) {
+      state.actions.setToolState(state.activeToolId, {
+        propertiesMenu: undefined,
+      });
+      event.preventDefault();
+      return;
+    }
+    if (isUserTyping()) return;
 
     if (state.isPlayMode) {
       if (event.key === "Escape") {
@@ -862,6 +875,31 @@ export class EditorEngine {
       return;
     }
 
+    // Panel navigation takes priority over drawing and play-mode shortcuts.
+    if (state.openToolMenuId && (key === "ENTER" || key === "ESCAPE")) {
+      state.actions.setToolMenuOpen(false);
+      event.preventDefault();
+      return;
+    }
+    if (event.repeat && key === "ENTER") return;
+
+    const currentTool = state.actions.getActiveTool();
+    if (
+      currentTool?.meta.hasMenu &&
+      currentTool.meta.shortcut.toUpperCase() === key &&
+      !modifier &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      if (!event.repeat) {
+        state.actions.setToolMenuOpen(
+          state.openToolMenuId !== state.activeToolId,
+        );
+      }
+      event.preventDefault();
+      return;
+    }
+
     // Let active tool handle the key first
     const activeTool = state.actions.getActiveTool();
     if (activeTool?.onKeyDown) {
@@ -884,11 +922,14 @@ export class EditorEngine {
     }
 
     for (const tool of state.toolsMap.values()) {
-      if (tool.meta.shortcut.toUpperCase() === key) {
-        state.actions.activateTool(
-          tool.meta.id,
-          tool.meta.id === defaultTools.vertex.id ? "normal" : undefined,
-        );
+      if (
+        tool.meta.shortcut.toUpperCase() === key &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        if (!event.repeat) state.actions.activateTool(tool.meta.id);
+        event.preventDefault();
         return;
       }
 

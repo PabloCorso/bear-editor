@@ -6,6 +6,7 @@ import { SpriteIcon } from "~/components/sprite-icon";
 import {
   ToolControlButton,
   ToolControlMenu,
+  useToolSelection,
   type ToolControlButtonProps,
 } from "./tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
@@ -182,12 +183,17 @@ function AppleButton({
   isActive,
   ...props
 }: ButtonProps & { shortcut?: string; isActive?: boolean }) {
+  const onSelect = useToolSelection();
   return (
     <ToolbarButton
       size="sm"
       className={cn("relative", isActive && "bg-primary-hover/50", className)}
       iconAfter={shortcut && <ShortcutIndicator>{shortcut}</ShortcutIndicator>}
       {...props}
+      onClick={(event) => {
+        props.onClick?.(event);
+        onSelect?.();
+      }}
     />
   );
 }
