@@ -1,7 +1,7 @@
 import type { EditorLevel, Polygon, Position } from "../elma-types";
 import { calculateBoundingBox } from "./level-helpers";
 
-const VERTEX_OVERLAP_EPSILON = 0.0000002;
+export const VERTEX_OVERLAP_EPSILON = 0.0000002;
 const MAX_LEVEL_DIMENSION = 188;
 const POSITION_EPSILON = 1e-10;
 

@@ -23,6 +23,11 @@ import {
 } from "./canvas-tip";
 import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
 import { useModifier } from "~/utils/misc";
+import {
+  DEFAULT_CUT_CONNECT_WIDTH_PX,
+  MIN_CUT_CONNECT_WIDTH_PX,
+  MAX_CUT_CONNECT_WIDTH_PX,
+} from "~/editor/helpers/cut-and-connect";
 
 import {
   DEFAULT_PIPE_WIDTH_PX,
@@ -109,6 +114,41 @@ export function ToolInfo() {
   const pipeWidth = vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
   const pipeAppleMode = vertex?.pipeAppleMode ?? "none";
   const canChangeDirection = canToggleVertexToolDirection(vertex);
+  if (vertex?.variant === "cutConnect" && !isAutoGrass) {
+    return (
+      <CanvasTipSections aria-label="Active tool info">
+        <CanvasTipGroup
+          title="Cut & Connect"
+          aria-label="Cut and connect width"
+        >
+          <CanvasTipNumberControl
+            label="Width"
+            accessibleLabel="cut and connect width"
+            value={vertex.cutConnectWidthPx ?? DEFAULT_CUT_CONNECT_WIDTH_PX}
+            min={MIN_CUT_CONNECT_WIDTH_PX}
+            max={MAX_CUT_CONNECT_WIDTH_PX}
+            onAdjust={(delta) =>
+              getActiveTool<VertexTool>()?.adjustCutConnectWidth(delta)
+            }
+          />
+        </CanvasTipGroup>
+        <CanvasTipSection>
+          <CanvasTipSegment>Drag or click two points</CanvasTipSegment>
+          <CanvasTipSegment>
+            Start in sky to cut, ground to connect
+          </CanvasTipSegment>
+          <CanvasTipSegment>
+            Cancel <CanvasTipKey>Esc</CanvasTipKey>
+          </CanvasTipSegment>
+        </CanvasTipSection>
+        {vertex.cutConnectError && (
+          <CanvasTipSection role="status">
+            {vertex.cutConnectError}
+          </CanvasTipSection>
+        )}
+      </CanvasTipSections>
+    );
+  }
 
   if (isPipe) {
     return (

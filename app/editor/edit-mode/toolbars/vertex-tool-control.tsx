@@ -131,6 +131,18 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       >
         <VertexIcon {...getVertexIconProps("pipe")} />
       </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
+        name={defaultTools.vertex.variants.cutConnect.name}
+        shortcut={defaultTools.vertex.variants.cutConnect.shortcut}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "cutConnect"}
+        onClick={() => onVariantChange("cutConnect")}
+      >
+        <VertexIcon {...getVertexIconProps("cutConnect")} />
+      </ToolControlButton>
       <div
         role="separator"
         aria-orientation="horizontal"
@@ -379,7 +391,7 @@ type VertexIconProps = React.ComponentPropsWithoutRef<"svg"> & {
   boundsColor?: string;
   handles?: boolean;
   badge?: string;
-  corridor?: boolean;
+  corridor?: boolean | "narrow";
 };
 
 export function VertexIcon({
@@ -413,7 +425,11 @@ export function VertexIcon({
         <g clipPath={`url(#${frameClipId})`}>
           <rect width="24" height="24" fill={ground} />
           <path
-            d="M-3 20L20-3L27 4L4 27Z"
+            d={
+              corridor === "narrow"
+                ? "M-3 23L23-3L27 1L1 27Z"
+                : "M-3 20L20-3L27 4L4 27Z"
+            }
             fill={sky}
             stroke={boundsColor}
             strokeWidth="1.5"
@@ -483,6 +499,9 @@ export function VertexIcon({
 export function getVertexIconProps(
   variant?: VertexToolVariant,
 ): VertexIconProps {
+  if (variant === "cutConnect") {
+    return { corridor: "narrow", badge: "C" };
+  }
   if (variant === "pipe") {
     return { corridor: true };
   }

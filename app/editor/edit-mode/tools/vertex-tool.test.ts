@@ -4,6 +4,10 @@ import type { EditorStore } from "~/editor/editor-store";
 import type { Polygon, Position } from "~/editor/elma-types";
 import { defaultAutoGrassOptions } from "~/editor/helpers/auto-grass";
 import { ELMA_PIXEL_SCALE } from "~/editor/constants";
+import { createEditorStore } from "~/editor/editor-store";
+import { cutAndConnect } from "~/editor/helpers/cut-and-connect";
+import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
+import { validateLevelTopology } from "~/editor/helpers/level-topology";
 import {
   VertexTool,
   type VertexToolState,
@@ -17,6 +21,358 @@ function position(x: number, y: number): Position {
 function polygon(vertices: Position[], grass = false): Polygon {
   return { vertices, grass } as Polygon;
 }
+
+function rectangle(x: number, y: number, width: number, height: number) {
+  return polygon([
+    position(x, y),
+    position(x + width, y),
+    position(x + width, y + height),
+    position(x, y + height),
+  ]);
+}
+
+describe("Cut & Connect", () => {
+  it.each([0, 1e-7])(
+    "rejects a stroke that leaves polygon corners separated by %s",
+    (gap) => {
+      const polygons = [
+        rectangle(0, 0, 4, 6),
+        rectangle(8 + gap, 4 + gap, 4, 4),
+      ];
+      expect(
+        validateLevelTopology({ polygons, flowers: [position(0, 0)] }).issues,
+      ).toEqual([]);
+
+      const result = cutAndConnect(polygons, position(2, 3), position(8, 3), 2);
+
+      expect(result.polygons).toBe(polygons);
+      expect(result.changedPolygons).toEqual([]);
+      expect(result.error).toBeTruthy();
+    },
+  );
+
+  it("allows a stroke whose corners stay outside the topology tolerance", () => {
+    const polygons = [
+      rectangle(0, 0, 4, 6),
+      rectangle(8 + 3e-7, 4 + 3e-7, 4, 4),
+    ];
+    const result = cutAndConnect(polygons, position(2, 3), position(8, 3), 2);
+    expect(result.polygons).not.toBe(polygons);
+    expect(result.error).toBeUndefined();
+    expect(
+      validateLevelTopology({
+        polygons: result.polygons,
+        flowers: [position(0, 0)],
+      }).issues,
+    ).toEqual([]);
+  });
+
+  it("ignores grass and existing overlaps outside the stroke", () => {
+    const grass = { ...rectangle(8, 4, 4, 4), grass: true };
+    const polygons = [
+      rectangle(0, 0, 4, 6),
+      grass,
+      rectangle(20, 20, 4, 4),
+      rectangle(24, 24, 4, 4),
+    ];
+    const result = cutAndConnect(polygons, position(2, 3), position(8, 3), 2);
+    expect(result.polygons).not.toBe(polygons);
+    expect(result.polygons).toContain(grass);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("cuts a sky polygon in two when starting in ground", () => {
+    const result = cutAndConnect(
+      [rectangle(0, 0, 10, 10)],
+      position(-2, 5),
+      position(12, 5),
+      2,
+    );
+    expect(result.polygons).toHaveLength(2);
+    expect(isWorldPointInGroundRegion(position(5, 5), result.polygons)).toBe(
+      true,
+    );
+    expect(isWorldPointInGroundRegion(position(5, 2), result.polygons)).toBe(
+      false,
+    );
+    expect(
+      validateLevelTopology({
+        polygons: result.polygons,
+        flowers: [position(0, 0)],
+      }).issues,
+    ).toEqual([]);
+  });
+
+  it("joins multiple sky polygons with a passage when starting in sky", () => {
+    const result = cutAndConnect(
+      [rectangle(0, 0, 4, 10), rectangle(8, 0, 4, 10), rectangle(16, 0, 4, 10)],
+      position(2, 5),
+      position(18, 5),
+      2,
+    );
+    expect(result.polygons).toHaveLength(1);
+    for (const x of [2, 6, 10, 14, 18]) {
+      expect(isWorldPointInGroundRegion(position(x, 5), result.polygons)).toBe(
+        false,
+      );
+    }
+    expect(isWorldPointInGroundRegion(position(6, 2), result.polygons)).toBe(
+      true,
+    );
+    expect(
+      validateLevelTopology({
+        polygons: result.polygons,
+        flowers: [position(0, 0)],
+      }).issues,
+    ).toEqual([]);
+  });
+
+  it("splits nested ground islands and preserves grass and distant polygons", () => {
+    const outer = rectangle(-5, -5, 40, 20);
+    const grass = { ...rectangle(1, 1, 2, 2), grass: true };
+    const distant = rectangle(60, 0, 5, 5);
+    const result = cutAndConnect(
+      [outer, rectangle(0, 0, 4, 10), rectangle(8, 0, 4, 10), grass, distant],
+      position(-2, 5),
+      position(14, 5),
+      2,
+    );
+    expect(result.polygons).toContain(outer);
+    expect(result.polygons).toContain(grass);
+    expect(result.polygons).toContain(distant);
+    expect(result.changedPolygons).toHaveLength(4);
+    expect(isWorldPointInGroundRegion(position(2, 5), result.polygons)).toBe(
+      false,
+    );
+    expect(isWorldPointInGroundRegion(position(2, 2), result.polygons)).toBe(
+      true,
+    );
+    expect(
+      validateLevelTopology({
+        polygons: result.polygons,
+        flowers: [position(0, 0)],
+      }).issues,
+    ).toEqual([]);
+  });
+
+  it("handles diagonal strokes and uses the requested width", () => {
+    const original = [rectangle(0, 0, 10, 10)];
+    const result = cutAndConnect(
+      original,
+      position(-2, -2),
+      position(12, 12),
+      2,
+    );
+    expect(isWorldPointInGroundRegion(position(5, 5), result.polygons)).toBe(
+      true,
+    );
+    expect(isWorldPointInGroundRegion(position(5, 5.5), result.polygons)).toBe(
+      true,
+    );
+    expect(isWorldPointInGroundRegion(position(5, 8), result.polygons)).toBe(
+      false,
+    );
+    expect(
+      validateLevelTopology({
+        polygons: result.polygons,
+        flowers: [position(0, 0)],
+      }).issues,
+    ).toEqual([]);
+  });
+
+  it("keeps strokes finite with square end caps", () => {
+    const result = cutAndConnect(
+      [rectangle(0, 0, 10, 10)],
+      position(-2, 5),
+      position(5, 5),
+      2,
+    );
+    expect(isWorldPointInGroundRegion(position(4, 5), result.polygons)).toBe(
+      true,
+    );
+    expect(isWorldPointInGroundRegion(position(6, 5), result.polygons)).toBe(
+      false,
+    );
+    expect(
+      validateLevelTopology({
+        polygons: result.polygons,
+        flowers: [position(0, 0)],
+      }).issues,
+    ).toEqual([]);
+  });
+
+  it.each([0, -1, NaN, Infinity])("ignores invalid width %s", (width) => {
+    const polygons = [rectangle(0, 0, 10, 10)];
+    expect(
+      cutAndConnect(polygons, position(-2, 5), position(12, 5), width).polygons,
+    ).toBe(polygons);
+  });
+
+  it("does not change geometry on zero-length or non-intersecting strokes", () => {
+    const polygons = [rectangle(0, 0, 10, 10)];
+    expect(
+      cutAndConnect(polygons, position(-2, 5), position(-2, 5), 2).polygons,
+    ).toBe(polygons);
+    expect(
+      cutAndConnect(polygons, position(20, 5), position(30, 5), 2).polygons,
+    ).toBe(polygons);
+    expect(
+      cutAndConnect(polygons, position(2, 5), position(8, 5), 2).polygons,
+    ).toBe(polygons);
+  });
+
+  it("preserves deliberate collinear vertices on untouched polygons", () => {
+    const untouched = polygon([
+      position(30, 0),
+      position(35, 0),
+      position(40, 0),
+      position(40, 10),
+      position(30, 10),
+    ]);
+    const polygons = [rectangle(0, 0, 10, 10), untouched];
+    const result = cutAndConnect(polygons, position(-2, 5), position(12, 5), 2);
+    expect(result.polygons).toContain(untouched);
+    expect(untouched.vertices).toHaveLength(5);
+    expect(
+      cutAndConnect(polygons, position(20, 20), position(30, 20), 2).polygons,
+    ).toBe(polygons);
+  });
+
+  it("keeps a third-level sky island when joining its surrounding ground", () => {
+    const polygons = [
+      rectangle(0, 0, 30, 30),
+      rectangle(5, 5, 20, 20),
+      rectangle(10, 10, 10, 10),
+    ];
+    const result = cutAndConnect(
+      polygons,
+      position(7, 15),
+      position(23, 15),
+      2,
+    );
+    expect(isWorldPointInGroundRegion(position(15, 15), result.polygons)).toBe(
+      true,
+    );
+    expect(isWorldPointInGroundRegion(position(15, 12), result.polygons)).toBe(
+      false,
+    );
+    expect(isWorldPointInGroundRegion(position(2, 15), result.polygons)).toBe(
+      false,
+    );
+    expect(
+      validateLevelTopology({
+        polygons: result.polygons,
+        flowers: [position(0, 0)],
+      }).issues,
+    ).toEqual([]);
+  });
+
+  function createCutTool() {
+    const store = createEditorStore({ historyUpdateThrottle: 0 });
+    const tool = new VertexTool(store);
+    store.getState().actions.setPolygons([rectangle(0, 0, 10, 10)]);
+    tool.onActivate("cutConnect");
+    store.getState().actions.setToolState<VertexToolState>("vertex", {
+      cutConnectWidthPx: 96,
+    });
+    store.getState().actions.setMouseOnCanvas(true);
+    store.temporal.getState().clear();
+    return { store, tool };
+  }
+  const context = (x: number, y: number) => ({
+    worldPos: position(x, y),
+    screenX: x * 10,
+    screenY: y * 10,
+  });
+  const pointer = { pointerId: 1, type: "pointerup" } as PointerEvent;
+  const key = (key: string) => ({ key, preventDefault() {} }) as KeyboardEvent;
+
+  it("rejects an invalid preview and commit without changing history", () => {
+    const { store, tool } = createCutTool();
+    const polygons = [rectangle(0, 0, 4, 6), rectangle(8, 4, 4, 4)];
+    store.getState().actions.setPolygons(polygons);
+    store.temporal.getState().clear();
+    tool.onPointerDown(pointer, context(2, 3));
+    tool.onPointerUp(pointer, context(2, 3));
+    store.getState().actions.setMousePosition(position(8, 3));
+    expect(tool.getDrafts().replacementPolygons).toBe(polygons);
+
+    tool.onPointerDown(pointer, context(8, 3));
+    expect(store.getState().polygons).toBe(polygons);
+    expect(store.temporal.getState().pastStates).toHaveLength(0);
+    expect(tool.getDrafts().replacementPolygons).toBeUndefined();
+    expect(
+      store.getState().actions.getToolState<VertexToolState>("vertex")
+        ?.cutConnectError,
+    ).toBeTruthy();
+  });
+
+  it("previews without modifying the document, then commits two clicks in one undo step", () => {
+    const { store, tool } = createCutTool();
+    const before = store.getState().polygons;
+    tool.onPointerDown(pointer, context(-2, 5));
+    tool.onPointerUp(pointer, context(-2, 5));
+    store.getState().actions.setMousePosition(position(12, 5));
+    const preview = tool.getDrafts().replacementPolygons;
+    expect(preview).toHaveLength(2);
+    expect(store.getState().polygons).toBe(before);
+    expect(store.temporal.getState().pastStates).toHaveLength(0);
+    tool.onPointerDown(pointer, context(12, 5));
+    const after = store.getState().polygons;
+    expect(after).toBe(preview);
+    expect(tool.getDrafts().replacementPolygons).toBeUndefined();
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+    store.temporal.getState().undo();
+    expect(store.getState().polygons).toEqual(before);
+    store.temporal.getState().redo();
+    expect(store.getState().polygons).toEqual(after);
+  });
+
+  it("commits a drag at the release position even without a final mousemove", () => {
+    const { store, tool } = createCutTool();
+    tool.onPointerDown(pointer, context(-2, 5));
+    tool.onPointerMove(pointer, context(5, 5));
+    tool.onPointerUp(pointer, context(12, 5));
+    expect(store.getState().polygons).toHaveLength(2);
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+  });
+
+  it.each(["escape", "right-click", "deactivate", "pointercancel"])(
+    "cancels on %s without a document change",
+    (method) => {
+      const { store, tool } = createCutTool();
+      const before = store.getState().polygons;
+      tool.onPointerDown(pointer, context(-2, 5));
+      store.getState().actions.setMousePosition(position(12, 5));
+      if (method === "escape") tool.onKeyDown(key("Escape"), context(12, 5));
+      if (method === "right-click")
+        tool.onRightClick({} as MouseEvent, context(12, 5));
+      if (method === "deactivate") tool.onDeactivate();
+      if (method === "pointercancel")
+        tool.onPointerUp(
+          { ...pointer, type: "pointercancel" } as PointerEvent,
+          context(12, 5),
+        );
+      expect(store.getState().polygons).toBe(before);
+      expect(tool.getDrafts().replacementPolygons).toBeUndefined();
+      expect(store.temporal.getState().pastStates).toHaveLength(0);
+    },
+  );
+
+  it("updates the preview with +/- and preserves width for the next stroke", () => {
+    const { store, tool } = createCutTool();
+    tool.onPointerDown(pointer, context(-2, 5));
+    store.getState().actions.setMousePosition(position(12, 5));
+    const before = tool.getDrafts().replacementPolygons;
+    tool.onKeyDown(key("+"), context(12, 5));
+    expect(tool.getDrafts().replacementPolygons).not.toEqual(before);
+    tool.clear();
+    expect(
+      store.getState().actions.getToolState<VertexToolState>("vertex")
+        ?.cutConnectWidthPx,
+    ).toBe(97);
+  });
+});
 
 function createVertexTool({
   polygons,

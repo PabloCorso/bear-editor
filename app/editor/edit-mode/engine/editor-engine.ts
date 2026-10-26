@@ -421,6 +421,18 @@ export class EditorEngine {
   private endActiveTouchToolInteraction() {
     if (this.activeTouchToolPointerId === null) return;
 
+    const state = this.store.getState();
+    if (
+      state.activeToolId === "vertex" &&
+      state.actions.getToolState<VertexToolState>("vertex")?.variant ===
+        "cutConnect"
+    ) {
+      // A second finger begins a camera gesture, rather than applying a stroke.
+      state.actions.getActiveTool()?.clear?.();
+      this.activeTouchToolPointerId = null;
+      return;
+    }
+
     const pointerPos = this.touchPointers.get(this.activeTouchToolPointerId);
     if (pointerPos) {
       const syntheticEvent = this.createSyntheticTouchPointerEvent(
@@ -631,6 +643,14 @@ export class EditorEngine {
   };
 
   private handlePointerCancel = (event: PointerEvent) => {
+    const activeTool = this.store.getState().actions.getActiveTool();
+    if (
+      activeTool instanceof VertexTool &&
+      this.store.getState().actions.getToolState<VertexToolState>("vertex")
+        ?.variant === "cutConnect"
+    ) {
+      activeTool.clear();
+    }
     if (event.pointerType === "touch") {
       this.cancelTouchContextMenuTimer();
       this.touchPointers.delete(event.pointerId);
@@ -850,6 +870,25 @@ export class EditorEngine {
     const modifier = checkModifierKey(event);
 
     if (
+      key === "C" &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !event.isComposing
+    ) {
+      const vertexState = state.actions.getToolState<VertexToolState>("vertex");
+      if (
+        state.activeToolId !== "vertex" ||
+        vertexState?.variant !== "cutConnect"
+      ) {
+        state.actions.activateTool("vertex", "cutConnect");
+      }
+      event.preventDefault();
+      return;
+    }
+
+    if (
       key === "P" &&
       event.shiftKey &&
       !event.metaKey &&
@@ -936,6 +975,8 @@ export class EditorEngine {
       for (const [variantKey, variantMeta] of Object.entries(
         tool.meta.variants || {},
       )) {
+        // C is handled above with modifier checks so Copy stays available.
+        if (variantKey === "cutConnect") continue;
         if (variantMeta.shortcut.toUpperCase() === key) {
           // If tool is already active, let onKeyDown handle it (toggle)
           if (state.activeToolId === tool.meta.id) {
@@ -1087,6 +1128,10 @@ export class EditorEngine {
     if (state.activeToolId !== "vertex") return;
 
     const toolState = state.actions.getToolState<VertexToolState>("vertex");
+    if (toolState?.variant === "cutConnect") {
+      state.actions.getActiveTool()?.clear?.();
+      return;
+    }
     if (
       !toolState?.editingPolygon ||
       toolState.drawingPolygon.vertices.length === 0

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-26
+
+- Add Cut & Connect with live terrain previews and adjustable width (C).
+- Add LGR folder support.
+- Update toolbars interaction, close panel after selection to reduce clutter.
+- Add fancy boosted Default.lgr by default and color pictures tool.
+- Refine pictures/textures/colors tools.
+
 ## 2026-10-24
 
 - Improve auto grass corners logic.

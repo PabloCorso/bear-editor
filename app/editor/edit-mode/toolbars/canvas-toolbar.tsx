@@ -52,6 +52,7 @@ export function CanvasToolbar({
     activeToolId === "vertex" &&
     (vertex?.variant === "autoGrass" ||
       vertex?.variant === "pipe" ||
+      vertex?.variant === "cutConnect" ||
       vertex?.previewAutoGrassAll);
   const modifier = useModifier();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
