@@ -9,7 +9,7 @@ export type ToolMeta = {
 };
 
 export const defaultTools = {
-  select: { id: "select", name: "Select tool", shortcut: "S" },
+  select: { id: "select", name: "Select tool", shortcut: "S", hasMenu: true },
   hand: { id: "hand", name: "Hand tool", shortcut: "H" },
   vertex: {
     id: "vertex",

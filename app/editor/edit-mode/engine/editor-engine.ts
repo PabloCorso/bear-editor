@@ -1290,7 +1290,7 @@ export class EditorEngine {
     }
 
     const selectState = state.actions.getToolState<SelectToolState>("select");
-    if (selectState?.isDragging) {
+    if (selectState?.isDragging || selectState?.isMarqueeSelecting) {
       return;
     }
 
