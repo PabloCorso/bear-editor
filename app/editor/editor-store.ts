@@ -1,7 +1,13 @@
 import {
+  getSessionArtifacts,
+  findSessionArtifact,
+  getSessionArtifactKey,
+} from "./session-artifacts";
+import {
   DEFAULT_LEVEL_TITLE,
   normalizeLevelTitle,
 } from "./helpers/level-title";
+import { emptyTestStarts, testStartColors } from "./test-starts";
 import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { temporal, type TemporalState } from "zundo";
 import type {
@@ -50,7 +56,9 @@ export type PartialEditorState = Pick<
   | "start"
   | "pictures"
 >;
-export type TemporalEditorState = TemporalState<PartialEditorState>;
+export type EditorHistoryState = PartialEditorState &
+  Pick<EditorState, "testStarts">;
+export type TemporalEditorState = TemporalState<EditorHistoryState>;
 export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
   temporal: StoreApi<TemporalEditorState>;
 };
@@ -84,8 +92,16 @@ export function getLevelSnapshot(
   };
 }
 
+/** Undo includes session data; save/export and dirty tracking use getLevelSnapshot. */
+export function getEditorHistorySnapshot(
+  state: EditorState,
+): EditorHistoryState {
+  return { ...getLevelSnapshot(state), testStarts: state.testStarts };
+}
+
 type PositionSnapshot = { x: number; y: number };
 type ObjectSelectionSnapshot = PositionSnapshot & {
+  artifactKey?: string;
   kind?: "start" | "apple" | "killer" | "flower";
   index?: number;
 };
@@ -170,6 +186,9 @@ export function createEditorStore({
     const captureObjectSnapshot = (
       object: Position,
     ): ObjectSelectionSnapshot => {
+      const artifact = findSessionArtifact(state, object);
+      const artifactKey = artifact?.key ?? getSessionArtifactKey(object);
+      if (artifactKey) return { ...object, artifactKey };
       if (state.start === object) {
         return { x: object.x, y: object.y, kind: "start", index: 0 };
       }
@@ -237,6 +256,7 @@ export function createEditorStore({
 
     const objectBuckets = new Map<string, Position[]>();
     const allObjects = [
+      ...getSessionArtifacts(state).map((item) => item.position),
       state.start,
       ...state.apples.map((apple) => apple.position),
       ...state.killers,
@@ -267,6 +287,14 @@ export function createEditorStore({
     const consumeObjectSnapshot = (
       snapshot: ObjectSelectionSnapshot,
     ): Position | null => {
+      if (snapshot.artifactKey) {
+        const artifact = getSessionArtifacts(state).find(
+          (item) => item.key === snapshot.artifactKey,
+        );
+        if (!artifact || consumedObjects.has(artifact.position)) return null;
+        consumedObjects.add(artifact.position);
+        return artifact.position;
+      }
       let candidate: Position | null = null;
 
       if (snapshot.kind === "start") {
@@ -354,6 +382,9 @@ export function createEditorStore({
     temporal(
       (set, get, store) => ({
         // Initial state - level data will be injected via constructor
+        testStarts: emptyTestStarts(),
+        testStartRename: null,
+        testStartMenu: null,
         levelName: defaultLevelTitle,
         lgr: "default",
         ground: "ground",
@@ -436,6 +467,98 @@ export function createEditorStore({
           setLgr: (lgr) => set({ lgr }),
           setGround: (ground) => set({ ground }),
           setSky: (sky) => set({ sky }),
+          addTestStart: (position) =>
+            set((state) => {
+              const session = state.testStarts;
+              const number = session.nextNumber;
+              const item = {
+                id: crypto.randomUUID(),
+                name: `Test start ${number}`,
+                position: { ...position },
+                color: testStartColors[(number - 1) % testStartColors.length],
+              };
+              return {
+                testStarts: {
+                  ...session,
+                  items: [...session.items, item],
+                  activeId: item.id,
+                  nextNumber: number + 1,
+                },
+                testStartMenu: null,
+              };
+            }),
+          moveTestStart: (id, position) =>
+            set((state) => ({
+              testStarts: {
+                ...state.testStarts,
+                items: state.testStarts.items.map((item) =>
+                  item.id === id ? { ...item, position } : item,
+                ),
+              },
+            })),
+          renameTestStart: (id, name) => {
+            const trimmedName = name.trim();
+            if (!trimmedName) return;
+            set((state) => ({
+              testStarts: {
+                ...state.testStarts,
+                ...(id === null
+                  ? { levelName: trimmedName }
+                  : {
+                      items: state.testStarts.items.map((item) =>
+                        item.id === id ? { ...item, name: trimmedName } : item,
+                      ),
+                    }),
+              },
+            }));
+          },
+          activateTestStart: (id) =>
+            set((state) => ({
+              testStarts: {
+                ...state.testStarts,
+                activeId: state.testStarts.items.some((item) => item.id === id)
+                  ? id
+                  : null,
+              },
+              testStartMenu: null,
+            })),
+          deleteTestStart: (id) =>
+            set((state) => ({
+              testStarts: {
+                ...state.testStarts,
+                items: state.testStarts.items.filter((item) => item.id !== id),
+                activeId:
+                  state.testStarts.activeId === id
+                    ? null
+                    : state.testStarts.activeId,
+              },
+              testStartMenu: null,
+            })),
+          promoteTestStart: (id) => {
+            const state = get();
+            const item = state.testStarts.items.find((item) => item.id === id);
+            if (!item) return;
+            const before = state.testStarts;
+            const after = {
+              ...before,
+              activeId: null,
+              levelName: item.name,
+              items: before.items.map((candidate) =>
+                candidate.id === id
+                  ? {
+                      ...candidate,
+                      position: { ...state.start },
+                      name: before.levelName,
+                    }
+                  : candidate,
+              ),
+            };
+            set({
+              start: { ...item.position },
+              testStarts: after,
+              testStartMenu: null,
+            });
+          },
           setStart: (position) => set({ start: position }),
           addApple: (apple) => set({ apples: [...get().apples, apple] }),
           updateApple: (values) =>
@@ -651,6 +774,9 @@ export function createEditorStore({
             );
             set({
               ...normalizedLevel,
+              testStarts: emptyTestStarts(),
+              testStartRename: null,
+              testStartMenu: null,
               documentSession: createDocumentSession(
                 { ...document, level: normalizedLevel },
                 defaultLevelTitle,
@@ -704,18 +830,7 @@ export function createEditorStore({
       {
         equality: fastDeepEqual,
         handleSet: (handleSet) => throttle(handleSet, historyUpdateThrottle),
-        partialize: (state) => ({
-          levelName: state.levelName,
-          lgr: state.lgr,
-          ground: state.ground,
-          sky: state.sky,
-          polygons: state.polygons,
-          apples: state.apples,
-          killers: state.killers,
-          flowers: state.flowers,
-          start: state.start,
-          pictures: state.pictures,
-        }),
+        partialize: getEditorHistorySnapshot,
       },
     ),
   );
@@ -735,7 +850,8 @@ export function createEditorStore({
     selectionFuture = [];
     currentSelection = captureSelectionMemento(editorStore.getState());
 
-    const maxPastCount = temporalStore.getState().pastStates.length;
+    // zundo calls onSave before appending the new history entry.
+    const maxPastCount = temporalStore.getState().pastStates.length + 1;
     if (selectionPast.length > maxPastCount) {
       selectionPast = selectionPast.slice(selectionPast.length - maxPastCount);
     }
@@ -787,6 +903,22 @@ export function createEditorStore({
   });
 
   currentSelection = captureSelectionMemento(editorStore.getState());
+
+  // Selection can change without a content/history entry (click, marquee, filters).
+  // Remember it before the next edit, but preserve the pre-drag selection while
+  // history is paused and positions are being replaced.
+  editorStore.subscribe((state, previous) => {
+    if (!temporalStore.getState().isTracking) return;
+    const selection = state.actions.getToolState<SelectToolState>("select");
+    const before = previous.toolState.select as SelectToolState | undefined;
+    if (
+      selection?.selectedObjects !== before?.selectedObjects ||
+      selection?.selectedVertices !== before?.selectedVertices ||
+      selection?.selectedPictures !== before?.selectedPictures
+    ) {
+      currentSelection = captureSelectionMemento(state);
+    }
+  });
 
   const syncDocumentSession = () => {
     const state = editorStore.getState();

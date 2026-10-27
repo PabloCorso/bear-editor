@@ -26,6 +26,7 @@ uniform bool u_useTexture;
 uniform bool u_useMaskTexture;
 uniform bool u_repeatTexture;
 uniform vec4 u_color;
+uniform bool u_recolorKuski;
 uniform sampler2D u_texture;
 uniform sampler2D u_maskTexture;
 
@@ -37,6 +38,19 @@ void main() {
   if (u_useTexture) {
     vec2 texCoord = u_repeatTexture ? fract(v_texCoord) : v_texCoord;
     color = texture2D(u_texture, texCoord) * u_color;
+    if (u_recolorKuski) {
+      vec4 sprite = texture2D(u_texture, texCoord);
+      // Remove the original red/yellow hue before applying the identity color.
+      // Keep the sprite shading, with just a little lift to keep hues readable.
+      vec3 original = sprite.rgb / max(sprite.a, 0.001);
+      vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
+      float luminance = clamp(dot(original, luminanceWeights), 0.0, 1.0);
+      float shade = mix(luminance, sqrt(luminance), 0.25);
+      // Soften identity colors without losing their distinction from one another.
+      float tintLuminance = dot(u_color.rgb, luminanceWeights);
+      vec3 tint = mix(vec3(tintLuminance), u_color.rgb, 0.8);
+      color = vec4(tint * shade, sprite.a * u_color.a);
+    }
     if (u_useMaskTexture) {
       float maskAlpha = texture2D(u_maskTexture, v_maskTexCoord).a;
       color.a *= step(0.001, maskAlpha);
@@ -52,6 +66,7 @@ type ProgramInfo = {
   positionAttribute: number;
   texCoordAttribute: number;
   colorUniform: WebGLUniformLocation;
+  recolorKuskiUniform: WebGLUniformLocation;
   maskTextureUniform: WebGLUniformLocation;
   repeatTextureUniform: WebGLUniformLocation;
   useMaskTextureUniform: WebGLUniformLocation;
@@ -72,9 +87,9 @@ export class WebGLRenderContext {
   private canvasTextureCache = new WeakMap<HTMLCanvasElement, WebGLTexture>();
   private textures = new Set<WebGLTexture>();
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, { alpha = false } = {}) {
     const gl = canvas.getContext("webgl", {
-      alpha: false,
+      alpha,
       antialias: true,
       preserveDrawingBuffer: import.meta.env.DEV,
       stencil: true,
@@ -111,10 +126,10 @@ export class WebGLRenderContext {
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  clear(color: string) {
+  clear(color: string, alpha = 1) {
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     this.resetDrawState();
-    this.gl.clearColor(...hexToRgb(color), 1);
+    this.gl.clearColor(...hexToRgb(color), alpha);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.STENCIL_BUFFER_BIT);
   }
 
@@ -139,7 +154,12 @@ export class WebGLRenderContext {
     gl.stencilFunc(gl.ALWAYS, 0, 0xff);
     gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.blendFuncSeparate(
+      gl.SRC_ALPHA,
+      gl.ONE_MINUS_SRC_ALPHA,
+      gl.ONE,
+      gl.ONE_MINUS_SRC_ALPHA,
+    );
     gl.activeTexture(gl.TEXTURE0);
   }
 
@@ -149,12 +169,14 @@ export class WebGLRenderContext {
     scene,
     texture = null,
     repeatTexture = false,
+    recolorKuski = false,
   }: {
     vertices: number[];
     color: WebGLColor;
     scene: WorldRenderScene;
     texture?: WebGLTexture | null;
     repeatTexture?: boolean;
+    recolorKuski?: boolean;
   }) {
     if (vertices.length === 0) return;
 
@@ -173,6 +195,7 @@ export class WebGLRenderContext {
     applyViewportUniforms(gl, programInfo, scene);
     gl.uniform4fv(programInfo.colorUniform, color);
     gl.uniform1i(programInfo.useTextureUniform, texture ? 1 : 0);
+    gl.uniform1i(programInfo.recolorKuskiUniform, recolorKuski ? 1 : 0);
     gl.uniform1i(programInfo.useMaskTextureUniform, 0);
     gl.uniform1i(programInfo.repeatTextureUniform, repeatTexture ? 1 : 0);
     if (texture) {
@@ -208,6 +231,7 @@ export class WebGLRenderContext {
     applyViewportUniforms(gl, programInfo, scene);
     gl.uniform4fv(programInfo.colorUniform, color);
     gl.uniform1i(programInfo.useTextureUniform, 1);
+    gl.uniform1i(programInfo.recolorKuskiUniform, 0);
     gl.uniform1i(programInfo.useMaskTextureUniform, 1);
     gl.uniform1i(programInfo.repeatTextureUniform, 1);
     gl.activeTexture(gl.TEXTURE0);
@@ -336,6 +360,7 @@ function createProgramInfo(gl: WebGLRenderingContext): ProgramInfo {
     );
   }
 
+  const recolorKuskiUniform = gl.getUniformLocation(program, "u_recolorKuski");
   const colorUniform = gl.getUniformLocation(program, "u_color");
   const maskTextureUniform = gl.getUniformLocation(program, "u_maskTexture");
   const repeatTextureUniform = gl.getUniformLocation(
@@ -350,6 +375,7 @@ function createProgramInfo(gl: WebGLRenderingContext): ProgramInfo {
   const textureUniform = gl.getUniformLocation(program, "u_texture");
   const viewRectUniform = gl.getUniformLocation(program, "u_viewRect");
   if (
+    !recolorKuskiUniform ||
     !colorUniform ||
     !maskTextureUniform ||
     !repeatTextureUniform ||
@@ -367,6 +393,7 @@ function createProgramInfo(gl: WebGLRenderingContext): ProgramInfo {
     positionAttribute: gl.getAttribLocation(program, "a_position"),
     texCoordAttribute: gl.getAttribLocation(program, "a_texCoord"),
     colorUniform,
+    recolorKuskiUniform,
     maskTextureUniform,
     repeatTextureUniform,
     useMaskTextureUniform,

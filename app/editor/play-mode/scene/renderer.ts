@@ -20,6 +20,10 @@ export type PlayModeRenderVisibility = Pick<
 
 export type PlayModeRenderOptions = {
   visibility?: PlayModeRenderVisibility;
+  testStartState?: Pick<
+    import("~/editor/editor-state").EditorState,
+    "start" | "testStarts"
+  >;
 };
 
 export interface PlayModeRenderer {

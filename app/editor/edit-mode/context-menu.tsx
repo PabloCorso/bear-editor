@@ -1,4 +1,13 @@
 import {
+  getSessionArtifacts,
+  type SessionArtifact,
+} from "~/editor/session-artifacts";
+import { ContextMenu } from "@base-ui/react/context-menu";
+import {
+  TestStartMenuItems,
+  TestStartSubmenu,
+} from "~/editor/edit-mode/test-start-controls";
+import {
   useEditorToolState,
   useEditorActions,
   useEditorActiveTool,
@@ -81,7 +90,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { cn, useModifier } from "~/utils/misc";
-import kuskiSrc from "~/assets/kuski.png";
+import { KuskiIcon } from "~/components/kuski-icon";
 
 const TOOLBAR_COLLISION_PADDING_PX = 8;
 
@@ -99,6 +108,7 @@ export function EditorContextMenu() {
   const killers = useEditor((state) => state.killers);
   const flowers = useEditor((state) => state.flowers);
   const start = useEditor((state) => state.start);
+  const sessionArtifacts = useEditor(getSessionArtifacts);
   const polygons = useEditor((state) => state.polygons);
   const pictures = useEditor((state) => state.pictures);
   const autoGrassOptions = useEditor((state) => state.autoGrassOptions);
@@ -148,6 +158,7 @@ export function EditorContextMenu() {
     killers,
     flowers,
     start,
+    sessionArtifacts,
     pictures,
   });
   const sourceSelectionGroups = getSelectionGroups(nextSelectionFilterSource, {
@@ -155,6 +166,7 @@ export function EditorContextMenu() {
     killers,
     flowers,
     start,
+    sessionArtifacts,
     pictures,
   });
   const selectionCount = selectionGroups.reduce(
@@ -290,15 +302,33 @@ export function EditorContextMenu() {
     );
   }
 
+  const canvas =
+    typeof document === "undefined" ? null : document.querySelector("canvas");
+  const collisionBoundary = canvas ?? undefined;
+
+  const anchorPosition = getContextMenuAnchorPosition(
+    selectToolState.contextMenuPosition ?? { x: 0, y: 0 },
+  );
+
+  const anchor = createRectAnchor(anchorPosition, canvas, {
+    width: 0,
+    height: 0,
+  });
+
+  const directMenu = toolbarSections.length === 0;
   const selectionActionsIndex = toolbarSections.length;
   toolbarSections.push(
     <SelectionActionsMenu
+      direct={directMenu}
+      anchor={anchor}
+      onClose={() => selectTool?.closeContextMenu()}
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(selectToolState.transformMode)}
       onTransform={() => selectTool?.toggleTransform()}
       onMirror={(direction) => selectTool?.mirrorSelection(direction)}
       canArrange={canArrange}
       canDuplicate={canDuplicate}
+      canDelete={selectTool?.canDeleteSelection() ?? false}
       onArrange={(direction) => {
         selectTool?.arrangeSelectedPictures(direction);
       }}
@@ -318,19 +348,7 @@ export function EditorContextMenu() {
   );
 
   if (!hasSelection) return null;
-
-  const canvas =
-    typeof document === "undefined" ? null : document.querySelector("canvas");
-  const collisionBoundary = canvas ?? undefined;
-
-  const anchorPosition = getContextMenuAnchorPosition(
-    selectToolState.contextMenuPosition ?? { x: 0, y: 0 },
-  );
-
-  const anchor = createRectAnchor(anchorPosition, canvas, {
-    width: 0,
-    height: 0,
-  });
+  if (directMenu) return toolbarSections[selectionActionsIndex];
 
   return (
     <Popover
@@ -567,7 +585,8 @@ function useSelectionGroupIcons(): Record<
     apples: <SpriteIcon className="opacity-100" src={appleSprite.src} />,
     killers: <SpriteIcon className="opacity-100" src={killerSprite.src} />,
     flowers: <SpriteIcon className="opacity-100" src={flowerSprite.src} />,
-    start: <PictureIcon className="scale-125 opacity-100" src={kuskiSrc} />,
+    sessionArtifacts: <KuskiIcon className="opacity-100" />,
+    start: <KuskiIcon className="opacity-100" />,
     pictures: <PictureIcon className="opacity-100" src={pictureSprite.src} />,
     textures: (
       <PictureIcon
@@ -583,79 +602,125 @@ function useSelectionGroupIcons(): Record<
 }
 
 function SelectionActionsMenu({
+  direct,
+  anchor,
+  onClose,
   canTransform,
   transforming,
   onTransform,
   onMirror,
   canArrange,
   canDuplicate,
+  canDelete,
   onArrange,
   onCopy,
   onDuplicate,
   onDelete,
 }: {
+  direct: boolean;
+  anchor: PointAnchor;
+  onClose: () => void;
   canTransform: boolean;
   transforming: boolean;
   onTransform: () => void;
   onMirror: (direction: MirrorSelectionDirection) => void;
   canArrange: boolean;
   canDuplicate: boolean;
+  canDelete: boolean;
   onArrange: (direction: ArrangeSelectionDirection) => void;
   onCopy: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const modifier = useModifier();
+  const singleTestPlayerSelected = useEditor((state) => {
+    const selection = state.actions.getToolState<SelectToolState>("select");
+    return Boolean(
+      selection &&
+      selection.selectedVertices.length === 0 &&
+      selection.selectedPictures.length === 0 &&
+      selection.selectedObjects.length === 1 &&
+      state.testStarts.items.some(
+        (item) =>
+          item.id === state.testStartMenu?.id &&
+          item.position === selection.selectedObjects[0],
+      ),
+    );
+  });
+  const onlyTestStartActions =
+    !canTransform &&
+    !canDuplicate &&
+    !canArrange &&
+    (!canDelete || singleTestPlayerSelected);
+  // Context menus register the floating parent without needing a trigger,
+  // so opening a submenu does not dismiss the parent as a sibling menu.
+  const MenuRoot = direct ? ContextMenu.Root : DropdownMenu;
 
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger>
-        <ToolbarButton type="button" aria-label="More selection actions">
-          <DotsThreeVerticalIcon weight="light" />
-        </ToolbarButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom">
-        <DropdownMenuItem
-          disabled={!canTransform}
-          shortcut="R"
-          onClick={onTransform}
-        >
-          {transforming ? "Exit resize & rotate" : "Resize & rotate"}
-        </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={!canTransform} openOnHover>
-            Mirror
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => onMirror("horizontal")}>
-                Mirror horizontally
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMirror("vertical")}>
-                Mirror vertically
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSeparator />
+    <MenuRoot
+      {...(direct ? {} : { modal: false })}
+      open={direct ? true : undefined}
+      onOpenChange={(open) => {
+        if (direct && !open) onClose();
+      }}
+    >
+      {!direct && (
+        <DropdownMenuTrigger>
+          <ToolbarButton type="button" aria-label="More selection actions">
+            <DotsThreeVerticalIcon weight="light" />
+          </ToolbarButton>
+        </DropdownMenuTrigger>
+      )}
+      <DropdownMenuContent
+        anchor={direct ? anchor : undefined}
+        positionMethod={direct ? "fixed" : undefined}
+        finalFocus={false}
+        align={direct ? "start" : "end"}
+        side="bottom"
+        sideOffset={direct ? 0 : 12}
+      >
+        {canTransform && (
+          <>
+            <DropdownMenuItem shortcut="R" onClick={onTransform}>
+              {transforming ? "Exit resize & rotate" : "Resize & rotate"}
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger openOnHover>
+                Mirror
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => onMirror("horizontal")}>
+                    Mirror horizontally
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onMirror("vertical")}>
+                    Mirror vertically
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            {(canDuplicate || canDelete) && <DropdownMenuSeparator />}
+          </>
+        )}
         <DropdownMenuGroup>
-          <DropdownMenuItem
-            disabled={!canDuplicate}
-            shortcut={`${modifier} + C`}
-            onClick={onCopy}
-          >
-            Copy
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!canDuplicate}
-            shortcut={`${modifier} + D`}
-            onClick={onDuplicate}
-          >
-            Duplicate
-          </DropdownMenuItem>
-          <DropdownMenuItem shortcut="Delete" onClick={onDelete}>
-            Delete
-          </DropdownMenuItem>
+          {canDuplicate && (
+            <>
+              <DropdownMenuItem shortcut={`${modifier} + C`} onClick={onCopy}>
+                Copy
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                shortcut={`${modifier} + D`}
+                onClick={onDuplicate}
+              >
+                Duplicate
+              </DropdownMenuItem>
+            </>
+          )}
+          {canDelete && !onlyTestStartActions && (
+            <DropdownMenuItem shortcut="Delete" onClick={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
         {canArrange && (
           <>
@@ -697,8 +762,16 @@ function SelectionActionsMenu({
             </DropdownMenuGroup>
           </>
         )}
+        {onlyTestStartActions ? (
+          <TestStartMenuItems />
+        ) : (
+          <>
+            <DropdownMenuSeparator />
+            <TestStartSubmenu />
+          </>
+        )}
       </DropdownMenuContent>
-    </DropdownMenu>
+    </MenuRoot>
   );
 }
 
@@ -857,6 +930,7 @@ function getSelectionGroups(
     killers: Position[];
     flowers: Position[];
     start: Position;
+    sessionArtifacts: SessionArtifact[];
     pictures: Picture[];
   },
 ) {
@@ -908,6 +982,17 @@ function getSelectionGroups(
     label: "Start",
     singularLabel: "start",
     count: selectedObjects.includes(editorSelectionSources.start) ? 1 : 0,
+  });
+
+  addSelectionGroup(groups, {
+    kind: "sessionArtifacts",
+    label: "Session items",
+    singularLabel: "session item",
+    count: selectedObjects.filter((object) =>
+      editorSelectionSources.sessionArtifacts.some(
+        (item) => item.position === object,
+      ),
+    ).length,
   });
 
   const selectedPictures = getSelectedPictures(

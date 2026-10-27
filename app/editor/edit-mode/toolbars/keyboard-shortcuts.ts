@@ -1,3 +1,4 @@
+export const GO_TO_PLAY_START_SHORTCUT = "Shift + Enter";
 export const OPEN_KEYBOARD_SHORTCUTS_SHORTCUT = "?";
 
 export function getNewLevelShortcut(isMac: boolean) {

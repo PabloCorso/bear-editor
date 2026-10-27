@@ -1,7 +1,11 @@
+import { getDevicePixelSnappedViewportCenter } from "~/editor/helpers/camera-helpers";
 import { LgrAssets } from "~/components/lgr-assets";
+import { testStartGhostOpacity } from "~/editor/test-starts";
+import { PLAY_MODE_PIXELS_PER_METER } from "~/editor/play-mode/play-settings";
 import { buildPlayModeScene } from "~/editor/play-mode/scene/play-mode-scene-builder";
 import type { PlayModeRenderVisibility } from "~/editor/play-mode/scene/play-mode-scene";
 import { getPictureWorldDimensions } from "~/editor/render/picture-metrics";
+import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
 import {
   createWorldSceneRenderer,
   type WorldSceneRendererBackend,
@@ -13,7 +17,6 @@ export class PlayModeSceneRenderer {
   private canvas: HTMLCanvasElement;
   private worldRenderer: WorldSceneRenderer;
   private lgrAssets: LgrAssets | null;
-  private pixelsPerMeter = 48;
   private viewportWidth = 0;
   private viewportHeight = 0;
   private devicePixelRatio = 1;
@@ -51,13 +54,17 @@ export class PlayModeSceneRenderer {
     state: GameState,
     options?: {
       visibility?: PlayModeRenderVisibility;
+      testStartState?: Pick<
+        import("~/editor/editor-state").EditorState,
+        "start" | "testStarts"
+      >;
     },
   ): void {
     const width = this.viewportWidth;
     const height = this.viewportHeight;
     if (width <= 0 || height <= 0) return;
     const cam = state.camera;
-    const ppm = this.pixelsPerMeter * cam.zoom;
+    const ppm = PLAY_MODE_PIXELS_PER_METER * cam.zoom;
     const snappedCenter = getDevicePixelSnappedViewportCenter({
       centerX: cam.x,
       centerY: -cam.y,
@@ -91,37 +98,36 @@ export class PlayModeSceneRenderer {
       resolvePictureDimensions: (picture) =>
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
+    const starts = options?.testStartState;
+    if (starts) {
+      const active = starts.testStarts.items.find(
+        (item) => item.id === starts.testStarts.activeId,
+      );
+      for (const item of scene.drawItems)
+        if (item.type === "bike")
+          item.color = active?.color ?? starts.testStarts.levelColor;
+      const markers = [
+        ...starts.testStarts.items.filter((item) => item.id !== active?.id),
+        ...(active
+          ? [{ position: starts.start, color: starts.testStarts.levelColor }]
+          : []),
+      ];
+      const foregroundIndex = scene.drawItems.findIndex(
+        (item) => item.distance < DEFAULT_OBJECT_RENDER_DISTANCE,
+      );
+      scene.drawItems.splice(
+        foregroundIndex === -1 ? scene.drawItems.length : foregroundIndex,
+        0,
+        ...markers.map((item) => ({
+          type: "start" as const,
+          position: item.position,
+          color: item.color,
+          opacity: testStartGhostOpacity.play,
+          distance: DEFAULT_OBJECT_RENDER_DISTANCE,
+          clip: 0,
+        })),
+      );
+    }
     this.worldRenderer.render(scene);
   }
-}
-
-function getDevicePixelSnappedViewportCenter({
-  centerX,
-  centerY,
-  width,
-  height,
-  zoom,
-  devicePixelRatio,
-}: {
-  centerX: number;
-  centerY: number;
-  width: number;
-  height: number;
-  zoom: number;
-  devicePixelRatio: number;
-}) {
-  const unitsPerDevicePixel = 1 / Math.max(zoom * devicePixelRatio, 0.0001);
-  const halfWidth = width / (2 * zoom);
-  const halfHeight = height / (2 * zoom);
-  const minX = snapToGrid(centerX - halfWidth, unitsPerDevicePixel);
-  const minY = snapToGrid(centerY - halfHeight, unitsPerDevicePixel);
-
-  return {
-    x: minX + halfWidth,
-    y: minY + halfHeight,
-  };
-}
-
-function snapToGrid(value: number, gridSize: number) {
-  return Math.round(value / gridSize) * gridSize;
 }

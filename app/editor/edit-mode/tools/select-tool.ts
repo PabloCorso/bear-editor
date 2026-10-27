@@ -1,3 +1,8 @@
+import {
+  getSessionArtifacts,
+  findSessionArtifact,
+  getSessionArtifactKey,
+} from "~/editor/session-artifacts";
 import rotateCursorSvg from "~/assets/rotate-cursor.svg?raw";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
@@ -24,7 +29,11 @@ import {
 } from "~/editor/constants";
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
-import type { EditorStore, PartialEditorState } from "~/editor/editor-store";
+import {
+  getEditorHistorySnapshot,
+  type EditorStore,
+  type EditorHistoryState,
+} from "~/editor/editor-store";
 import { defaultTools } from "./default-tools";
 import { rectsIntersect, type WorldRect } from "~/editor/render/world-geometry";
 import {
@@ -95,6 +104,7 @@ export type SelectSelectionKind =
   | "killers"
   | "flowers"
   | "start"
+  | "sessionArtifacts"
   | "pictures"
   | "textures";
 
@@ -162,7 +172,7 @@ export class SelectTool extends Tool<SelectToolState> {
   private isMarqueeSelecting = false;
   private marqueeStartPos = { x: 0, y: 0 };
   private marqueeEndPos = { x: 0, y: 0 };
-  private dragHistoryStart: PartialEditorState | null = null;
+  private dragHistoryStart: EditorHistoryState | null = null;
   private dragHasChanges = false;
   private isHistoryPaused = false;
 
@@ -1046,6 +1056,19 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   }
 
+  public canDeleteSelection(): boolean {
+    const { state, toolState } = this.getState();
+    return Boolean(
+      toolState &&
+      (toolState.selectedVertices.length ||
+        toolState.selectedPictures.length ||
+        toolState.selectedObjects.some((object) => {
+          const artifact = findSessionArtifact(state, object);
+          return artifact ? Boolean(artifact.remove) : object !== state.start;
+        })),
+    );
+  }
+
   public deleteCurrentSelection(): boolean {
     if (!this.hasSelection()) return false;
     this.deleteSelection();
@@ -1144,6 +1167,8 @@ export class SelectTool extends Tool<SelectToolState> {
         kinds.has(polygon.grass ? "grassVertices" : "groundVertices"),
     );
     const selectedObjects = selectionSource.selectedObjects.filter((object) => {
+      if (kinds.has("sessionArtifacts") && findSessionArtifact(state, object))
+        return true;
       if (kinds.has("start") && object === state.start) return true;
       if (
         kinds.has("apples") &&
@@ -1214,7 +1239,9 @@ export class SelectTool extends Tool<SelectToolState> {
           state.killers,
           state.flowers,
           state.start,
-        ).map(({ obj }) => obj)
+        )
+          .map(({ obj }) => obj)
+          .concat(getSessionArtifacts(state).map((item) => item.position))
       : [];
     const selectedPictures = state.pictures
       .filter(
@@ -1270,8 +1297,11 @@ export class SelectTool extends Tool<SelectToolState> {
         hoveredObject &&
         !toolState?.selectedObjects.includes(hoveredObject)
       ) {
-        if (hoveredObject === state.start) {
-          const circles = getKuskiSelectionCircles({ start: state.start });
+        if (
+          hoveredObject === state.start ||
+          findSessionArtifact(state, hoveredObject)
+        ) {
+          const circles = this.getObjectSelectionCircles(hoveredObject);
           overlays.push(
             ...circles.map((circle) => ({
               type: "circle" as const,
@@ -1374,8 +1404,8 @@ export class SelectTool extends Tool<SelectToolState> {
 
     overlays.push(
       ...toolState.selectedObjects.flatMap((position) => {
-        if (position === state.start) {
-          return getKuskiSelectionCircles({ start: state.start })
+        if (position === state.start || findSessionArtifact(state, position)) {
+          return this.getObjectSelectionCircles(position)
             .filter((circle) =>
               rectIntersectsViewport(
                 {
@@ -1489,6 +1519,11 @@ export class SelectTool extends Tool<SelectToolState> {
     );
     const useImageStartSelection = state.levelVisibility.showObjects;
 
+    const artifact = [...getSessionArtifacts(state)]
+      .reverse()
+      .find((item) => item.hitTest(position, useImageStartSelection));
+    if (artifact) return artifact.position;
+
     const apple = findObjectNearPosition(
       position,
       state.apples.map((a) => a.position),
@@ -1534,6 +1569,20 @@ export class SelectTool extends Tool<SelectToolState> {
       options?.useStartImageSelection ? "boundsWithImage" : "boundsOnly";
 
     for (const object of objects) {
+      const artifact = findSessionArtifact(state, object);
+      if (artifact) {
+        if (
+          artifact.hitTest(
+            position,
+            Boolean(
+              state.levelVisibility.showObjects &&
+              options?.useStartImageSelection,
+            ),
+          )
+        )
+          return object;
+        continue;
+      }
       if (object === state.start) {
         const isHovered = isStartObjectHit(
           position,
@@ -1767,6 +1816,12 @@ export class SelectTool extends Tool<SelectToolState> {
         state.flowers,
         state.start,
       );
+      allObjects.push(
+        ...getSessionArtifacts(state).map((item) => ({
+          obj: item.position,
+          type: "sessionArtifact",
+        })),
+      );
       allObjects.forEach(({ obj }: { obj: Position }) => {
         if (this.objectIntersectsMarquee(obj, bounds)) {
           this.selectObject(obj);
@@ -1789,14 +1844,22 @@ export class SelectTool extends Tool<SelectToolState> {
       });
   }
 
+  private getObjectSelectionCircles(position: Position) {
+    const { state } = this.getState();
+    return (
+      findSessionArtifact(state, position)?.selectionCircles ??
+      getKuskiSelectionCircles({ start: position })
+    );
+  }
+
   private objectIntersectsMarquee(
     object: Position,
     bounds: WorldRect,
   ): boolean {
     const { state } = this.getState();
 
-    if (object === state.start) {
-      return getKuskiSelectionCircles({ start: state.start }).some((circle) =>
+    if (object === state.start || findSessionArtifact(state, object)) {
+      return this.getObjectSelectionCircles(object).some((circle) =>
         circleIntersectsRect(
           { x: circle.x, y: circle.y },
           circle.radius,
@@ -1865,6 +1928,7 @@ export class SelectTool extends Tool<SelectToolState> {
   private isObjectPresent(object: Position): boolean {
     const { state } = this.getState();
     return (
+      Boolean(findSessionArtifact(state, object)) ||
       state.start === object ||
       state.killers.includes(object) ||
       state.flowers.includes(object) ||
@@ -1926,6 +1990,7 @@ export class SelectTool extends Tool<SelectToolState> {
           .map((selectedObject) => {
             const identityMatch = this.findObjectByIdentity(selectedObject);
             if (identityMatch) return identityMatch;
+            if (getSessionArtifactKey(selectedObject)) return null;
             return this.findObjectByCoordinates(selectedObject);
           })
           .filter((object): object is Position => Boolean(object))
@@ -2003,6 +2068,8 @@ export class SelectTool extends Tool<SelectToolState> {
 
   private findObjectByIdentity(selectedObject: Position): Position | null {
     const { state } = this.getState();
+    const artifact = findSessionArtifact(state, selectedObject);
+    if (artifact) return artifact.position;
     if (state.start === selectedObject) return state.start;
     if (state.apples.some((apple) => apple.position === selectedObject)) {
       return selectedObject;
@@ -2098,6 +2165,16 @@ export class SelectTool extends Tool<SelectToolState> {
     toolState.selectedObjects.forEach((object: ObjectSelection, index) => {
       const newPos = newPositions[index];
 
+      const artifact = findSessionArtifact(state, object);
+      if (artifact) {
+        if (artifact.move) {
+          artifact.move(newPos);
+          updatedSelectedObjects[index] = newPos;
+          if (toolState.hoveredObject === object) nextHoveredObject = newPos;
+        }
+        return;
+      }
+
       // Find and update the object in the appropriate array
       const appleIndex = state.apples.findIndex((a) => a.position === object);
       if (appleIndex !== -1) {
@@ -2177,20 +2254,9 @@ export class SelectTool extends Tool<SelectToolState> {
     setToolState({ selectedPictures: updatedSelectedPictures });
   }
 
-  private getHistorySnapshot(): PartialEditorState {
+  private getHistorySnapshot(): EditorHistoryState {
     const { state } = this.getState();
-    return {
-      levelName: state.levelName,
-      lgr: state.lgr,
-      ground: state.ground,
-      sky: state.sky,
-      polygons: state.polygons,
-      apples: state.apples,
-      killers: state.killers,
-      flowers: state.flowers,
-      start: state.start,
-      pictures: state.pictures,
-    };
+    return getEditorHistorySnapshot(state);
   }
 
   private beginDragHistoryBatch() {
@@ -2213,10 +2279,10 @@ export class SelectTool extends Tool<SelectToolState> {
 
     const temporalState = this.store.temporal.getState() as {
       _handleSet?: (
-        pastState: PartialEditorState,
+        pastState: EditorHistoryState,
         replace: undefined,
-        currentState: PartialEditorState,
-        deltaState?: Partial<PartialEditorState> | null,
+        currentState: EditorHistoryState,
+        deltaState?: Partial<EditorHistoryState> | null,
       ) => void;
     };
     temporalState._handleSet?.(
@@ -2255,10 +2321,10 @@ export class SelectTool extends Tool<SelectToolState> {
 
     const temporalState = this.store.temporal.getState() as {
       _handleSet?: (
-        pastState: PartialEditorState,
+        pastState: EditorHistoryState,
         replace: undefined,
-        currentState: PartialEditorState,
-        deltaState?: Partial<PartialEditorState> | null,
+        currentState: EditorHistoryState,
+        deltaState?: Partial<EditorHistoryState> | null,
       ) => void;
     };
 
@@ -2587,6 +2653,11 @@ export class SelectTool extends Tool<SelectToolState> {
 
       // Delete selected objects
       toolState.selectedObjects.forEach((object: ObjectSelection) => {
+        const artifact = findSessionArtifact(state, object);
+        if (artifact) {
+          artifact.remove?.();
+          return;
+        }
         const apple = state.apples.find((a) => a.position === object);
         if (apple) {
           state.actions.removeApple(apple);
@@ -2897,7 +2968,7 @@ function isWithinVertexSelectionThreshold(
   );
 }
 
-function createSelectionHandleOverlay(
+export function createSelectionHandleOverlay(
   position: Position,
   size: number,
   lineWidth: number,
