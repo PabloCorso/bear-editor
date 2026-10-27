@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-28
+
+- Add Frame, Draw and Brush tools.
+- Add session test starts and pick one when entering play mode.
+- Add tool settings and reset.
+- Add PNG export.
+- Add skew and improve selection mirroring.
+
 ## 2026-10-26
 
 - Add Cut & Connect with live terrain previews and adjustable width (C).

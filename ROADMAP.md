@@ -6,15 +6,10 @@ Planned features and feedback for Bear Editor.
 
 - AI Assistant
 
-- Explore a consistent pattern for tool settings access and reset; AutoGrass has an accessible settings panel, while Pipe has none.
-
 - More vertex tool options or new polygon tools
   - Roller coaster tool
-  - Frame tool
   - Shapes
-  - Cut/connect
   - Smoothen
-  - Draw
   - Text
   - Merge/subtract polygons
   - Image to polygon
@@ -36,15 +31,12 @@ Planned features and feedback for Bear Editor.
 ## Other
 
 - Custom lev folder management with preview thumbnails
-- Switch Level / Graphics design modes (toggle pics/grass visibility and show different toolbar)
 - Multi-player level editor
   - Follow a designer's view while editing; explore following them in play mode too.
   - Chain level working areas: let different designers build separate parts, with optional locks to prevent edits by others and optional hiding to keep parts secret until revealed.
 - Version history info
 - Export to SVG
 - Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
-- Save start position
-  - Checkpoints: create, move, select for play mode, and delete multiple translucent, distinctly colored bike markers without moving the actual level start. Editor-only and session-local (not stored in Elma level files), with per-designer test starts in the future multiplayer editor.
 - Import level
 - Grid
   - Snap to grid
@@ -54,4 +46,3 @@ Planned features and feedback for Bear Editor.
 - Desktop build
   - Bundle the shared editor with Electron for offline use and native file access; download updates in the background and offer Restart to update when the user is ready, protecting unsaved work.
   - Keep shortcuts consistent with the web, with a few platform-specific overrides for standard desktop actions such as Cmd/Ctrl+N for a new level; show the appropriate shortcuts in menus and shortcut help.
-- Add LGR folder
