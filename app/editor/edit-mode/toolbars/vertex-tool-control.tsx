@@ -1,4 +1,3 @@
-import { PencilSimpleIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   ToolControlButton,
   ToolControlMenu,
@@ -24,7 +23,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-export const AUTO_GRASS_ALL_SHORTCUT = "Shift + G";
+export function getAutoGrassAllShortcut(modifier: string) {
+  return `${modifier} + Shift + G`;
+}
 
 export function VertexToolControl(props: ToolControlButtonProps) {
   const vertexToolState = useEditorToolState<VertexToolState>(
@@ -88,7 +89,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       <ToolControlButton
         {...defaultTools.vertex}
         name={defaultTools.vertex.variants?.autoGrass?.name}
-        shortcut={undefined}
+        shortcut={defaultTools.vertex.variants.autoGrass.shortcut}
         tooltipSide="right"
         size="sm"
         showLabel
@@ -117,7 +118,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       <ToolControlButton
         {...defaultTools.vertex}
         name="Draw"
-        shortcut={undefined}
+        shortcut={defaultTools.vertex.variants.draw.shortcut}
         tooltipSide="right"
         size="sm"
         showLabel
@@ -126,6 +127,23 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       >
         <VertexIcon {...getVertexIconProps("draw")} />
       </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
+        name="Brush"
+        shortcut={defaultTools.vertex.variants.brush.shortcut}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "brush"}
+        onClick={() => onVariantChange("brush")}
+      >
+        <VertexIcon {...getVertexIconProps("brush")} />
+      </ToolControlButton>
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        className="my-1 h-px self-stretch bg-separator"
+      />
       <ToolControlButton
         {...defaultTools.vertex}
         name="Frame"
@@ -245,6 +263,16 @@ export function VertexIcon({
             strokeWidth="1"
           />
         </g>
+      ) : freehand && corridor ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={ground} />
+          <path
+            d="M-3 18C4 18 3 5 10 5S16 17 27 4L27 13C16 26 11 12 10 12S9 25-3 25Z"
+            fill={sky}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+        </g>
       ) : freehand ? (
         <g clipPath={`url(#${frameClipId})`}>
           <rect width="24" height="24" fill={sky} />
@@ -254,7 +282,6 @@ export function VertexIcon({
             stroke={boundsColor}
             strokeWidth="1.5"
           />
-          <PencilSimpleIcon x="12" y="0" width="13" height="13" color="white" />
         </g>
       ) : corridor ? (
         <g clipPath={`url(#${frameClipId})`}>
@@ -337,12 +364,13 @@ export function getVertexIconProps(
   if (variant === "cutConnect") {
     return {
       corridor: "narrow",
-      badge: "C",
       sky: colors.ground,
       ground: colors.sky,
     };
   }
   if (variant === "frame") return { frame: true };
+  if (variant === "brush") return { corridor: true, freehand: true };
+
   if (variant === "draw") return { freehand: true };
 
   if (variant === "pipe") {

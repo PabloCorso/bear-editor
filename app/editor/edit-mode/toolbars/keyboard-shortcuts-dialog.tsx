@@ -31,7 +31,7 @@ import {
 } from "~/editor/use-editor-store";
 import { cn, useModifier } from "~/utils/misc";
 import {
-  AUTO_GRASS_ALL_SHORTCUT,
+  getAutoGrassAllShortcut,
   VertexIcon,
   getVertexIconProps,
 } from "./vertex-tool-control";
@@ -370,20 +370,15 @@ function getShortcutGroups(
           ],
         },
         {
-          shortcut: "",
-          label: "Draw (Vertex toolbar)",
+          shortcut: defaultTools.vertex.variants.draw.shortcut,
+          label: "Select Draw tool",
           icon: (
             <VertexIcon {...getVertexIconProps("draw")} className="h-6 w-6" />
           ),
           subItems: [
-            { shortcut: "Drag", label: "Draw polygon; release to finish" },
-            {
-              shortcut: "Click–move–click",
-              label: "Draw without holding the mouse",
-            },
             {
               shortcut: ["-", "+"],
-              label: "Adjust edge length in Elma pixels",
+              label: "Adjust edge length",
             },
             {
               shortcut: ["Enter", "Esc", "Right click"],
@@ -432,10 +427,6 @@ function getShortcutGroups(
             />
           ),
           subItems: [
-            {
-              shortcut: "Drag / Click twice",
-              label: "Extend the starting sky or ground along the stroke",
-            },
             { shortcut: ["-", "+"], label: "Adjust width" },
             { shortcut: "Enter", label: "Apply at cursor" },
             { shortcut: ["Esc", "Right click"], label: "Cancel stroke" },
@@ -453,12 +444,44 @@ function getShortcutGroups(
               shortcut: "Space",
               label: "Cycle mode: Inside / Outside / Centered",
             },
-            { shortcut: "Click", label: "Frame the hovered polygon" },
           ],
         },
         {
-          shortcut: AUTO_GRASS_ALL_SHORTCUT,
-          label: "AutoGrass all polygons",
+          shortcut: defaultTools.vertex.variants.brush.shortcut,
+          label: "Select Brush tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("brush")} className="h-6 w-6" />
+          ),
+          subItems: [
+            { shortcut: ["-", "+"], label: "Adjust width" },
+            {
+              shortcut: [",", "."],
+              label: "Adjust centerline edge length",
+            },
+            { shortcut: "Space", label: "Cycle apple mode" },
+            { shortcut: ["[", "]"], label: "Adjust apple distance or count" },
+            { shortcut: "0–250", label: "Type apple count in count mode" },
+            { shortcut: "S", label: "Toggle start chamber and player" },
+            { shortcut: "F", label: "Toggle end flower" },
+            {
+              shortcut: ["Enter", "Esc", "Right click"],
+              label: "Finish brush stroke",
+            },
+          ],
+        },
+        {
+          shortcut: defaultTools.vertex.variants.autoGrass.shortcut,
+          label: "Select AutoGrass tool",
+          icon: (
+            <VertexIcon
+              {...getVertexIconProps("autoGrass")}
+              className="h-6 w-6"
+            />
+          ),
+        },
+        {
+          shortcut: getAutoGrassAllShortcut(modifier),
+          label: "AutoGrass level",
           icon: (
             <VertexIcon
               {...getVertexIconProps("autoGrass")}
