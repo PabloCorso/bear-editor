@@ -1,3 +1,4 @@
+import type { PictureSelectionSettings } from "./helpers/picture-selection";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -92,6 +93,7 @@ export type EditorState = EditorLevel & {
   levelVisibility: LevelVisibilitySettings;
   playSettings: PlaySettings;
   vertexEdgeClickBehavior: VertexEdgeClickBehavior;
+  pictureSelection: PictureSelectionSettings;
   autoGrassOptions: AutoGrassOptions;
   isUIVisible: boolean;
   isPlayMode: boolean;
@@ -170,6 +172,7 @@ export type EditorState = EditorLevel & {
       runEndBehavior?: PlayRunEndBehavior;
       keyBindings?: Partial<PlayKeyBindings>;
     }) => void;
+    setPictureSelection: (settings: Partial<PictureSelectionSettings>) => void;
     setVertexEdgeClickBehavior: (behavior: VertexEdgeClickBehavior) => void;
     setAutoGrassOptions: (options: Partial<AutoGrassOptions>) => void;
     toggleLevelVisibility: (key: keyof LevelVisibilitySettings) => void;

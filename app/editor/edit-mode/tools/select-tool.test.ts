@@ -1,3 +1,10 @@
+import {
+  defaultPictureSelectionSettings,
+  getPictureSelectionSegments,
+  isPictureSelectionHit,
+} from "~/editor/helpers/picture-selection";
+import type { LgrAssets } from "~/components/lgr-assets";
+import { PICTURE_SCALE } from "~/editor/render/picture-metrics";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorStore } from "~/editor/editor-store";
 import { Clip, Gravity, type Position } from "~/editor/elma-types";
@@ -388,5 +395,132 @@ describe("SelectTool marquee selection", () => {
     dragMarquee(tool, position(14, 14), position(20, 20));
 
     expect(getSelection(store)?.selectedPictures).toEqual([picturePosition]);
+  });
+});
+
+describe("Picture selection preferences", () => {
+  const picture = {
+    name: "test",
+    texture: "",
+    mask: "" as const,
+    clip: Clip.Unclipped,
+    distance: 500,
+    position: position(0, 0),
+  };
+  function assets() {
+    const pixels = new Uint8ClampedArray(10 * 10 * 4);
+    for (let y = 3; y < 7; y++)
+      for (let x = 3; x < 7; x++) pixels[(y * 10 + x) * 4 + 3] = 255;
+    return {
+      getSprite: () => ({ width: 10, height: 10 }),
+      getSpritePixels: () => ({ width: 10, height: 10, pixels }),
+    } as unknown as LgrAssets;
+  }
+  it("distinguishes image rectangles, visible outlines, interiors and borders", () => {
+    const lgr = assets();
+    const point = (x: number, y: number) =>
+      position(x * PICTURE_SCALE, y * PICTURE_SCALE);
+    const tolerance = PICTURE_SCALE / 4;
+    expect(
+      isPictureSelectionHit(
+        point(1, 1),
+        picture,
+        lgr,
+        defaultPictureSelectionSettings,
+        tolerance,
+      ),
+    ).toBe(false);
+    expect(
+      isPictureSelectionHit(
+        point(1, 1),
+        picture,
+        lgr,
+        { ...defaultPictureSelectionSettings, boundary: "rectangle" },
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(
+      isPictureSelectionHit(
+        point(5, 5),
+        picture,
+        lgr,
+        defaultPictureSelectionSettings,
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(
+      isPictureSelectionHit(
+        point(5, 5),
+        picture,
+        lgr,
+        { ...defaultPictureSelectionSettings, click: "border" },
+        tolerance,
+      ),
+    ).toBe(false);
+    expect(
+      isPictureSelectionHit(
+        point(3, 5),
+        picture,
+        lgr,
+        { ...defaultPictureSelectionSettings, click: "border" },
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(
+      isPictureSelectionHit(
+        point(10.1, 5),
+        picture,
+        lgr,
+        {
+          ...defaultPictureSelectionSettings,
+          boundary: "rectangle",
+          click: "border",
+        },
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(getPictureSelectionSegments(picture, lgr, "rectangle")).toHaveLength(
+      4,
+    );
+  });
+  it("keeps the top-left anchor clickable in every click mode", () => {
+    for (const click of ["interior", "border", "anchor"] as const) {
+      expect(
+        isPictureSelectionHit(
+          position(0, 0),
+          picture,
+          assets(),
+          { ...defaultPictureSelectionSettings, click },
+          0.001,
+        ),
+      ).toBe(true);
+    }
+    expect(
+      isPictureSelectionHit(
+        position(PICTURE_SCALE * 5, PICTURE_SCALE * 5),
+        picture,
+        assets(),
+        { ...defaultPictureSelectionSettings, click: "anchor" },
+        0.001,
+      ),
+    ).toBe(false);
+  });
+  it("can use the anchor rather than the full picture bounds for area selection", () => {
+    vi.stubGlobal("window", { navigator: { platform: "Linux" } });
+    try {
+      const { store, tool } = createTool();
+      const picturePosition = position(10, 10);
+      store
+        .getState()
+        .actions.setPictures([{ ...picture, position: picturePosition }]);
+      store.getState().actions.setPictureSelection({ area: "anchor" });
+      tool.setPictureDimensionsResolver(() => ({ width: 10, height: 10 }));
+      dragMarquee(tool, position(14, 14), position(20, 20));
+      expect(getSelection(store)?.selectedPictures).toEqual([]);
+      dragMarquee(tool, position(9, 9), position(11, 11));
+      expect(getSelection(store)?.selectedPictures).toEqual([picturePosition]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

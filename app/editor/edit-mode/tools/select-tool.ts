@@ -1812,6 +1812,8 @@ export class SelectTool extends Tool<SelectToolState> {
     picture: Picture,
     bounds: WorldRect,
   ): boolean {
+    if (this.getState().state.pictureSelection.area === "anchor")
+      return isPointInRect(picture.position, bounds);
     const dimensions = this.pictureDimensionsResolver({
       name: picture.name || undefined,
       texture: picture.texture || undefined,

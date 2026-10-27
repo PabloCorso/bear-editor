@@ -1,4 +1,8 @@
 import {
+  defaultPictureSelectionSettings,
+  normalizePictureSelectionSettings,
+} from "./helpers/picture-selection";
+import {
   DEFAULT_LEVEL_TITLE,
   normalizeLevelTitle,
 } from "./helpers/level-title";
@@ -405,6 +409,11 @@ export function createEditorStore({
         levelVisibility:
           initialPreferences?.levelVisibility ?? defaultLevelVisibility,
         playSettings: initialPreferences?.playSettings ?? defaultPlaySettings,
+        pictureSelection: initialPreferences?.pictureSelection
+          ? normalizePictureSelectionSettings(
+              initialPreferences.pictureSelection,
+            )
+          : defaultPictureSelectionSettings,
         vertexEdgeClickBehavior:
           initialPreferences?.vertexEdgeClickBehavior ??
           ("default" as VertexEdgeClickBehavior),
@@ -610,6 +619,13 @@ export function createEditorStore({
               },
             })),
 
+          setPictureSelection: (settings) =>
+            set((state) => ({
+              pictureSelection: normalizePictureSelectionSettings({
+                ...state.pictureSelection,
+                ...settings,
+              }),
+            })),
           setVertexEdgeClickBehavior: (vertexEdgeClickBehavior) =>
             set({ vertexEdgeClickBehavior }),
 
