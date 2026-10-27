@@ -323,7 +323,13 @@ export function EditorContextMenu() {
       anchor={anchor}
       onClose={() => selectTool?.closeContextMenu()}
       canTransform={selectTool?.canTransformSelection() ?? false}
-      transforming={Boolean(selectToolState.transformMode)}
+      transforming={Boolean(
+        selectToolState.transformMode && !selectToolState.skewMode,
+      )}
+      skewing={Boolean(
+        selectToolState.transformMode && selectToolState.skewMode,
+      )}
+      onSkew={() => selectTool?.toggleTransform(true)}
       onTransform={() => selectTool?.toggleTransform()}
       onMirror={(direction) => selectTool?.mirrorSelection(direction)}
       canArrange={canArrange}
@@ -607,6 +613,8 @@ function SelectionActionsMenu({
   onClose,
   canTransform,
   transforming,
+  skewing,
+  onSkew,
   onTransform,
   onMirror,
   canArrange,
@@ -622,6 +630,8 @@ function SelectionActionsMenu({
   onClose: () => void;
   canTransform: boolean;
   transforming: boolean;
+  skewing: boolean;
+  onSkew: () => void;
   onTransform: () => void;
   onMirror: (direction: MirrorSelectionDirection) => void;
   canArrange: boolean;
@@ -683,6 +693,9 @@ function SelectionActionsMenu({
           <>
             <DropdownMenuItem shortcut="R" onClick={onTransform}>
               {transforming ? "Exit resize & rotate" : "Resize & rotate"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onSkew}>
+              {skewing ? "Exit skew" : "Skew"}
             </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger openOnHover>
