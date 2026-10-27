@@ -1,3 +1,5 @@
+import { defaultPictureSelectionSettings } from "~/editor/helpers/picture-selection";
+import { Switch } from "~/components/ui/switch";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -607,6 +609,7 @@ function PreferencesSettingsPanel({
           <p className="text-sm text-red-300">{customTemplateError}</p>
         )}
       </section>
+      <PictureSelectionPreferences />
       <section className="flex flex-col gap-3">
         <SettingsSectionHeading
           title="Vertex tool behavior"
@@ -639,6 +642,93 @@ function PreferencesSettingsPanel({
         </div>
       </section>
     </TabsContent>
+  );
+}
+
+function PictureSelectionPreferences() {
+  const settings = useEditor((state) => state.pictureSelection);
+  const visibility = useEditor((state) => state.levelVisibility);
+  const store = useEditorStore();
+  const { setPictureSelection, setLevelVisibility } = store.getState().actions;
+  const fields = [
+    {
+      key: "boundary",
+      label: "Boundary shape",
+      options: [
+        { value: "outline", label: "Visible outline" },
+        { value: "rectangle", label: "Image rectangle" },
+      ],
+    },
+    {
+      key: "click",
+      label: "Click to select",
+      options: [
+        { value: "interior", label: "Inside boundary" },
+        { value: "border", label: "Border only" },
+        { value: "anchor", label: "Top-left point only" },
+      ],
+    },
+    {
+      key: "area",
+      label: "Area selection",
+      options: [
+        { value: "bounds", label: "Touch image bounds" },
+        { value: "anchor", label: "Enclose top-left point" },
+      ],
+    },
+  ] as const;
+  return (
+    <section className="flex flex-col gap-3">
+      <SettingsSectionHeading
+        title="Picture selection"
+        description="Choose how pictures and textures are selected. The top-left point is always clickable."
+      />
+      {fields.map((field) => (
+        <label
+          key={field.key}
+          className="flex items-center justify-between gap-4 text-sm"
+        >
+          <span>{field.label}</span>
+          <Select
+            value={settings[field.key]}
+            items={[...field.options]}
+            onValueChange={(value) => {
+              if (value) setPictureSelection({ [field.key]: value });
+            }}
+          >
+            <SelectTrigger className="h-9 w-48 px-3 font-normal">
+              <SelectValue />
+              <SelectTriggerIcon />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+      ))}
+      <label className="flex items-center justify-between gap-4 text-sm">
+        <span>Show picture boundaries</span>
+        <Switch
+          checked={visibility.showPictureBounds}
+          onCheckedChange={(checked) =>
+            setLevelVisibility({ showPictureBounds: checked })
+          }
+        />
+      </label>
+      <label className="flex items-center justify-between gap-4 text-sm">
+        <span>Show texture boundaries</span>
+        <Switch
+          checked={visibility.showTextureBounds}
+          onCheckedChange={(checked) =>
+            setLevelVisibility({ showTextureBounds: checked })
+          }
+        />
+      </label>
+    </section>
   );
 }
 
@@ -871,6 +961,7 @@ function LevelPresetPreview({
               playModeZoom: DEFAULT_PLAY_MODE_ZOOM,
               playSettings: defaultPlaySettings,
               vertexEdgeClickBehavior: "default",
+              pictureSelection: defaultPictureSelectionSettings,
               autoGrassOptions: defaultAutoGrassOptions,
             },
           }),

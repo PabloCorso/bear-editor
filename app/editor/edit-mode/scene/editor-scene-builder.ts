@@ -163,9 +163,11 @@ function getDrawItemQueue(
             distance: picture.distance,
             clip: picture.clip,
             cacheKey: picture,
+            boundaryShape: state.pictureSelection.boundary,
             showBounds:
-              showPictureBounds ||
-              (Boolean(picture.texture) && showTextureBounds),
+              picture.texture && picture.mask
+                ? showTextureBounds
+                : showPictureBounds,
             boundsLineWidth: idleBoundsLineWidth,
             boundsColor: idleBoundsColor,
             boundsOpacity: idleBoundsOpacity,

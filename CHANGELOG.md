@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-27
+
+- Add picture selection preferences for outline or rectangle boundaries, interior/border/anchor clicks, and anchor-based area selection.
+
 ## 2026-10-26
 
 - Add Cut & Connect with live terrain previews and adjustable width (C).

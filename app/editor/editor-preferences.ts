@@ -1,4 +1,8 @@
 import {
+  defaultPictureSelectionSettings,
+  normalizePictureSelectionSettings,
+} from "./helpers/picture-selection";
+import {
   DEFAULT_LEVEL_TITLE,
   normalizeLevelTitle,
 } from "./helpers/level-title";
@@ -66,6 +70,7 @@ const defaultEditorPreferences: EditorPreferences = {
   playModeZoom: DEFAULT_PLAY_MODE_ZOOM,
   playSettings: defaultPlaySettings,
   vertexEdgeClickBehavior: "default",
+  pictureSelection: defaultPictureSelectionSettings,
   autoGrassOptions: defaultAutoGrassOptions,
 };
 
@@ -104,6 +109,9 @@ export function loadEditorPreferences(): EditorPreferences {
         ...(preferences?.playSettings?.keyBindings ?? {}),
       },
     },
+    pictureSelection: normalizePictureSelectionSettings(
+      preferences?.pictureSelection,
+    ),
     vertexEdgeClickBehavior: loadVertexEdgeClickBehavior(
       preferences?.vertexEdgeClickBehavior,
     ),
@@ -160,6 +168,7 @@ function getComparableEditorPreferences(state: EditorState): EditorPreferences {
     playModeZoom: state.playModeZoom,
     playSettings: state.playSettings,
     vertexEdgeClickBehavior: state.vertexEdgeClickBehavior,
+    pictureSelection: state.pictureSelection,
     autoGrassOptions: state.autoGrassOptions,
   };
 }
