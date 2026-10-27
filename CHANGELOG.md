@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-27
+
+- Add Replace selection with objects, scenery, or a copied group at each selected position.
+
 ## 2026-10-26
 
 - Add Cut & Connect with live terrain previews and adjustable width (C).

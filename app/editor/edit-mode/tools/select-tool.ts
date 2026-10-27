@@ -1062,6 +1062,217 @@ export class SelectTool extends Tool<SelectToolState> {
     return true;
   }
 
+  /** Replacement uses selected vertices and element anchors; the start is protected. */
+  public getReplacementCount(): number {
+    return this.getReplacementTargets().length;
+  }
+
+  private getReplacementTargets(): Position[] {
+    const { state, toolState } = this.getState();
+    if (!toolState) return [];
+    return [
+      ...new Set([
+        ...toolState.selectedVertices
+          .filter(
+            ({ polygon, vertex }) =>
+              state.polygons.includes(polygon) &&
+              polygon.vertices.includes(vertex),
+          )
+          .map(({ vertex }) => vertex),
+        ...toolState.selectedObjects.filter(
+          (position) =>
+            position !== state.start && this.isObjectPresent(position),
+        ),
+        ...toolState.selectedPictures.filter((position) =>
+          state.pictures.some((picture) => picture.position === position),
+        ),
+      ]),
+    ];
+  }
+
+  public replaceSelectionWithObject(
+    kind: "apples" | "killers" | "flowers",
+    apple: Omit<Apple, "position">,
+  ): string | null {
+    const origin = { x: 0, y: 0 };
+    return this.replaceSelectionWithContent({
+      polygons: [],
+      apples: kind === "apples" ? [{ ...apple, position: origin }] : [],
+      killers: kind === "killers" ? [origin] : [],
+      flowers: kind === "flowers" ? [origin] : [],
+      pictures: [],
+    });
+  }
+
+  public replaceSelectionWithPicture(
+    picture: Omit<Picture, "position">,
+  ): string | null {
+    return this.replaceSelectionWithContent({
+      polygons: [],
+      apples: [],
+      killers: [],
+      flowers: [],
+      pictures: [{ ...picture, position: { x: 0, y: 0 } }],
+    });
+  }
+
+  public async replaceSelectionWithCopiedContent(
+    signal?: AbortSignal,
+  ): Promise<string | null> {
+    const { state, toolState } = this.getState();
+    const snapshot = this.getHistorySnapshot();
+    let content = this.clipboard;
+    if (this.canAccessSystemClipboard()) {
+      try {
+        const text = await navigator.clipboard.readText();
+        // An accessible but unrelated clipboard must never trigger a destructive fallback.
+        content = this.deserializeClipboard(text)?.payload ?? null;
+      } catch {
+        // Match ordinary paste when browser clipboard access is unavailable.
+      }
+    }
+    const current = this.getState();
+    if (signal?.aborted) return "Replacement cancelled.";
+    if (
+      current.state.documentSession.clipboardSessionId !==
+        state.documentSession.clipboardSessionId ||
+      current.state.activeToolId !== this.meta.id ||
+      !fastDeepEqual(snapshot, this.getHistorySnapshot()) ||
+      !fastDeepEqual(toolState, current.toolState)
+    )
+      return "The selection changed. Try again.";
+    if (!content) return "Copy level elements in Bear first.";
+    // Do not consume or replace the user's clipboard or advance ordinary paste offsets.
+    return this.replaceSelectionWithContent(content);
+  }
+
+  private replaceSelectionWithContent(
+    content: SelectionClipboard,
+  ): string | null {
+    this.pruneHiddenSelection();
+    const { state, toolState, setToolState } = this.getState();
+    const targets = this.getReplacementTargets();
+    if (!toolState || targets.length === 0)
+      return "Select vertices or elements to replace.";
+    const center = getClipboardCenter(content);
+    if (!center) return "Copy level elements in Bear first.";
+    const pointCount =
+      content.polygons.reduce(
+        (total, polygon) => total + polygon.vertices.length,
+        0,
+      ) +
+      content.apples.length +
+      content.killers.length +
+      content.flowers.length +
+      content.pictures.length;
+    if (pointCount * targets.length > 20000)
+      return "Replacement is too large. Select fewer elements or copy a smaller group.";
+    const added: SelectionClipboard = {
+      polygons: [],
+      apples: [],
+      killers: [],
+      flowers: [],
+      pictures: [],
+    };
+    const atTarget = (point: Position, target: Position): Position => ({
+      x: point.x - center.x + target.x,
+      y: point.y - center.y + target.y,
+    });
+    for (const target of targets) {
+      added.polygons.push(
+        ...content.polygons.map((polygon) => ({
+          ...polygon,
+          vertices: polygon.vertices.map((point) => atTarget(point, target)),
+        })),
+      );
+      added.apples.push(
+        ...content.apples.map((apple) => ({
+          ...apple,
+          position: atTarget(apple.position, target),
+        })),
+      );
+      added.killers.push(
+        ...content.killers.map((point) => atTarget(point, target)),
+      );
+      added.flowers.push(
+        ...content.flowers.map((point) => atTarget(point, target)),
+      );
+      added.pictures.push(
+        ...content.pictures.map((picture) => ({
+          ...picture,
+          position: atTarget(picture.position, target),
+        })),
+      );
+    }
+    if (
+      [
+        ...added.polygons.flatMap((p) => p.vertices),
+        ...added.apples.map((a) => a.position),
+        ...added.killers,
+        ...added.flowers,
+        ...added.pictures.map((p) => p.position),
+      ].some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))
+    ) {
+      return "Replacement contains invalid coordinates.";
+    }
+    const vertices = new Map<Polygon, Set<Position>>();
+    for (const { polygon, vertex } of toolState.selectedVertices) {
+      const selected = vertices.get(polygon) ?? new Set<Position>();
+      selected.add(vertex);
+      vertices.set(polygon, selected);
+    }
+    const objects = new Set(toolState.selectedObjects);
+    const pictures = new Set(toolState.selectedPictures);
+    // Build the complete result before touching the document. Partial polygons follow Delete rules.
+    const remainingPolygons = state.polygons.flatMap((polygon) => {
+      const removed = vertices.get(polygon);
+      if (!removed) return [polygon];
+      const remaining = polygon.vertices.filter(
+        (vertex) => !removed.has(vertex),
+      );
+      return remaining.length >= (polygon.grass ? 2 : 3)
+        ? [{ ...polygon, vertices: remaining }]
+        : [];
+    });
+    this.runHistoryBatch(() => {
+      state.actions.setPolygons([...remainingPolygons, ...added.polygons]);
+      state.actions.setApples([
+        ...state.apples.filter((apple) => !objects.has(apple.position)),
+        ...added.apples,
+      ]);
+      state.actions.setKillers([
+        ...state.killers.filter((point) => !objects.has(point)),
+        ...added.killers,
+      ]);
+      state.actions.setFlowers([
+        ...state.flowers.filter((point) => !objects.has(point)),
+        ...added.flowers,
+      ]);
+      state.actions.setPictures([
+        ...state.pictures.filter((picture) => !pictures.has(picture.position)),
+        ...added.pictures,
+      ]);
+    });
+    this.transformFrame = null;
+    setToolState({
+      selectedVertices: added.polygons.flatMap((polygon) =>
+        polygon.vertices.map((vertex) => ({ polygon, vertex })),
+      ),
+      selectedObjects: [
+        ...added.apples.map((apple) => apple.position),
+        ...added.killers,
+        ...added.flowers,
+        ...(objects.has(state.start) ? [state.start] : []),
+      ],
+      selectedPictures: added.pictures.map((picture) => picture.position),
+      hoveredObject: undefined,
+      hoveredPictureBounds: undefined,
+      contextMenuType: undefined,
+      transformMode: false,
+    });
+    return null;
+  }
+
   public canArrangeSelection(): boolean {
     const { toolState } = this.getState();
     return Boolean(toolState && toolState.selectedPictures.length > 0);
