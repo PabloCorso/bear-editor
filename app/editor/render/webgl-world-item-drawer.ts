@@ -403,6 +403,8 @@ export class WebGLWorldItemDrawer {
         this.drawKuski(
           {
             type: "bike",
+            color: item.color,
+            opacity: item.opacity,
             distance: item.distance,
             start: item.position,
             coords: defaultBikeCoords,
@@ -422,8 +424,9 @@ export class WebGLWorldItemDrawer {
         this.shapes.drawCircle(
           item.position,
           OBJECT_DIAMETER / 2,
-          colors.start,
+          item.color ?? colors.start,
           scene,
+          item.opacity ?? 1,
         );
       }
     }
@@ -495,11 +498,20 @@ export class WebGLWorldItemDrawer {
     this.drawKuski(item, scene, kuskiSprites as Record<string, ImageBitmap>);
   }
 
+  private bikeColor: [number, number, number, number] = [1, 1, 1, 1];
+
   private drawKuski(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "bike" }>,
     scene: WorldRenderScene,
     lgrSprites: Record<string, ImageBitmap>,
   ) {
+    const hex = item.color ?? "#ffffff";
+    this.bikeColor = [
+      parseInt(hex.slice(1, 3), 16) / 255,
+      parseInt(hex.slice(3, 5), 16) / 255,
+      parseInt(hex.slice(5, 7), 16) / 255,
+      item.opacity ?? 1,
+    ];
     const coords = item.coords;
     const pose = buildWebGLBikePose({
       start: item.start,
@@ -820,7 +832,13 @@ export class WebGLWorldItemDrawer {
         1,
         1,
       ],
-      color: [1, 1, 1, opacity],
+      color: [
+        this.bikeColor[0],
+        this.bikeColor[1],
+        this.bikeColor[2],
+        opacity * this.bikeColor[3],
+      ],
+      recolorKuski: this.bikeColor.slice(0, 3).some((channel) => channel < 1),
       texture: this.context.getTexture(sprite),
       scene,
     });

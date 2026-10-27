@@ -37,6 +37,7 @@ import {
 } from "./vertex-tool-control";
 import {
   getNewLevelShortcut,
+  GO_TO_PLAY_START_SHORTCUT,
   OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
 } from "./keyboard-shortcuts";
 
@@ -267,7 +268,7 @@ function getShortcutGroups(
             },
             {
               shortcut: `${modifier} + C`,
-              label: "Copy selection",
+              label: "Copy selection (excluding starts and session artifacts)",
             },
             {
               shortcut: `${modifier} + V`,
@@ -275,11 +276,12 @@ function getShortcutGroups(
             },
             {
               shortcut: `${modifier} + D`,
-              label: "Duplicate selection",
+              label:
+                "Duplicate selection (excluding starts and session artifacts)",
             },
             {
               shortcut: "Delete",
-              label: "Delete selection",
+              label: "Delete selection (including test players)",
             },
             {
               shortcut: "Shift + Drag",
@@ -562,6 +564,11 @@ function getShortcutGroups(
           label: "Start / restart run (outside dialogs and tool panels)",
         },
         {
+          shortcut: "Enter",
+          label:
+            "With only one Kuski selected: use it as play start and start run",
+        },
+        {
           shortcut: formatShortcutCode(toolIcons.playKeyBindings.throttle),
           label: "Throttle",
         },
@@ -594,6 +601,14 @@ function getShortcutGroups(
     {
       title: "General",
       items: [
+        {
+          shortcut: "Enter",
+          label: "Save player name while renaming",
+        },
+        {
+          shortcut: "Esc",
+          label: "Cancel player rename",
+        },
         {
           shortcut: getNewLevelShortcut(modifier === "⌘"),
           label: "New level",
@@ -642,6 +657,10 @@ function getShortcutGroups(
         {
           shortcut: ["←", "↑", "→", "↓"],
           label: "Pan canvas",
+        },
+        {
+          shortcut: GO_TO_PLAY_START_SHORTCUT,
+          label: "Go to active play start (in edit mode)",
         },
       ],
     },

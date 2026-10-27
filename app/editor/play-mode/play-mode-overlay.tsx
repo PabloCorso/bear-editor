@@ -1,3 +1,4 @@
+import { activeTestStart } from "~/editor/test-starts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@mantine/hooks";
 import {
@@ -374,10 +375,17 @@ export function PlayModeOverlay({
       const container = containerRef.current;
       if (!canvas || !container) return;
 
+      const testStartState = {
+        start: store.getState().start,
+        testStarts: store.getState().testStarts,
+      };
       let levelData: LevelData;
       try {
         levelData = convertLevelToGameData(
-          elmaLevelFromEditorState(store.getState()),
+          elmaLevelFromEditorState({
+            ...store.getState(),
+            start: activeTestStart(store.getState()).position,
+          }),
         );
       } catch (error) {
         console.error("Failed to start play mode:", error);
@@ -494,6 +502,7 @@ export function PlayModeOverlay({
         });
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
         renderer.render(gameState, {
+          testStartState,
           visibility: {
             ...store.getState().levelVisibility,
             showGrassBounds: false,

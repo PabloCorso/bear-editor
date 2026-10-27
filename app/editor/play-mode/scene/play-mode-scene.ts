@@ -2,6 +2,7 @@ import type { LevelVisibilitySettings } from "~/editor/level-visibility";
 import type { LevelData } from "~/editor/play-mode/engine/level";
 import type {
   WorldRenderBikeItem,
+  WorldRenderStartItem,
   WorldRenderObjectItem,
   WorldRenderPictureItem,
   WorldRenderScene,
@@ -35,7 +36,8 @@ export type PlayModeSceneBikeItem = WorldRenderBikeItem;
 export type PlayModeSceneDrawItem =
   | PlayModeScenePictureItem
   | PlayModeSceneObjectItem
-  | PlayModeSceneBikeItem;
+  | PlayModeSceneBikeItem
+  | WorldRenderStartItem;
 
 export type PlayModeScene = Omit<WorldRenderScene, "drawItems"> & {
   drawItems: PlayModeSceneDrawItem[];

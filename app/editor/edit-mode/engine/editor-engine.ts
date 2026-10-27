@@ -1,3 +1,9 @@
+import { activeTestStart } from "~/editor/test-starts";
+import { goToTestStart } from "~/editor/helpers/test-start-navigation";
+import {
+  getSessionArtifacts,
+  findSessionArtifact,
+} from "~/editor/session-artifacts";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import { type EditorState } from "~/editor/editor-state";
 import {
@@ -499,6 +505,7 @@ export class EditorEngine {
   }
 
   private handlePointerDown = (event: PointerEvent) => {
+    this.store.setState({ testStartMenu: null });
     if (event.pointerType === "touch") {
       event.preventDefault();
       this.trySetPointerCapture(event.pointerId);
@@ -699,13 +706,41 @@ export class EditorEngine {
       state.viewPortOffset,
       state.zoom,
     );
+    const openTestStartMenu = (id?: string | null, selectionMenu = false) => {
+      if (!selectionMenu)
+        state.actions.getTool<SelectTool>("select")?.closeContextMenu();
+      this.store.setState({
+        testStartMenu: {
+          x: event.clientX,
+          y: event.clientY,
+          position: context.worldPos,
+          selectionMenu,
+          ...(id !== undefined ? { id } : {}),
+        },
+      });
+    };
     this.updateSelectHoverState(state, context.worldPos);
+    const hoveredObject = this.store
+      .getState()
+      .actions.getToolState<SelectToolState>("select")?.hoveredObject;
+    const test = state.testStarts.items.find(
+      (item) => item.position === hoveredObject,
+    );
+    const levelHit = hoveredObject === state.start;
 
     const activeTool = this.store.getState().actions.getActiveTool();
     if (activeTool?.onRightClick) {
       const consumed = activeTool.onRightClick(event, context);
-      if (consumed) return;
+      if (consumed) {
+        if (state.activeToolId === "select")
+          openTestStartMenu(test?.id ?? (levelHit ? null : undefined), true);
+        return;
+      }
     }
+    // Let selection resolve objects, pictures, and terrain before treating the
+    // canvas as empty space for a new test start.
+    if (state.activeToolId === "select")
+      openTestStartMenu(levelHit ? null : undefined);
   }
 
   private getCanvasPoint(clientX: number, clientY: number) {
@@ -923,6 +958,21 @@ export class EditorEngine {
     }
     if (event.repeat && key === "ENTER") return;
 
+    if (
+      key === "ENTER" &&
+      event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.isComposing
+    ) {
+      const screenPoint = this.getCurrentMouseScreenPoint(state);
+      goToTestStart(this.store, activeTestStart(state).position, this.canvas);
+      this.syncMousePositionFromScreenPoint(screenPoint);
+      event.preventDefault();
+      return;
+    }
+
     const currentTool = state.actions.getActiveTool();
     if (
       currentTool?.meta.hasMenu &&
@@ -1035,10 +1085,44 @@ export class EditorEngine {
 
     // Handle other shortcuts
     const shortcuts: Record<string, () => void> = {
-      Enter: () =>
+      Enter: () => {
+        if (
+          state.activeToolId === "select" &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.shiftKey &&
+          !event.isComposing
+        ) {
+          const selection =
+            state.actions.getToolState<SelectToolState>("select");
+          if (
+            selection &&
+            !selection.selectedVertices.length &&
+            !selection.selectedPictures.length &&
+            !selection.isDragging &&
+            !selection.isMarqueeSelecting &&
+            !selection.transformMode
+          ) {
+            const selectedTestStart = state.testStarts.items.find(
+              (item) =>
+                selection.selectedObjects.length === 1 &&
+                item.position === selection.selectedObjects[0],
+            );
+            if (selectedTestStart) {
+              state.actions.activateTestStart(selectedTestStart.id);
+            } else if (
+              selection.selectedObjects.length === 1 &&
+              selection.selectedObjects[0] === state.start
+            ) {
+              state.actions.activateTestStart(null);
+            }
+          }
+        }
         state.actions.startPlayMode(
           Array.from(this.pressedKeys).filter((code) => code !== "Enter"),
-        ),
+        );
+      },
       Escape: () => state.actions.activateTool("select"),
       "+": () => this.zoomInOut(this.zoomStep),
       "=": () => this.zoomInOut(this.zoomStep),
@@ -1426,6 +1510,14 @@ export class EditorEngine {
       const useImageStartSelection =
         state.levelVisibility.showObjects &&
         this.isStartObjectImageSelectionReady();
+      const artifact = [...getSessionArtifacts(state)]
+        .reverse()
+        .find((item) => item.hitTest(worldPos, useImageStartSelection));
+      if (artifact)
+        return {
+          hoveredObject: artifact.position,
+          hoveredPictureBounds: undefined,
+        };
       if (
         isPointVisible(state.start, viewportRect) &&
         isStartObjectHit(
@@ -1528,6 +1620,11 @@ export class EditorEngine {
       : "boundsOnly";
 
     for (const object of objects) {
+      const artifact = findSessionArtifact(state, object);
+      if (artifact) {
+        if (artifact.hitTest(position, useImageStartSelection)) return object;
+        continue;
+      }
       if (object === state.start) {
         const isHovered = isStartObjectHit(
           position,
@@ -1643,9 +1740,7 @@ export class EditorEngine {
   ): WorldRenderOverlayItem[] {
     const overlays: WorldRenderOverlayItem[] = [];
     const selectState = state.actions.getToolState<SelectToolState>("select");
-    if (state.activeToolId !== "select") {
-      return overlays;
-    }
+    if (state.activeToolId !== "select") return overlays;
 
     const hoveredPicture = selectState?.isMarqueeSelecting
       ? undefined

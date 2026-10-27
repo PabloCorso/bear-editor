@@ -1,7 +1,11 @@
+import { TestStartContextMenu } from "~/editor/edit-mode/test-start-controls";
 import { lazy, Suspense } from "react";
 import { useHotkeys } from "@mantine/hooks";
 import { ControlToolbar } from "~/editor/edit-mode/toolbars/control-toolbar";
-import { HeaderToolbar } from "~/editor/edit-mode/toolbars/header-toolbar";
+import {
+  HeaderToolbar,
+  useLevelFileNameEntrance,
+} from "~/editor/edit-mode/toolbars/header-toolbar";
 import { CanvasToolbar } from "~/editor/edit-mode/toolbars/canvas-toolbar";
 import { EditorContextMenu } from "~/editor/edit-mode/context-menu";
 import { PlacementPropertiesMenu } from "~/editor/edit-mode/placement-properties-menu";
@@ -58,6 +62,7 @@ export function EditorShell({
       />
       <EditorContextMenu />
       <PlacementPropertiesMenu />
+      <TestStartContextMenu />
     </>
   );
 }
@@ -85,10 +90,15 @@ function EditorToolbars({
   const isPlayMode = useEditorIsPlayMode();
   useHotkeys([["mod + .", () => toggleUIVisibility()]]);
 
+  const fileNameEntrance = useLevelFileNameEntrance(isUIVisible && !isPlayMode);
+
   if (!isUIVisible || isPlayMode) return null;
   return (
     <>
-      <HeaderToolbar isLoading={isLoading} />
+      <HeaderToolbar
+        isLoading={isLoading}
+        fileNameEntrance={fileNameEntrance}
+      />
       <ControlToolbar />
       <CanvasToolbar engineRef={engineRef} />
     </>

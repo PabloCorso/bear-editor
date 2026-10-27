@@ -4,6 +4,7 @@ import {
   uiStrokeWidths,
 } from "~/editor/constants";
 import type { EditorState } from "~/editor/editor-state";
+import { testStartGhostOpacity } from "~/editor/test-starts";
 import { Clip, type Picture } from "~/editor/elma-types";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import {
@@ -97,7 +98,11 @@ export function buildEditorWorldScene({
 export function getEditorHoverableItems(
   state: EditorState,
 ): EditorHoverableWorldItem[] {
-  const items = getDrawItemQueue(state);
+  const items = getDrawItemQueue(state).filter(
+    (item) =>
+      item.type !== "start" ||
+      !state.testStarts.items.some((test) => test.position === item.position),
+  );
   return items.map((item) => {
     if (item.type === "picture") {
       return {
@@ -283,7 +288,12 @@ function getDrawItemQueue(
             type: "start" as const,
             ...DEFAULT_DISTANCE_AND_CLIP,
             position: drafts.start ?? state.start,
-            opacity: drafts.start ? DRAFT_PREVIEW_OPACITY : undefined,
+            opacity: drafts.start
+              ? DRAFT_PREVIEW_OPACITY
+              : state.testStarts.activeId
+                ? testStartGhostOpacity.editor
+                : 1,
+            color: state.testStarts.levelColor,
             forceVisible: !!drafts.start,
             showBounds: showObjectBounds,
             boundsLineWidth: idleBoundsLineWidth,
@@ -291,6 +301,22 @@ function getDrawItemQueue(
             boundsOpacity: idleBoundsOpacity,
           },
         ]
+      : []),
+    ...(showAnyObjects
+      ? state.testStarts.items.map((item) => ({
+          type: "start" as const,
+          ...DEFAULT_DISTANCE_AND_CLIP,
+          position: item.position,
+          color: item.color,
+          opacity:
+            item.id === state.testStarts.activeId
+              ? 1
+              : testStartGhostOpacity.editor,
+          showBounds: showObjectBounds,
+          boundsLineWidth: idleBoundsLineWidth,
+          boundsColor: idleBoundsColor,
+          boundsOpacity: idleBoundsOpacity,
+        }))
       : []),
   ].sort((a, b) => b.distance - a.distance);
 }

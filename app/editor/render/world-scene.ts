@@ -72,6 +72,7 @@ export type WorldRenderObjectItem = {
 
 export type WorldRenderStartItem = {
   type: "start";
+  color?: string;
   position: WorldPoint;
   distance: number;
   clip: number;
@@ -84,6 +85,8 @@ export type WorldRenderStartItem = {
 
 export type WorldRenderBikeItem = {
   type: "bike";
+  color?: string;
+  opacity?: number;
   distance: number;
   start: WorldPoint;
   coords: BikeCoords;

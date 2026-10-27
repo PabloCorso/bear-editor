@@ -1,3 +1,4 @@
+import { TestStartPicker } from "../test-start-controls";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -91,11 +92,50 @@ const ISSUE_FOCUS_MIN_ZOOM = 0.2;
 const ISSUE_FOCUS_MAX_ZOOM = 10000;
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
-type HeaderToolbarProps = ToolbarProps & { isLoading?: boolean };
+type HeaderToolbarProps = ToolbarProps & {
+  isLoading?: boolean;
+  fileNameEntrance: ReturnType<typeof useLevelFileNameEntrance>;
+};
+
+// Keep this state above the toolbars that unmount in play mode or with hidden UI.
+export function useLevelFileNameEntrance(isVisible: boolean) {
+  const store = useEditorStore();
+  const documentSession = useEditorDocumentSession();
+  const sessionId = documentSession.clipboardSessionId;
+  const [entrance, setEntrance] = useState({
+    sessionId,
+    isEntering: isVisible && documentSession.hasExternalHandle,
+  });
+
+  if (entrance.sessionId !== sessionId) {
+    setEntrance({
+      sessionId,
+      isEntering: isVisible && documentSession.hasExternalHandle,
+    });
+  } else if (!isVisible && entrance.isEntering) {
+    setEntrance({ sessionId, isEntering: false });
+  }
+
+  return {
+    sessionId,
+    isEntering: entrance.isEntering,
+    onEnd() {
+      setEntrance((current) => ({ ...current, isEntering: false }));
+    },
+    onNavigate() {
+      // Folder carets replace the document too, but should keep the label still.
+      setEntrance({
+        sessionId: store.getState().documentSession.clipboardSessionId,
+        isEntering: false,
+      });
+    },
+  };
+}
 
 export function HeaderToolbar({
   className,
   isLoading,
+  fileNameEntrance,
   ...props
 }: HeaderToolbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -182,6 +222,7 @@ export function HeaderToolbar({
             setTopologyResult={setTopologyResult}
             isLoading={isLoading}
           />
+          <TestStartPicker mobile />
           <PlayModeControl />
         </Toolbar>
 
@@ -204,11 +245,17 @@ export function HeaderToolbar({
           </Toolbar>
 
           <Toolbar className="pointer-events-auto w-fit gap-2 justify-self-end">
+            <TestStartPicker />
             <PlayModeControl />
           </Toolbar>
         </div>
 
-        <LevelFileName className="justify-center" isLoading={isLoading} />
+        <LevelFileName
+          key={fileNameEntrance.sessionId}
+          className="justify-center"
+          isLoading={isLoading}
+          entrance={fileNameEntrance}
+        />
 
         <div className="pointer-events-none mt-2 flex justify-center">
           <TopologyResultPanel
@@ -769,8 +816,12 @@ function LevelNameControl({ isLoading }: { isLoading?: boolean }) {
 function LevelFileName({
   className,
   isLoading,
+  entrance,
   ...props
-}: React.ComponentPropsWithRef<"div"> & { isLoading?: boolean }) {
+}: React.ComponentPropsWithRef<"div"> & {
+  isLoading?: boolean;
+  entrance: ReturnType<typeof useLevelFileNameEntrance>;
+}) {
   const store = useEditorStore();
   const levelFolder = useEditor((state) => state.levelFolder);
   const folderRevision = useSyncExternalStore(
@@ -787,18 +838,6 @@ function LevelFileName({
   const fileName = documentSession.hasExternalHandle
     ? documentSession.displayName
     : null;
-  const [entrance, setEntrance] = useState({
-    fileName,
-    isEntering: Boolean(fileName),
-  });
-
-  if (entrance.fileName !== fileName) {
-    setEntrance({
-      fileName,
-      isEntering: !entrance.fileName && Boolean(fileName),
-    });
-  }
-
   useEffect(
     function syncLevelFolderFiles() {
       let cancelled = false;
@@ -864,6 +903,7 @@ function LevelFileName({
         displayName: result.fileName,
         hasExternalHandle: true,
       });
+      entrance.onNavigate();
       triggerFitToView();
     } catch (error) {
       alert(`Import failed: ${error instanceof Error ? error.message : error}`);
@@ -889,7 +929,7 @@ function LevelFileName({
           currentIndex >= 0 ? "level-file-name-next" : "level-file-name-label",
         );
         if (isLastPiece) {
-          setEntrance((current) => ({ ...current, isEntering: false }));
+          entrance.onEnd();
         }
       }}
       {...props}

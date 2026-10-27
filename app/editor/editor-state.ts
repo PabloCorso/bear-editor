@@ -71,6 +71,18 @@ export type EditorDocumentInput = {
 };
 
 export type EditorState = EditorLevel & {
+  testStarts: import("./test-starts").TestStartSession;
+  testStartRename: {
+    id: string | null;
+    name: string;
+  } | null;
+  testStartMenu: {
+    selectionMenu?: boolean;
+    x: number;
+    y: number;
+    position: Position;
+    id?: string | null;
+  } | null;
   documentSession: EditorDocumentSession;
 
   // Editor state
@@ -112,6 +124,12 @@ export type EditorState = EditorLevel & {
   levelFolder: LevelFolder;
 
   actions: {
+    addTestStart: (position: Position) => void;
+    moveTestStart: (id: string, position: Position) => void;
+    renameTestStart: (id: string | null, name: string) => void;
+    activateTestStart: (id: string | null) => void;
+    deleteTestStart: (id: string) => void;
+    promoteTestStart: (id: string) => void;
     // Level data operations
     setStart: (position: Position) => void;
     addApple: (apple: Apple) => void;

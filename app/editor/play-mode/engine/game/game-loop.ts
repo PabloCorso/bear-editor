@@ -23,7 +23,7 @@ import {
 } from "../physics/stepper";
 import { EventBuffer, WavEvent } from "./event-buffer";
 import { InputManager, type KeyBindings, DEFAULT_KEYS } from "../input-manager";
-import { createCamera, updateCamera, type Camera } from "./camera";
+import { createStartCamera, updateCamera, type Camera } from "./camera";
 import type { LevelData, ObjectProperty } from "../level";
 import { sortObjects, initializeObjects } from "../level";
 
@@ -102,8 +102,7 @@ export function createGame(
   const segments = new Segments(gameLevel);
   segments.setupCollisionGrid(0.4); // max wheel radius
 
-  const camera = createCamera();
-  updateCamera(camera, motor.bike.r.x, motor.bike.r.y);
+  const camera = createStartCamera(motor.leftWheel.r);
 
   // Set camera bounds from level geometry
   let minX = Infinity,
