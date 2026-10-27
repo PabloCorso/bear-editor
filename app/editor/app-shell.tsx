@@ -96,6 +96,7 @@ function EditorToolbars({
   return (
     <>
       <HeaderToolbar
+        engineRef={engineRef}
         isLoading={isLoading}
         fileNameEntrance={fileNameEntrance}
       />
