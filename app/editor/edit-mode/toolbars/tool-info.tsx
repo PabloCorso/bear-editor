@@ -6,6 +6,8 @@ import {
 } from "~/editor/use-editor-store";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import {
+  getPipeToolSettings,
+  getDrawEdgeLength,
   DEFAULT_DRAW_EDGE_LENGTH_PX,
   MIN_DRAW_EDGE_LENGTH_PX,
   MAX_DRAW_EDGE_LENGTH_PX,
@@ -157,8 +159,9 @@ export function ToolInfo() {
   const isBrush = vertex?.variant === "brush" && !isAutoGrass;
   const isPipe = (vertex?.variant === "pipe" || isBrush) && !isAutoGrass;
   const pipeName = isBrush ? "Brush" : "Pipe";
-  const pipeWidth = vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
-  const pipeAppleMode = vertex?.pipeAppleMode ?? "none";
+  const pipeWidth =
+    getPipeToolSettings(vertex).pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
+  const pipeAppleMode = getPipeToolSettings(vertex).pipeAppleMode ?? "none";
   const canChangeDirection = canToggleVertexToolDirection(vertex);
   if (vertex?.variant === "cutConnect" && !isAutoGrass) {
     return (
@@ -192,17 +195,14 @@ export function ToolInfo() {
       <CanvasTipGroup title="Draw" aria-label="Active tool info">
         <CanvasTipNumberControl
           label="Edge length"
-          accessibleLabel="draw edge length in Elma pixels"
-          value={vertex?.drawEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+          accessibleLabel="draw edge length"
+          value={getDrawEdgeLength(vertex) ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
           min={MIN_DRAW_EDGE_LENGTH_PX}
           max={MAX_DRAW_EDGE_LENGTH_PX}
           onAdjust={(delta) =>
             getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
           }
         />
-        <CanvasTipSegment>
-          Drag and release, or click–move–click
-        </CanvasTipSegment>
       </CanvasTipGroup>
     );
   }
@@ -226,8 +226,8 @@ export function ToolInfo() {
           <CanvasTipSection aria-label="Brush drawing">
             <CanvasTipNumberControl
               label="Edge length"
-              accessibleLabel="brush edge length in Elma pixels"
-              value={vertex?.drawEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+              accessibleLabel="brush edge length"
+              value={getDrawEdgeLength(vertex) ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
               min={MIN_DRAW_EDGE_LENGTH_PX}
               max={MAX_DRAW_EDGE_LENGTH_PX}
               decreaseKey=","
@@ -237,9 +237,6 @@ export function ToolInfo() {
                 getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
               }
             />
-            <CanvasTipSegment>
-              Drag and release, or click–move–click
-            </CanvasTipSegment>
           </CanvasTipSection>
         )}
         <CanvasTipSection aria-label={`${pipeName} apples`}>
@@ -263,8 +260,10 @@ export function ToolInfo() {
               }
               value={
                 pipeAppleMode === "distance"
-                  ? (vertex?.pipeAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE)
-                  : (vertex?.pipeAppleCount ?? DEFAULT_PIPE_APPLE_COUNT)
+                  ? (getPipeToolSettings(vertex).pipeAppleDistance ??
+                    DEFAULT_PIPE_APPLE_DISTANCE)
+                  : (getPipeToolSettings(vertex).pipeAppleCount ??
+                    DEFAULT_PIPE_APPLE_COUNT)
               }
               min={pipeAppleMode === "distance" ? PIPE_APPLE_DISTANCE_STEP : 0}
               max={

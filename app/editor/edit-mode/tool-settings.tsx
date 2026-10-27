@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { IconButton } from "~/components/ui/button";
+import {
+  Collapsible,
+  CollapsiblePanel,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import { NumberInput } from "~/components/ui/number-input";
 import {
   SegmentedControl,
@@ -46,7 +51,7 @@ import {
 } from "./tools/vertex-tool";
 export function ToolSettingsPanel() {
   return (
-    <div className="columns-1 gap-3 sm:columns-2">
+    <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
       <VertexShapeSettings />
     </div>
   );
@@ -74,7 +79,7 @@ function VertexShapeSettings() {
         }
       >
         <NumberSetting
-          label="Height (px)"
+          label="Height"
           name="AutoGrass height"
           value={Math.round(autoGrass.depth * ELMA_PIXELS_PER_WORLD_UNIT)}
           min={1}
@@ -84,7 +89,7 @@ function VertexShapeSettings() {
           }
         />
         <NumberSetting
-          label="End inset (px)"
+          label="End inset"
           name="AutoGrass end inset"
           value={Math.round(autoGrass.endInset * ELMA_PIXELS_PER_WORLD_UNIT)}
           min={0}
@@ -97,7 +102,7 @@ function VertexShapeSettings() {
         />
       </ToolSettingsSection>
       <ToolSettingsSection
-        title="Pipe & Brush"
+        title="Pipe"
         icon={<VertexIcon {...getVertexIconProps("pipe")} />}
         onReset={() =>
           update({
@@ -118,7 +123,7 @@ function VertexShapeSettings() {
         }
       >
         <NumberSetting
-          label="Width (px)"
+          label="Width"
           name="Pipe width"
           value={vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX}
           min={MIN_PIPE_WIDTH_PX}
@@ -137,30 +142,26 @@ function VertexShapeSettings() {
           }))}
           onChange={(pipeAppleMode) => update({ pipeAppleMode })}
         />
-        {vertex?.pipeAppleMode === "distance" && (
-          <NumberSetting
-            label="Apple spacing (units)"
-            name="Pipe apple distance"
-            value={vertex.pipeAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE}
-            min={PIPE_APPLE_DISTANCE_STEP}
-            max={MAX_PIPE_APPLE_DISTANCE}
-            step={PIPE_APPLE_DISTANCE_STEP}
-            onChange={(pipeAppleDistance) => update({ pipeAppleDistance })}
-          />
-        )}
-        {vertex?.pipeAppleMode === "count" && (
-          <NumberSetting
-            label="Apple count"
-            name="Pipe apple count"
-            value={vertex.pipeAppleCount ?? DEFAULT_PIPE_APPLE_COUNT}
-            min={0}
-            max={MAX_PIPE_APPLE_COUNT}
-            onChange={(pipeAppleCount) => update({ pipeAppleCount })}
-          />
-        )}
+        <NumberSetting
+          label="Apple spacing"
+          name="Pipe apple distance"
+          value={vertex?.pipeAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE}
+          min={PIPE_APPLE_DISTANCE_STEP}
+          max={MAX_PIPE_APPLE_DISTANCE}
+          step={PIPE_APPLE_DISTANCE_STEP}
+          onChange={(pipeAppleDistance) => update({ pipeAppleDistance })}
+        />
+        <NumberSetting
+          label="Apple count"
+          name="Pipe apple count"
+          value={vertex?.pipeAppleCount ?? DEFAULT_PIPE_APPLE_COUNT}
+          min={0}
+          max={MAX_PIPE_APPLE_COUNT}
+          onChange={(pipeAppleCount) => update({ pipeAppleCount })}
+        />
       </ToolSettingsSection>
       <ToolSettingsSection
-        title="Draw & Brush"
+        title="Draw"
         icon={<VertexIcon {...getVertexIconProps("draw")} />}
         onReset={() =>
           update({ drawEdgeLengthPx: DEFAULT_DRAW_EDGE_LENGTH_PX })
@@ -171,12 +172,82 @@ function VertexShapeSettings() {
         }
       >
         <NumberSetting
-          label="Edge length (px)"
-          name="Draw and Brush centerline edge length"
+          label="Edge length"
+          name="Draw edge length"
           value={vertex?.drawEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
           min={MIN_DRAW_EDGE_LENGTH_PX}
           max={MAX_DRAW_EDGE_LENGTH_PX}
           onChange={(drawEdgeLengthPx) => update({ drawEdgeLengthPx })}
+        />
+      </ToolSettingsSection>
+      <ToolSettingsSection
+        title="Brush"
+        icon={<VertexIcon {...getVertexIconProps("brush")} />}
+        onReset={() =>
+          update({
+            brushEdgeLengthPx: DEFAULT_DRAW_EDGE_LENGTH_PX,
+            brushWidthPx: DEFAULT_PIPE_WIDTH_PX,
+            brushAppleMode: "none",
+            brushAppleDistance: DEFAULT_PIPE_APPLE_DISTANCE,
+            brushAppleCount: DEFAULT_PIPE_APPLE_COUNT,
+          })
+        }
+        isDefault={
+          (vertex?.brushEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX) ===
+            DEFAULT_DRAW_EDGE_LENGTH_PX &&
+          (vertex?.brushWidthPx ?? DEFAULT_PIPE_WIDTH_PX) ===
+            DEFAULT_PIPE_WIDTH_PX &&
+          (vertex?.brushAppleMode ?? "none") === "none" &&
+          (vertex?.brushAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE) ===
+            DEFAULT_PIPE_APPLE_DISTANCE &&
+          (vertex?.brushAppleCount ?? DEFAULT_PIPE_APPLE_COUNT) ===
+            DEFAULT_PIPE_APPLE_COUNT
+        }
+      >
+        <NumberSetting
+          label="Edge length"
+          name="Brush edge length"
+          value={vertex?.brushEdgeLengthPx ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+          min={MIN_DRAW_EDGE_LENGTH_PX}
+          max={MAX_DRAW_EDGE_LENGTH_PX}
+          onChange={(brushEdgeLengthPx) => update({ brushEdgeLengthPx })}
+        />
+        <NumberSetting
+          label="Width"
+          name="Brush width"
+          value={vertex?.brushWidthPx ?? DEFAULT_PIPE_WIDTH_PX}
+          min={MIN_PIPE_WIDTH_PX}
+          max={MAX_PIPE_WIDTH_PX}
+          onChange={(brushWidthPx) => update({ brushWidthPx })}
+        />
+        <ChoiceSetting
+          label="Apples"
+          name="Brush apple placement"
+          value={vertex?.brushAppleMode ?? "none"}
+          options={PIPE_APPLE_MODES.map((value) => ({
+            value,
+            label: { none: "None", distance: "Distance", count: "Count" }[
+              value
+            ],
+          }))}
+          onChange={(brushAppleMode) => update({ brushAppleMode })}
+        />
+        <NumberSetting
+          label="Apple spacing"
+          name="Brush apple distance"
+          value={vertex?.brushAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE}
+          min={PIPE_APPLE_DISTANCE_STEP}
+          max={MAX_PIPE_APPLE_DISTANCE}
+          step={PIPE_APPLE_DISTANCE_STEP}
+          onChange={(brushAppleDistance) => update({ brushAppleDistance })}
+        />
+        <NumberSetting
+          label="Apple count"
+          name="Brush apple count"
+          value={vertex?.brushAppleCount ?? DEFAULT_PIPE_APPLE_COUNT}
+          min={0}
+          max={MAX_PIPE_APPLE_COUNT}
+          onChange={(brushAppleCount) => update({ brushAppleCount })}
         />
       </ToolSettingsSection>
       <ToolSettingsSection
@@ -192,7 +263,7 @@ function VertexShapeSettings() {
         }
       >
         <NumberSetting
-          label="Width (px)"
+          label="Width"
           name="Frame width"
           value={vertex?.frameWidthPx ?? DEFAULT_FRAME_WIDTH_PX}
           min={MIN_FRAME_WIDTH_PX}
@@ -222,7 +293,7 @@ function VertexShapeSettings() {
         }
       >
         <NumberSetting
-          label="Width (px)"
+          label="Width"
           name="Cut & Connect width"
           value={vertex?.cutConnectWidthPx ?? DEFAULT_CUT_CONNECT_WIDTH_PX}
           min={MIN_CUT_CONNECT_WIDTH_PX}
@@ -248,19 +319,16 @@ function ToolSettingsSection({
   isDefault: boolean;
 }) {
   return (
-    <section
-      aria-label={`${title} settings`}
-      className="mb-3 min-w-0 break-inside-avoid overflow-hidden rounded-lg border border-separator"
-    >
-      <div className="flex h-10 items-center justify-between gap-2 border-b border-separator bg-primary/40 px-3">
-        <div className="flex min-w-0 items-center gap-2 text-secondary">
+    <Collapsible className="min-w-0 overflow-hidden rounded-lg border border-separator">
+      <div className="flex min-h-12 items-center gap-2 pr-3">
+        <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-3 self-stretch px-3 py-3 text-secondary transition-colors hover:bg-primary/40 hover:text-primary">
           <Icon size="sm" aria-hidden="true">
             {icon}
           </Icon>
-          <div className="min-w-0">
-            <h2 className="text-xs font-medium text-primary">{title}</h2>
-          </div>
-        </div>
+          <span className="flex-1 text-xs font-medium text-primary">
+            {title}
+          </span>
+        </CollapsibleTrigger>
         <IconButton
           size="sm"
           iconSize="sm"
@@ -273,8 +341,16 @@ function ToolSettingsSection({
           <ArrowCounterClockwiseIcon />
         </IconButton>
       </div>
-      <div className="grid min-w-0 gap-2.5 p-3">{children}</div>
-    </section>
+      <CollapsiblePanel>
+        <div
+          role="group"
+          aria-label={`${title} settings`}
+          className="grid min-w-0 gap-3 border-t border-separator bg-primary/20 p-3"
+        >
+          {children}
+        </div>
+      </CollapsiblePanel>
+    </Collapsible>
   );
 }
 

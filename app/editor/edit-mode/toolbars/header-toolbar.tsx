@@ -97,7 +97,7 @@ import { ExportImageDialog } from "./export-image-dialog";
 import type { ImageExport } from "~/editor/helpers/image-export";
 
 import {
-  AUTO_GRASS_ALL_SHORTCUT,
+  getAutoGrassAllShortcut,
   VertexIcon,
   getVertexIconProps,
 } from "./vertex-tool-control";
@@ -366,6 +366,7 @@ function LevelOptionsMenu({
   onOpenToolSettings: () => void;
 }) {
   const { getTool } = useEditorActions();
+  const modifier = useModifier();
 
   return (
     <DropdownMenu modal={false}>
@@ -380,7 +381,7 @@ function LevelOptionsMenu({
       >
         <DropdownMenuItem
           iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
-          shortcut={AUTO_GRASS_ALL_SHORTCUT}
+          shortcut={getAutoGrassAllShortcut(modifier)}
           disabled={isLoading}
           onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
         >

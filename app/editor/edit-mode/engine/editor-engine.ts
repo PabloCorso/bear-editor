@@ -50,6 +50,7 @@ import {
 import {
   VertexTool,
   type VertexToolState,
+  type VertexToolVariant,
 } from "~/editor/edit-mode/tools/vertex-tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import type { EditorDocumentInput } from "~/editor/editor-state";
@@ -930,28 +931,39 @@ export class EditorEngine {
     }
 
     if (
-      (key === "P" || key === "F") &&
+      key === "G" &&
       event.shiftKey &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey
+      modifier &&
+      !event.altKey &&
+      !event.isComposing
     ) {
-      const vertexState = state.actions.getToolState<VertexToolState>(
-        defaultTools.vertex.id,
-      );
-      const variant = key === "F" ? "frame" : "pipe";
-      if (
-        state.activeToolId !== defaultTools.vertex.id ||
-        vertexState?.variant !== variant
-      ) {
-        state.actions.activateTool(defaultTools.vertex.id, variant);
-      }
+      if (!event.repeat) this.autoGrassAll(state);
       event.preventDefault();
       return;
     }
 
-    if (key === "G" && event.shiftKey && !modifier && !event.altKey) {
-      this.autoGrassAll(state);
+    const vertexVariantShortcuts: Partial<Record<string, VertexToolVariant>> =
+      event.shiftKey
+        ? { P: "pipe", F: "frame", G: "autoGrass" }
+        : { B: "brush", D: "draw" };
+    const variant = vertexVariantShortcuts[key];
+    if (
+      variant &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.isComposing
+    ) {
+      const vertexState = state.actions.getToolState<VertexToolState>(
+        defaultTools.vertex.id,
+      );
+      if (
+        !event.repeat &&
+        (state.activeToolId !== defaultTools.vertex.id ||
+          vertexState?.variant !== variant)
+      ) {
+        state.actions.activateTool(defaultTools.vertex.id, variant);
+      }
       event.preventDefault();
       return;
     }
@@ -1032,8 +1044,9 @@ export class EditorEngine {
       for (const [variantKey, variantMeta] of Object.entries(
         tool.meta.variants || {},
       )) {
-        // C is handled above with modifier checks so Copy stays available.
-        if (variantKey === "cutConnect") continue;
+        // These variants are handled above with explicit modifier checks.
+        if (["cutConnect", "brush", "draw", "autoGrass"].includes(variantKey))
+          continue;
         if (variantMeta.shortcut.toUpperCase() === key) {
           // If tool is already active, let onKeyDown handle it (toggle)
           if (state.activeToolId === tool.meta.id) {
