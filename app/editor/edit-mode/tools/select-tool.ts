@@ -155,6 +155,13 @@ export class SelectTool extends Tool<SelectToolState> {
     map: (point: Position) => Position;
   } | null = null;
 
+  private scalePreview: {
+    selection: SelectToolState;
+    points: Position[];
+    pictureOrigins: Position[];
+    center: Position;
+  } | null = null;
+
   private isDragging = false;
   private dragStartPos = { x: 0, y: 0 };
   private dragOriginPositions: Position[] = [];
@@ -171,6 +178,7 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   clear(): void {
+    this.finishScalePreview(false);
     this.finishTransformDrag(false);
     this.transformFrame = null;
     const { setToolState } = this.getState();
@@ -194,6 +202,11 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   onRightClick(event: MouseEvent, context: EventContext) {
+    if (this.scalePreview) {
+      this.finishScalePreview(true);
+      this.closeContextMenu();
+      return true;
+    }
     this.pruneHiddenSelection();
     const { state, toolState, setToolState } = this.getState();
     const hoveredPicture = this.resolveHoveredPictureFromState(
@@ -241,6 +254,7 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   public closeContextMenu(): void {
+    this.finishScalePreview(true);
     const { setToolState } = this.getState();
     setToolState({
       contextMenuType: undefined,
@@ -399,6 +413,7 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   onPointerDown(event: PointerEvent, context: EventContext): boolean {
+    this.finishScalePreview(true);
     this.pruneHiddenSelection();
     if (this.getState().toolState?.transformMode) {
       const target = this.getTransformTarget(context.worldPos);
@@ -688,6 +703,78 @@ export class SelectTool extends Tool<SelectToolState> {
     return Boolean(
       bounds && (bounds.maxX > bounds.minX || bounds.maxY > bounds.minY),
     );
+  }
+
+  public beginScalePreview(): boolean {
+    if (this.isDragging || this.isMarqueeSelecting || this.scalePreview)
+      return false;
+    this.pruneHiddenSelection();
+    const { toolState, setToolState } = this.getState();
+    const points = this.getTransformPoints().map(clonePosition);
+    const bounds = getTransformBounds(points);
+    if (!toolState || !bounds || !this.canTransformSelection()) return false;
+    this.transformFrame = null;
+    setToolState({ transformMode: false });
+    this.scalePreview = {
+      selection: this.getState().toolState!,
+      points,
+      pictureOrigins: toolState.selectedPictures.map(clonePosition),
+      center: getTransformCenter(bounds),
+    };
+    this.beginDragHistoryBatch();
+    return true;
+  }
+
+  public previewScale(factor: number): boolean {
+    const preview = this.scalePreview;
+    if (!preview || !Number.isFinite(factor) || factor <= 0) return false;
+    const positions = preview.points.map((point) =>
+      factor === 1
+        ? clonePosition(point)
+        : {
+            x: preview.center.x + (point.x - preview.center.x) * factor,
+            y: preview.center.y + (point.y - preview.center.y) * factor,
+          },
+    );
+    if (
+      positions.some(
+        (point) => !Number.isFinite(point.x) || !Number.isFinite(point.y),
+      )
+    )
+      return false;
+    this.dragHasChanges = factor !== 1;
+    const vertices = preview.selection.selectedVertices.length;
+    const objects = preview.selection.selectedObjects.length;
+    if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
+    if (objects)
+      this.updateSelectedObjects(positions.slice(vertices, vertices + objects));
+    if (preview.pictureOrigins.length) {
+      this.updateSelectedPictures(
+        positions.slice(vertices + objects).map((point, index) => {
+          const origin = preview.pictureOrigins[index];
+          const center = preview.points[vertices + objects + index];
+          return factor === 1
+            ? clonePosition(origin)
+            : {
+                x: point.x + origin.x - center.x,
+                y: point.y + origin.y - center.y,
+              };
+        }),
+      );
+    }
+    return true;
+  }
+
+  public finishScalePreview(commit: boolean): void {
+    const preview = this.scalePreview;
+    if (!preview) return;
+    this.scalePreview = null;
+    if (!commit && this.dragHistoryStart) {
+      this.store.setState(this.dragHistoryStart);
+      this.getState().setToolState(preview.selection);
+    }
+    this.transformFrame = null;
+    this.endDragHistoryBatch(commit);
   }
 
   public toggleTransform(): void {

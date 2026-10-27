@@ -306,6 +306,10 @@ function getShortcutGroups(
               label: "Resize & rotate: cancel drag / exit mode",
             },
             {
+              shortcut: "Enter / Esc",
+              label: "Scale popover: apply / cancel preview",
+            },
+            {
               shortcut: `${modifier} + ]`,
               label: "Bring picture forward",
             },

@@ -390,3 +390,124 @@ describe("SelectTool marquee selection", () => {
     expect(getSelection(store)?.selectedPictures).toEqual([picturePosition]);
   });
 });
+
+describe("SelectTool numeric scaling", () => {
+  function setup() {
+    const context = createTool();
+    context.store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [context.firstApple, context.secondApple],
+        contextMenuType: "selection",
+      });
+    context.store.temporal.getState().clear();
+    return context;
+  }
+
+  it("previews from the original selection and commits once with undo/redo", () => {
+    const { store, tool } = setup();
+    expect(tool.beginScalePreview()).toBe(true);
+    tool.previewScale(2);
+    expect(store.getState().apples.map((apple) => apple.position)).toEqual([
+      position(50, 100),
+      position(250, 100),
+    ]);
+    tool.previewScale(0.125);
+    expect(store.getState().apples.map((apple) => apple.position)).toEqual([
+      position(143.75, 100),
+      position(156.25, 100),
+    ]);
+    expect(store.temporal.getState().pastStates).toHaveLength(0);
+    tool.closeContextMenu();
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+    expect(store.temporal.getState().isTracking).toBe(true);
+    store.temporal.getState().undo();
+    expect(store.getState().apples[0].position).toEqual(position(100, 100));
+    store.temporal.getState().redo();
+    expect(store.getState().apples[0].position).toEqual(position(143.75, 100));
+  });
+
+  it("cancels without history and keeps selection references valid", () => {
+    const { store, tool, firstApple } = setup();
+    tool.beginScalePreview();
+    tool.previewScale(2);
+    tool.finishScalePreview(false);
+    expect(store.getState().apples[0].position).toBe(firstApple);
+    expect(getSelection(store)?.selectedObjects[0]).toBe(firstApple);
+    expect(store.temporal.getState().pastStates).toHaveLength(0);
+    expect(store.temporal.getState().isTracking).toBe(true);
+  });
+
+  it("restores scale 1 exactly and does not add a no-op history entry", () => {
+    const { store, tool } = setup();
+    tool.beginScalePreview();
+    tool.previewScale(1.025);
+    tool.previewScale(1);
+    tool.finishScalePreview(true);
+    expect(store.getState().apples.map((apple) => apple.position)).toEqual([
+      position(100, 100),
+      position(200, 100),
+    ]);
+    expect(store.temporal.getState().pastStates).toHaveLength(0);
+  });
+
+  it("rejects invalid scales and applies on canvas right click", () => {
+    const { store, tool } = setup();
+    tool.beginScalePreview();
+    for (const value of [0, -1, NaN, Infinity, Number.MAX_VALUE])
+      expect(tool.previewScale(value)).toBe(false);
+    tool.previewScale(0.5);
+    rightClick(tool, position(1000, 1000));
+    expect(store.getState().apples[0].position).toEqual(position(125, 100));
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+    expect(getSelection(store)?.contextMenuType).toBeUndefined();
+  });
+
+  it("scales mixed geometry and picture centres without changing sprite properties", () => {
+    const { store, tool, firstApple } = setup();
+    const polygon = {
+      grass: true,
+      vertices: [position(0, 0), position(20, 0), position(0, 20)],
+    };
+    const picture = {
+      name: "test",
+      texture: "",
+      mask: "" as const,
+      clip: Clip.Unclipped,
+      distance: 500,
+      position: position(20, 20),
+    };
+    store.getState().actions.setPolygons([polygon]);
+    store.getState().actions.setPictures([picture]);
+    tool.setPictureDimensionsResolver(() => ({ width: 10, height: 20 }));
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedVertices: polygon.vertices.map((vertex) => ({
+          polygon,
+          vertex,
+        })),
+        selectedObjects: [firstApple],
+        selectedPictures: [picture.position],
+      });
+    store.temporal.getState().clear();
+    tool.beginScalePreview();
+    tool.previewScale(2);
+    tool.previewScale(0.5);
+    tool.finishScalePreview(true);
+    expect(store.getState().polygons[0].vertices).toEqual([
+      position(25, 25),
+      position(35, 25),
+      position(25, 35),
+    ]);
+    expect(store.getState().apples[0].position).toEqual(position(75, 75));
+    expect(store.getState().pictures[0]).toEqual({
+      ...picture,
+      position: position(32.5, 30),
+    });
+    expect(getSelection(store)?.selectedPictures[0]).toBe(
+      store.getState().pictures[0].position,
+    );
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+  });
+});

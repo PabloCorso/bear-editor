@@ -63,7 +63,12 @@ import {
   DotsThreeVerticalIcon,
   ArrowRightIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { NumberInput } from "~/components/ui/number-input";
+import {
+  SettingsPopoverContent,
+  SettingsPopoverFields,
+} from "./toolbars/settings-popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -296,6 +301,7 @@ export function EditorContextMenu() {
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(selectToolState.transformMode)}
       onTransform={() => selectTool?.toggleTransform()}
+      selectTool={selectTool}
       onMirror={(direction) => selectTool?.mirrorSelection(direction)}
       canArrange={canArrange}
       canDuplicate={canDuplicate}
@@ -583,6 +589,7 @@ function useSelectionGroupIcons(): Record<
 }
 
 function SelectionActionsMenu({
+  selectTool,
   canTransform,
   transforming,
   onTransform,
@@ -594,6 +601,7 @@ function SelectionActionsMenu({
   onDuplicate,
   onDelete,
 }: {
+  selectTool: SelectTool | undefined;
   canTransform: boolean;
   transforming: boolean;
   onTransform: () => void;
@@ -606,99 +614,203 @@ function SelectionActionsMenu({
   onDelete: () => void;
 }) {
   const modifier = useModifier();
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const scaleInputRef = useRef<HTMLInputElement>(null);
+  const [scaleOpen, setScaleOpen] = useState(false);
+  const [factor, setFactor] = useState<number | null>(1);
+
+  function finishScale(commit: boolean) {
+    selectTool?.finishScalePreview(commit);
+    selectTool?.closeContextMenu();
+    setScaleOpen(false);
+  }
+
+  function changeFactor(value: number | null) {
+    setFactor(value);
+    // An empty/invalid field restores the original draft rather than committing
+    // a stale preview on dismissal.
+    if (!selectTool?.previewScale(value ?? 1)) selectTool?.previewScale(1);
+  }
 
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger>
-        <ToolbarButton type="button" aria-label="More selection actions">
-          <DotsThreeVerticalIcon weight="light" />
-        </ToolbarButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom">
-        <DropdownMenuItem
-          disabled={!canTransform}
-          shortcut="R"
-          onClick={onTransform}
+    <Popover
+      modal={false}
+      open={scaleOpen}
+      onOpenChange={(open, details) => {
+        if (!open) finishScale(details.reason !== "escape-key");
+      }}
+    >
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger>
+          <ToolbarButton
+            ref={anchorRef}
+            type="button"
+            aria-label="More selection actions"
+          >
+            <DotsThreeVerticalIcon weight="light" />
+          </ToolbarButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          side="bottom"
+          finalFocus={scaleOpen ? false : undefined}
         >
-          {transforming ? "Exit resize & rotate" : "Resize & rotate"}
-        </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={!canTransform} openOnHover>
-            Mirror
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => onMirror("horizontal")}>
-                Mirror horizontally
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMirror("vertical")}>
-                Mirror vertically
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
           <DropdownMenuItem
-            disabled={!canDuplicate}
-            shortcut={`${modifier} + C`}
-            onClick={onCopy}
+            disabled={!canTransform}
+            shortcut="R"
+            onClick={onTransform}
           >
-            Copy
+            {transforming ? "Exit resize & rotate" : "Resize & rotate"}
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={!canDuplicate}
-            shortcut={`${modifier} + D`}
-            onClick={onDuplicate}
+            disabled={!canTransform}
+            onClick={() => {
+              if (!selectTool?.beginScalePreview()) return;
+              setFactor(1);
+              setScaleOpen(true);
+            }}
           >
-            Duplicate
+            Scale…
           </DropdownMenuItem>
-          <DropdownMenuItem shortcut="Delete" onClick={onDelete}>
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        {canArrange && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger openOnHover>
-                  Arrange
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      shortcut={`${modifier} + ]`}
-                      onClick={() => onArrange("forward")}
-                    >
-                      Bring forward
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      shortcut={`${modifier} + Shift + ]`}
-                      onClick={() => onArrange("front")}
-                    >
-                      Bring to front
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      shortcut={`${modifier} + [`}
-                      onClick={() => onArrange("backward")}
-                    >
-                      Send backward
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      shortcut={`${modifier} + Shift + [`}
-                      onClick={() => onArrange("back")}
-                    >
-                      Send to back
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            </DropdownMenuGroup>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={!canTransform} openOnHover>
+              Mirror
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => onMirror("horizontal")}>
+                  Mirror horizontally
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onMirror("vertical")}>
+                  Mirror vertically
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuItem
+              disabled={!canDuplicate}
+              shortcut={`${modifier} + C`}
+              onClick={onCopy}
+            >
+              Copy
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canDuplicate}
+              shortcut={`${modifier} + D`}
+              onClick={onDuplicate}
+            >
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem shortcut="Delete" onClick={onDelete}>
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          {canArrange && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger openOnHover>
+                    Arrange
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        shortcut={`${modifier} + ]`}
+                        onClick={() => onArrange("forward")}
+                      >
+                        Bring forward
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        shortcut={`${modifier} + Shift + ]`}
+                        onClick={() => onArrange("front")}
+                      >
+                        Bring to front
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        shortcut={`${modifier} + [`}
+                        onClick={() => onArrange("backward")}
+                      >
+                        Send backward
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        shortcut={`${modifier} + Shift + [`}
+                        onClick={() => onArrange("back")}
+                      >
+                        Send to back
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </DropdownMenuGroup>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {scaleOpen && (
+        <SettingsPopoverContent
+          title="Scale selection"
+          initialFocus={scaleInputRef}
+          closeLabel="Apply and close scale"
+          anchor={anchorRef}
+          side="bottom"
+          align="end"
+          finalFocus={false}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            if (event.key === "Escape") {
+              event.preventDefault();
+              finishScale(false);
+            } else if (event.key === "Enter") {
+              event.preventDefault();
+              if (factor !== null && factor > 0 && Number.isFinite(factor))
+                finishScale(true);
+            }
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            finishScale(true);
+          }}
+        >
+          <SettingsPopoverFields>
+            <span className="text-xs font-bold text-secondary">Scale</span>
+            <NumberInput
+              aria-label="Scale factor"
+              size="sm"
+              value={factor}
+              min={0}
+              step={0.1}
+              smallStep={0.1}
+              largeStep={0.1}
+              snapOnStep={false}
+              format={{ maximumFractionDigits: 12, useGrouping: false }}
+              onValueChange={changeFactor}
+              inputProps={{
+                ref: scaleInputRef,
+                className: "w-20",
+                inputMode: "decimal",
+                onFocus: (event) => event.currentTarget.select(),
+              }}
+            />
+          </SettingsPopoverFields>
+          <div className="flex justify-end pt-3">
+            <Button
+              type="button"
+              size="sm"
+              disabled={
+                factor === null || factor <= 0 || !Number.isFinite(factor)
+              }
+              onClick={() => finishScale(true)}
+            >
+              Apply
+            </Button>
+          </div>
+        </SettingsPopoverContent>
+      )}
+    </Popover>
   );
 }
 
