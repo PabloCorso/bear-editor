@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-27
+
+- Select an edge’s two vertices with Alt + Click; plain edge clicks still select the polygon.
+
 ## 2026-10-26
 
 - Add Cut & Connect with live terrain previews and adjustable width (C).

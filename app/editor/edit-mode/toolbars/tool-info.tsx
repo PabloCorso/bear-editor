@@ -87,9 +87,13 @@ export function ToolInfo() {
         {hasPictures && (
           <CanvasTipSegment>
             Pick behind images
-            <CanvasTipKey>Shift / Alt + Click</CanvasTipKey>
+            <CanvasTipKey>Shift + Click</CanvasTipKey>
           </CanvasTipSegment>
         )}
+        <CanvasTipSegment>
+          Select edge vertices
+          <CanvasTipKey>Alt + Click</CanvasTipKey>
+        </CanvasTipSegment>
         {!!select?.selectedVertices.length && (
           <CanvasTipSegment>
             Slide along edge

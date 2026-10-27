@@ -390,3 +390,64 @@ describe("SelectTool marquee selection", () => {
     expect(getSelection(store)?.selectedPictures).toEqual([picturePosition]);
   });
 });
+
+describe("SelectTool edge endpoint selection", () => {
+  beforeEach(() =>
+    vi.stubGlobal("window", { navigator: { platform: "Linux" } }),
+  );
+  afterEach(() => vi.unstubAllGlobals());
+  it.each([false, true])(
+    "keeps whole-polygon clicks and uses Alt for endpoints (%s)",
+    (edgeMode) => {
+      const { store, tool } = createTool();
+      const polygon = {
+        grass: false,
+        vertices: [
+          position(0, 0),
+          position(100, 0),
+          position(100, 100),
+          position(0, 100),
+        ],
+      };
+      store.getState().actions.setPolygons([polygon]);
+      tool.onPointerDown(
+        { shiftKey: false, altKey: edgeMode } as PointerEvent,
+        { worldPos: position(50, 0), screenX: 0, screenY: 0 },
+      );
+      expect(
+        getSelection(store)?.selectedVertices.map(({ vertex }) => vertex),
+      ).toEqual(edgeMode ? polygon.vertices.slice(0, 2) : polygon.vertices);
+    },
+  );
+
+  it("adds closing-edge endpoints once with the multi-select modifier", () => {
+    const { store, tool, firstApple } = createTool();
+    const polygon = {
+      grass: false,
+      vertices: [
+        position(0, 0),
+        position(100, 0),
+        position(100, 100),
+        position(0, 100),
+      ],
+    };
+    store.getState().actions.setPolygons([polygon]);
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedObjects: [firstApple],
+      selectedVertices: [{ polygon, vertex: polygon.vertices[0] }],
+    });
+    tool.onPointerDown(
+      {
+        shiftKey: false,
+        altKey: true,
+        ctrlKey: true,
+        metaKey: true,
+      } as PointerEvent,
+      { worldPos: position(0, 50), screenX: 0, screenY: 0 },
+    );
+    expect(
+      getSelection(store)?.selectedVertices.map(({ vertex }) => vertex),
+    ).toEqual([polygon.vertices[0], polygon.vertices[3]]);
+    expect(getSelection(store)?.selectedObjects).toEqual([firstApple]);
+  });
+});
