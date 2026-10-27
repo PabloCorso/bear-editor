@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
+  DotsThreeVerticalIcon,
   CaretRightIcon,
   CaretLeftIcon,
   CaretDownIcon,
@@ -60,7 +61,10 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { supportsFilePickers } from "~/editor/helpers/file-session";
-import { SettingsDialog } from "~/editor/edit-mode/edit-settings";
+import {
+  SettingsDialog,
+  type SettingsTab,
+} from "~/editor/edit-mode/edit-settings";
 import { IconButton } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 import { checkModifierKey, cn, getModifier, useModifier } from "~/utils/misc";
@@ -91,6 +95,13 @@ import "./level-file-name.css";
 import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import { ExportImageDialog } from "./export-image-dialog";
 import type { ImageExport } from "~/editor/helpers/image-export";
+
+import {
+  AUTO_GRASS_ALL_SHORTCUT,
+  VertexIcon,
+  getVertexIconProps,
+} from "./vertex-tool-control";
+import type { VertexTool } from "../tools/vertex-tool";
 
 const ISSUE_FOCUS_MIN_ZOOM = 0.2;
 const ISSUE_FOCUS_MAX_ZOOM = 10000;
@@ -145,6 +156,7 @@ export function HeaderToolbar({
   ...props
 }: HeaderToolbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [highlightLevelFolder, setHighlightLevelFolder] = useState(false);
   const [topologyResult, setTopologyResult] =
     useState<TopologyCheckResult | null>(null);
@@ -198,6 +210,7 @@ export function HeaderToolbar({
 
         if (key === ",") {
           event.preventDefault();
+          setSettingsTab("general");
           setSettingsOpen(true);
         }
       };
@@ -248,9 +261,19 @@ export function HeaderToolbar({
             actions={menuActions}
             onExportImage={handleExportImage}
             isLoading={isLoading}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onOpenSettings={() => {
+              setSettingsTab("general");
+              setSettingsOpen(true);
+            }}
           />
           <LevelVisibilityControl />
+          <LevelOptionsMenu
+            isLoading={isLoading}
+            onOpenToolSettings={() => {
+              setSettingsTab("tools");
+              setSettingsOpen(true);
+            }}
+          />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
           <TopologyCheck
@@ -267,9 +290,19 @@ export function HeaderToolbar({
               actions={menuActions}
               onExportImage={handleExportImage}
               isLoading={isLoading}
-              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenSettings={() => {
+                setSettingsTab("general");
+                setSettingsOpen(true);
+              }}
             />
             <LevelVisibilityControl />
+            <LevelOptionsMenu
+              isLoading={isLoading}
+              onOpenToolSettings={() => {
+                setSettingsTab("tools");
+                setSettingsOpen(true);
+              }}
+            />
           </Toolbar>
 
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
@@ -305,6 +338,7 @@ export function HeaderToolbar({
       <CanvasTips>
         <LevelFolderTip
           onOpenSettings={() => {
+            setSettingsTab("general");
             setHighlightLevelFolder(true);
             setSettingsOpen(true);
           }}
@@ -313,6 +347,7 @@ export function HeaderToolbar({
       </CanvasTips>
       <SettingsDialog
         open={settingsOpen}
+        initialTab={settingsTab}
         highlightLevelFolder={highlightLevelFolder}
         onOpenChange={(open) => {
           setSettingsOpen(open);
@@ -320,6 +355,46 @@ export function HeaderToolbar({
         }}
       />
     </>
+  );
+}
+
+function LevelOptionsMenu({
+  isLoading,
+  onOpenToolSettings,
+}: {
+  isLoading?: boolean;
+  onOpenToolSettings: () => void;
+}) {
+  const { getTool } = useEditorActions();
+
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger>
+        <ToolButton name="Level options">
+          <DotsThreeVerticalIcon weight="bold" />
+        </ToolButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="min-w-64"
+        collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
+      >
+        <DropdownMenuItem
+          iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
+          shortcut={AUTO_GRASS_ALL_SHORTCUT}
+          disabled={isLoading}
+          onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
+        >
+          AutoGrass level
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          iconBefore={<GearIcon />}
+          onClick={onOpenToolSettings}
+        >
+          Tool settings
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

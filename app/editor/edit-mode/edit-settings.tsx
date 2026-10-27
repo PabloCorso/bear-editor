@@ -2,6 +2,7 @@ import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
 } from "~/editor/helpers/level-title";
+import { ToolSettingsPanel } from "./tool-settings";
 import { Input } from "~/components/ui/input";
 import {
   Select,
@@ -20,8 +21,8 @@ import {
 } from "react";
 import { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import {
-  useEditorLevelFolderName,
   useVertexEdgeClickPreference,
+  useEditorLevelFolderName,
   usePlaySettings,
   useEditorStore,
   useEditor,
@@ -33,7 +34,6 @@ import {
   useSetDefaultLevelPreset,
   useSetCustomDefaultLevelTemplate,
 } from "~/editor/edit-mode/default-level-preset";
-import type { VertexEdgeClickBehavior } from "~/editor/editor-preference-types";
 import {
   editorLevelFromFile,
   getDefaultLevel,
@@ -59,6 +59,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs";
+import type { VertexEdgeClickBehavior } from "~/editor/editor-preference-types";
 import { cn, useModifier } from "~/utils/misc";
 import { useForceUpdate } from "@mantine/hooks";
 import {
@@ -106,10 +107,13 @@ const playRunEndBehaviors: Array<{
   },
 ];
 
+export type SettingsTab = "general" | "tools" | "play" | "default-level";
+
 export function SettingsDialog({
   highlightLevelFolder = false,
+  initialTab = "general",
   ...props
-}: DialogProps & { highlightLevelFolder?: boolean }) {
+}: DialogProps & { highlightLevelFolder?: boolean; initialTab?: SettingsTab }) {
   return (
     <Dialog {...props}>
       <DialogContent
@@ -121,7 +125,8 @@ export function SettingsDialog({
         }
       >
         <SettingsPanel
-          key={highlightLevelFolder ? "level-folder" : "settings"}
+          key={highlightLevelFolder ? "level-folder" : initialTab}
+          initialTab={initialTab}
           highlightLevelFolder={highlightLevelFolder}
         />
       </DialogContent>
@@ -149,38 +154,9 @@ export function PlaySettingsDialog(props: DialogProps) {
 
 export function SettingsPanel({
   highlightLevelFolder = false,
-}: { highlightLevelFolder?: boolean } = {}) {
-  const modifier = useModifier();
-  const [activeTab, setActiveTab] = useState("general");
-  const vertexEdgeClickBehaviors: Array<{
-    id: VertexEdgeClickBehavior;
-    label: string;
-    description: ReactNode;
-  }> = [
-    {
-      id: "default",
-      label: "Default",
-      description: "Edit polygons by clicking on vertices or edges.",
-    },
-    {
-      id: "internal",
-      label: "Internal Editor",
-      description: (
-        <>
-          Edit polygons by clicking on vertices.
-          <br />(
-          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
-            {modifier}
-          </code>{" "}
-          +{" "}
-          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
-            Click
-          </code>{" "}
-          to edit from edges)
-        </>
-      ),
-    },
-  ];
+  initialTab = "general",
+}: { highlightLevelFolder?: boolean; initialTab?: SettingsTab } = {}) {
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
@@ -197,6 +173,9 @@ export function SettingsPanel({
             <TabsTrigger value="default-level" className="max-[360px]:text-xs">
               Preferences
             </TabsTrigger>
+            <TabsTrigger value="tools" className="max-[360px]:text-xs">
+              Tools
+            </TabsTrigger>
           </TabsList>
         </DialogHeader>
         <DialogDescription className="sr-only">
@@ -211,9 +190,10 @@ export function SettingsPanel({
             <PlaySettingsPanel />
           </TabsContent>
 
-          <PreferencesSettingsPanel
-            vertexEdgeClickBehaviors={vertexEdgeClickBehaviors}
-          />
+          <PreferencesSettingsPanel />
+          <TabsContent value="tools">
+            <ToolSettingsPanel />
+          </TabsContent>
         </DialogBody>
       </>
     </Tabs>
@@ -406,15 +386,38 @@ function GeneralSettingsPanel({
   );
 }
 
-function PreferencesSettingsPanel({
-  vertexEdgeClickBehaviors,
-}: {
-  vertexEdgeClickBehaviors: Array<{
+function PreferencesSettingsPanel() {
+  const modifier = useModifier();
+  const vertexEdgeClickBehaviors: Array<{
     id: VertexEdgeClickBehavior;
     label: string;
     description: ReactNode;
-  }>;
-}) {
+  }> = [
+    {
+      id: "default",
+      label: "Default",
+      description: "Edit polygons by clicking on vertices or edges.",
+    },
+    {
+      id: "internal",
+      label: "Internal Editor",
+      description: (
+        <>
+          Edit polygons by clicking on vertices.
+          <br />(
+          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
+            {modifier}
+          </code>{" "}
+          +{" "}
+          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
+            Click
+          </code>{" "}
+          to edit from edges)
+        </>
+      ),
+    },
+  ];
+
   const store = useEditorStore();
   const defaultLevelTitle = useEditor((state) => state.defaultLevelTitle);
   const defaultLevelPreset = useDefaultLevelPreset();
