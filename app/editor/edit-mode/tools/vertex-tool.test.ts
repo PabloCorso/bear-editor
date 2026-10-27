@@ -866,7 +866,7 @@ describe("Frame tool", () => {
     ).toBeNull();
   });
 
-  it("handles concave corners and rejects offsets that close a narrow notch", () => {
+  it("handles concave corners and closes narrow notches without rejecting the frame", () => {
     const concave = polygon([
       position(0, 0),
       position(10, 0),
@@ -879,8 +879,59 @@ describe("Frame tool", () => {
     ]);
     expect(createFramePolygons(concave, 0.5, "inside")).not.toBeNull();
     expect(createFramePolygons(concave, 0.5, "outside")).not.toBeNull();
-    expect(createFramePolygons(concave, 2, "outside")).toBeNull();
+    const result = createFramePolygons(concave, 2, "outside")!;
+    expect(result).toHaveLength(2);
+    expect(result[0].vertices).toEqual([
+      position(-2, -2),
+      position(12, -2),
+      position(12, 12),
+      position(-2, 12),
+    ]);
+    expect(result[1]).toBe(concave);
   });
+
+  it.each(["inside", "centered"] as const)(
+    "keeps both interiors when a narrow neck collapses (%s)",
+    (mode) => {
+      const vertices = [
+        position(0, 0),
+        position(10, 0),
+        position(10, 4.5),
+        position(20, 4.5),
+        position(20, 0),
+        position(30, 0),
+        position(30, 10),
+        position(20, 10),
+        position(20, 5.5),
+        position(10, 5.5),
+        position(10, 10),
+        position(0, 10),
+      ];
+      for (const winding of [vertices, [...vertices].reverse()]) {
+        const source = polygon(winding);
+        const result = createFramePolygons(
+          source,
+          mode === "inside" ? 1 : 2,
+          mode,
+        )!;
+        expect(result).toHaveLength(3);
+        expect(
+          result
+            .slice(1)
+            .map(({ vertices }) => [
+              Math.min(...vertices.map(({ x }) => x)),
+              Math.max(...vertices.map(({ x }) => x)),
+              Math.min(...vertices.map(({ y }) => y)),
+              Math.max(...vertices.map(({ y }) => y)),
+            ]),
+        ).toEqual([
+          [1, 9, 1, 9],
+          [21, 29, 1, 9],
+        ]);
+        expect(source.vertices).toEqual(winding);
+      }
+    },
+  );
 
   it("previews nested polygons and updates both outlines from keyboard controls", () => {
     const inner = polygon([
