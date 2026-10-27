@@ -1,3 +1,4 @@
+import clipping, { type Ring } from "polygon-clipping";
 import { ELMA_PIXELS_PER_WORLD_UNIT } from "~/editor/constants";
 import { WHEEL_RADIUS } from "~/editor/play-mode/engine/core/constants";
 import {
@@ -150,6 +151,7 @@ export function createPipePolygon(
   points: Position[],
   width: number,
   startChamber = false,
+  miterLimit = Infinity,
 ): Polygon | null {
   const centers = points.filter(
     (point, index) =>
@@ -171,8 +173,8 @@ export function createPipePolygon(
       const after = normals[Math.min(index, normals.length - 1)];
       const denominator = 1 + before.x * after.x + before.y * after.y;
       const halfWidth = (side * width) / 2;
-      // An exact reversal has no finite miter. Use two square corners instead.
-      if (denominator < 1e-8) {
+      // Bevel reversals and corners exceeding the requested miter limit.
+      if (denominator < 1e-8 || Math.sqrt(2 / denominator) > miterLimit) {
         return [before, after].map((normal) => ({
           x: point.x + normal.x * halfWidth,
           y: point.y + normal.y * halfWidth,
@@ -196,6 +198,80 @@ export function createPipePolygon(
     vertices: chamber ? [...vertices, ...chamber.corners] : vertices,
     grass: false,
   };
+}
+
+// Brush samples can be much shorter than the chamber. Merge the chamber's
+// area with the original corridor rather than moving its first wall vertices
+// past those samples, which folds the outline back into the chamber.
+export function createBrushPolygons(
+  points: Position[],
+  width: number,
+  startChamber = false,
+): Polygon[] {
+  const corridor = createPipePolygon(points, width, false, 2);
+  if (!corridor) return [];
+  if (!startChamber) return [corridor];
+  const chamber = createStartChamber(points, width);
+  if (!chamber) return [];
+  // The chamber opening can lie behind the original cap on either wall.
+  // Bridge both openings without moving any of the sampled corridor vertices.
+  const cap = [corridor.vertices[0], corridor.vertices.at(-1)!];
+  const openings = [...cap, chamber.entranceA, chamber.entranceB].sort(
+    (a, b) => a.x - b.x || a.y - b.y,
+  );
+  const hullHalf = (vertices: Position[]) => {
+    const hull: Position[] = [];
+    for (const point of vertices) {
+      while (hull.length >= 2) {
+        const a = hull[hull.length - 2];
+        const b = hull[hull.length - 1];
+        if ((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x) > 0)
+          break;
+        hull.pop();
+      }
+      hull.push(point);
+    }
+    return hull.slice(0, -1);
+  };
+  const bridge = [...hullHalf(openings), ...hullHalf([...openings].reverse())];
+  const toRing = (vertices: Position[]): Ring => {
+    const snapped = vertices.map(({ x, y }) => ({
+      x: Math.round(x * 1e9) / 1e9,
+      y: Math.round(y * 1e9) / 1e9,
+    }));
+    vertices = snapped.filter((point, index) => {
+      const before = snapped[(index + snapped.length - 1) % snapped.length];
+      return point.x !== before.x || point.y !== before.y;
+    });
+    // Sampling a straight wall produces tiny floating-point deviations. Remove
+    // redundant points before clipping so coincident boundaries stay stable.
+    const corners = vertices.filter((point, index) => {
+      const before = vertices[(index + vertices.length - 1) % vertices.length];
+      const after = vertices[(index + 1) % vertices.length];
+      const ax = point.x - before.x;
+      const ay = point.y - before.y;
+      const bx = after.x - point.x;
+      const by = after.y - point.y;
+      return Math.abs(ax * by - ay * bx) > 1e-10 || ax * bx + ay * by < 0;
+    });
+    return [...corners, corners[0]].map(({ x, y }) => [x, y]);
+  };
+  try {
+    const merged = clipping.union(
+      [toRing(corridor.vertices)],
+      [toRing([chamber.entranceA, chamber.entranceB, ...chamber.corners])],
+      ...(bridge.length >= 3 ? [[toRing(bridge)]] : []),
+    );
+    // Elma stores every boundary separately, including holes in looping strokes.
+    return merged.flatMap((region) =>
+      region.map((ring) => ({
+        vertices: ring.slice(0, -1).map(([x, y]) => ({ x, y })),
+        grass: false,
+      })),
+    );
+  } catch {
+    return [];
+  }
 }
 
 // Join the pipe walls to an upright chamber. Depending on the first segment's

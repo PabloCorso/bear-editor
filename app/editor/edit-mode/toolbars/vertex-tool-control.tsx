@@ -23,7 +23,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-export const AUTO_GRASS_ALL_SHORTCUT = "Shift + G";
+export function getAutoGrassAllShortcut(modifier: string) {
+  return `${modifier} + Shift + G`;
+}
 
 export function VertexToolControl(props: ToolControlButtonProps) {
   const vertexToolState = useEditorToolState<VertexToolState>(
@@ -87,7 +89,7 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       <ToolControlButton
         {...defaultTools.vertex}
         name={defaultTools.vertex.variants?.autoGrass?.name}
-        shortcut={undefined}
+        shortcut={defaultTools.vertex.variants.autoGrass.shortcut}
         tooltipSide="right"
         size="sm"
         showLabel
@@ -113,6 +115,35 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       >
         <VertexIcon {...getVertexIconProps("pipe")} />
       </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
+        name="Draw"
+        shortcut={defaultTools.vertex.variants.draw.shortcut}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "draw"}
+        onClick={() => onVariantChange("draw")}
+      >
+        <VertexIcon {...getVertexIconProps("draw")} />
+      </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
+        name="Brush"
+        shortcut={defaultTools.vertex.variants.brush.shortcut}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={vertexTool?.variant === "brush"}
+        onClick={() => onVariantChange("brush")}
+      >
+        <VertexIcon {...getVertexIconProps("brush")} />
+      </ToolControlButton>
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        className="my-1 h-px self-stretch bg-separator"
+      />
       <ToolControlButton
         {...defaultTools.vertex}
         name="Frame"
@@ -189,6 +220,7 @@ type VertexIconProps = React.ComponentPropsWithoutRef<"svg"> & {
   badge?: string;
   corridor?: boolean | "narrow";
   frame?: boolean;
+  freehand?: boolean;
 };
 
 export function VertexIcon({
@@ -201,6 +233,7 @@ export function VertexIcon({
   badge,
   corridor,
   frame,
+  freehand,
   ...props
 }: VertexIconProps) {
   const frameClipId = useId();
@@ -228,6 +261,26 @@ export function VertexIcon({
             fillRule="evenodd"
             stroke={boundsColor}
             strokeWidth="1"
+          />
+        </g>
+      ) : freehand && corridor ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={ground} />
+          <path
+            d="M-3 18C4 18 3 5 10 5S16 17 27 4L27 13C16 26 11 12 10 12S9 25-3 25Z"
+            fill={sky}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+        </g>
+      ) : freehand ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={sky} />
+          <path
+            d="M0 20L4 16L6 9L10 7L13 12L17 10L24 17V24H0Z"
+            fill={ground}
+            stroke={boundsColor}
+            strokeWidth="1.5"
           />
         </g>
       ) : corridor ? (
@@ -311,12 +364,14 @@ export function getVertexIconProps(
   if (variant === "cutConnect") {
     return {
       corridor: "narrow",
-      badge: "C",
       sky: colors.ground,
       ground: colors.sky,
     };
   }
   if (variant === "frame") return { frame: true };
+  if (variant === "brush") return { corridor: true, freehand: true };
+
+  if (variant === "draw") return { freehand: true };
 
   if (variant === "pipe") {
     return { corridor: true };
