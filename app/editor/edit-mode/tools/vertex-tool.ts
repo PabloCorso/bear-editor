@@ -1042,15 +1042,27 @@ export class VertexTool extends Tool<VertexToolState> {
       if (toolState.previewAutoGrassAll) return [];
       const preview = this.getFramePreview();
       if (!preview) return [];
-      return (preview.polygons ?? [preview.target]).map((polygon) => ({
-        type: "polyline" as const,
-        points: [...polygon.vertices, polygon.vertices[0]],
-        color: preview.polygons
-          ? uiColors.boundsSelected
-          : uiColors.boundsHover,
-        width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
-        opacity: 0.75,
-      }));
+      return [
+        ...(preview.polygons ?? [])
+          .filter((polygon) => polygon !== preview.target)
+          .map(
+            (polygon): WorldRenderOverlayItem => ({
+              type: "polyline",
+              points: [...polygon.vertices, polygon.vertices[0]],
+              color: uiColors.boundsSelected,
+              width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
+              opacity: 0.75,
+            }),
+          ),
+        // Keep the source contour visible as a reference in every frame mode.
+        {
+          type: "polyline",
+          points: [...preview.target.vertices, preview.target.vertices[0]],
+          color: uiColors.boundsHover,
+          width: uiStrokeWidths.boundsHoverScreen / state.zoom,
+          opacity: 0.75,
+        },
+      ];
     }
 
     if (toolState.variant === "pipe") {
