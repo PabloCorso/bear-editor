@@ -304,10 +304,6 @@ function getShortcutGroups(
               label: "Resize & rotate: snap rotation to 45°",
             },
             {
-              shortcut: "Esc",
-              label: "Resize & rotate: cancel drag / exit mode",
-            },
-            {
               shortcut: `${modifier} + ]`,
               label: "Bring picture forward",
             },

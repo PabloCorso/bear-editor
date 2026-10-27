@@ -55,6 +55,7 @@ import {
   getSkewHandles,
   getSkewTransform,
   rotateTransformPoint,
+  type TransformFrameCorners,
   type TransformHandle,
 } from "~/editor/helpers/selection-transform";
 
@@ -79,7 +80,11 @@ export type ArrangeSelectionDirection =
 
 export type MirrorSelectionDirection = "horizontal" | "vertical";
 
-type TransformFrame = { bounds: WorldRect; angle: number };
+type TransformFrame = {
+  bounds: WorldRect;
+  angle: number;
+  corners?: TransformFrameCorners;
+};
 
 export type SelectToolState = {
   selectedVertices: Array<{ polygon: Polygon; vertex: Position }>;
@@ -727,7 +732,19 @@ export class SelectTool extends Tool<SelectToolState> {
     if (this.isDragging || this.isMarqueeSelecting) return;
     this.pruneHiddenSelection();
     const { toolState } = this.getState();
-    const points = this.getTransformPoints();
+    if (!toolState) return;
+    const vertices = toolState.selectedVertices.length;
+    const objects = toolState.selectedObjects.length;
+    const objectOffsets = toolState.selectedObjects.map((object) =>
+      this.getKuskiWheelMidpointOffset(object),
+    );
+    const points = this.getTransformPoints().map((point, index) => {
+      const objectIndex = index - vertices;
+      const offset = objectOffsets[objectIndex];
+      return offset
+        ? { x: point.x + offset.x, y: point.y + offset.y }
+        : point;
+    });
     const bounds = getTransformBounds(points);
     if (!toolState || !bounds) return;
 
@@ -736,14 +753,18 @@ export class SelectTool extends Tool<SelectToolState> {
       x: direction === "horizontal" ? 2 * center.x - point.x : point.x,
       y: direction === "vertical" ? 2 * center.y - point.y : point.y,
     }));
-    const vertices = toolState.selectedVertices.length;
-    const objects = toolState.selectedObjects.length;
     this.runHistoryBatch(() => {
       if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
-      if (objects)
+      if (objects) {
         this.updateSelectedObjects(
-          positions.slice(vertices, vertices + objects),
+          positions
+            .slice(vertices, vertices + objects)
+            .map((point, index) => ({
+              x: point.x - objectOffsets[index].x,
+              y: point.y - objectOffsets[index].y,
+            })),
         );
+      }
       if (toolState.selectedPictures.length) {
         this.updateSelectedPictures(
           positions.slice(vertices + objects).map((point, index) => {
@@ -760,6 +781,22 @@ export class SelectTool extends Tool<SelectToolState> {
     });
     this.transformFrame = null;
     this.closeContextMenu();
+  }
+
+  private getKuskiWheelMidpointOffset(object: Position): Position {
+    const { state } = this.getState();
+    const artifact = findSessionArtifact(state, object);
+    const circles =
+      object === state.start
+        ? getKuskiSelectionCircles({ start: object })
+        : artifact?.selectionCircles;
+    const firstWheel = circles?.[0];
+    const secondWheel = circles?.[1];
+    if (!firstWheel || !secondWheel) return { x: 0, y: 0 };
+    return {
+      x: (firstWheel.x + secondWheel.x) / 2 - object.x,
+      y: (firstWheel.y + secondWheel.y) / 2 - object.y,
+    };
   }
 
   getCursor(context: EventContext): string | undefined {
@@ -848,13 +885,16 @@ export class SelectTool extends Tool<SelectToolState> {
     const { state } = this.getState();
     const frame = this.getTransformFrame();
     if (!frame || !this.canTransformSelection()) return null;
-    const local = rotateTransformPoint(
-      position,
-      getTransformCenter(frame.bounds),
-      -frame.angle,
-    );
+    const skewMode = this.getState().toolState?.skewMode;
+    const local = skewMode
+      ? position
+      : rotateTransformPoint(
+          position,
+          getTransformCenter(frame.bounds),
+          -frame.angle,
+        );
     const resizeRadius = 8 / state.zoom;
-    const resizeHandle = this.getFrameHandles(frame.bounds)
+    const resizeHandle = this.getFrameHandles(frame)
       .map((handle) => ({
         handle,
         distance: Math.hypot(
@@ -865,7 +905,7 @@ export class SelectTool extends Tool<SelectToolState> {
       .filter(({ distance }) => distance <= resizeRadius)
       .sort((a, b) => a.distance - b.distance)[0]?.handle;
     if (resizeHandle) return resizeHandle;
-    if (this.getState().toolState?.skewMode) return null;
+    if (skewMode) return null;
 
     // Rotation lives just outside each corner; direct handle hits always resize.
     const { minX, minY, maxX, maxY } = frame.bounds;
@@ -883,10 +923,24 @@ export class SelectTool extends Tool<SelectToolState> {
     return null;
   }
 
-  private getFrameHandles(bounds: WorldRect): TransformHandle[] {
+  private getFrameCorners(frame: TransformFrame): TransformFrameCorners {
+    if (frame.corners) return frame.corners;
+    const { minX, minY, maxX, maxY } = frame.bounds;
+    const center = getTransformCenter(frame.bounds);
+    return [
+      { x: minX, y: minY },
+      { x: maxX, y: minY },
+      { x: maxX, y: maxY },
+      { x: minX, y: maxY },
+    ].map((point) =>
+      rotateTransformPoint(point, center, frame.angle),
+    ) as TransformFrameCorners;
+  }
+
+  private getFrameHandles(frame: TransformFrame): TransformHandle[] {
     return this.getState().toolState?.skewMode
-      ? getSkewHandles(bounds)
-      : getTransformHandles(bounds);
+      ? getSkewHandles(this.getFrameCorners(frame))
+      : getTransformHandles(frame.bounds);
   }
 
   private startTransformDrag(
@@ -922,10 +976,14 @@ export class SelectTool extends Tool<SelectToolState> {
         y: point.y + worldPos.y - this.dragStartPos.y,
       });
     } else if (drag.selection.skewMode && typeof drag.handle === "object") {
-      drag.map = getSkewTransform(drag.frame.bounds, drag.handle, {
-        x: worldPos.x - this.dragStartPos.x,
-        y: worldPos.y - this.dragStartPos.y,
-      });
+      drag.map = getSkewTransform(
+        this.getFrameCorners(drag.frame),
+        drag.handle,
+        {
+          x: worldPos.x - this.dragStartPos.x,
+          y: worldPos.y - this.dragStartPos.y,
+        },
+      );
     } else if (drag.handle === "rotate") {
       let delta =
         Math.atan2(worldPos.y - center.y, worldPos.x - center.x) -
@@ -956,10 +1014,13 @@ export class SelectTool extends Tool<SelectToolState> {
           angle,
         );
     }
-    // A skew preview maps the original frame into a parallelogram. Rebuild
-    // axis-aligned bounds after applying it so the next gesture has clear axes.
-    if (drag.selection.skewMode && drag.handle !== "move") {
-      drag.previewFrame = drag.frame;
+    if (drag.selection.skewMode) {
+      drag.previewFrame = {
+        ...drag.frame,
+        corners: this.getFrameCorners(drag.frame).map(
+          drag.map,
+        ) as TransformFrameCorners,
+      };
     } else {
       // Keep the same oriented frame, including for subsequent gestures.
       const bounds = drag.frame.bounds;
@@ -1018,12 +1079,10 @@ export class SelectTool extends Tool<SelectToolState> {
       this.getState().setToolState(drag.selection);
     }
     if (commit) {
-      this.transformFrame = drag.selection.skewMode
-        ? null
-        : {
-            frame: drag.previewFrame,
-            points: this.getTransformPoints().map(clonePosition),
-          };
+      this.transformFrame = {
+        frame: drag.previewFrame,
+        points: this.getTransformPoints().map(clonePosition),
+      };
     }
     this.transformDrag = null;
     this.isDragging = false;
@@ -1038,11 +1097,17 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!frame) return [];
     const bounds = frame.bounds;
     const center = getTransformCenter(bounds);
-    const map =
-      this.transformDrag?.selection.skewMode &&
-      typeof this.transformDrag.handle === "object"
-        ? this.transformDrag.map
-        : (point: Position) => rotateTransformPoint(point, center, frame.angle);
+    const skewMode = toolState.skewMode;
+    const map = (point: Position) =>
+      rotateTransformPoint(point, center, frame.angle);
+    const framePoints = skewMode
+      ? this.getFrameCorners(frame)
+      : [
+          { x: bounds.minX, y: bounds.minY },
+          { x: bounds.maxX, y: bounds.minY },
+          { x: bounds.maxX, y: bounds.maxY },
+          { x: bounds.minX, y: bounds.maxY },
+        ].map(map);
     const color = uiColors.boundsSelected;
     const width = uiStrokeWidths.boundsSelectedScreen / state.zoom;
     const hovered =
@@ -1053,20 +1118,15 @@ export class SelectTool extends Tool<SelectToolState> {
     return [
       {
         type: "polyline",
-        points: [
-          { x: bounds.minX, y: bounds.minY },
-          { x: bounds.maxX, y: bounds.minY },
-          { x: bounds.maxX, y: bounds.maxY },
-          { x: bounds.minX, y: bounds.maxY },
-        ].map(map),
+        points: framePoints,
         closed: true,
         color,
         width,
         layer: "top",
       },
-      ...this.getFrameHandles(bounds).map((handle) =>
+      ...this.getFrameHandles(frame).map((handle) =>
         createSelectionHandleOverlay(
-          map(handle.position),
+          skewMode ? handle.position : map(handle.position),
           (typeof hovered === "object" &&
           hovered?.x === handle.x &&
           hovered?.y === handle.y
@@ -1994,24 +2054,37 @@ export class SelectTool extends Tool<SelectToolState> {
     const { state, toolState, setToolState } = this.getState();
     if (!toolState) return;
 
+    const verticesByPosition = new Map<string, VertexSelection[]>();
+    state.polygons.forEach((polygon) => {
+      polygon.vertices.forEach((vertex) => {
+        const key = `${vertex.x}:${vertex.y}`;
+        const matches = verticesByPosition.get(key) ?? [];
+        matches.push({ polygon, vertex });
+        verticesByPosition.set(key, matches);
+      });
+    });
+    const consumedVertices = new Set<Position>();
+
     const selectedVertices = this.isPolygonSelectable()
       ? toolState.selectedVertices
           .map((selection) => {
-            const polygon = state.polygons.find((p) =>
-              p.vertices.some(
-                (vertex) =>
-                  vertex.x === selection.vertex.x &&
-                  vertex.y === selection.vertex.y,
-              ),
+            if (
+              state.polygons.includes(selection.polygon) &&
+              selection.polygon.vertices.includes(selection.vertex) &&
+              !consumedVertices.has(selection.vertex)
+            ) {
+              consumedVertices.add(selection.vertex);
+              return selection;
+            }
+
+            const key = `${selection.vertex.x}:${selection.vertex.y}`;
+            const matches = verticesByPosition.get(key) ?? [];
+            const match = matches.find(
+              ({ vertex }) => !consumedVertices.has(vertex),
             );
-            if (!polygon) return null;
-            const vertex = polygon.vertices.find(
-              (candidate) =>
-                candidate.x === selection.vertex.x &&
-                candidate.y === selection.vertex.y,
-            );
-            if (!vertex) return null;
-            return { polygon, vertex };
+            if (!match) return null;
+            consumedVertices.add(match.vertex);
+            return match;
           })
           .filter((selection): selection is VertexSelection =>
             Boolean(selection),

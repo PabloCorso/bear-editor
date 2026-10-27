@@ -70,13 +70,10 @@ export function ToolInfo() {
 
   if (activeToolId === "select" && select?.transformMode && select.skewMode) {
     return (
-      <CanvasTipGroup title="Skew" aria-label="Active tool info">
-        <CanvasTipSegment>Drag a side handle to skew</CanvasTipSegment>
-        <CanvasTipSegment>
-          Cancel
-          <CanvasTipKey>Esc</CanvasTipKey>
-        </CanvasTipSegment>
-      </CanvasTipGroup>
+      <CanvasTipGroup
+        title={`${toolName} · Skew`}
+        aria-label="Active tool info"
+      />
     );
   }
 

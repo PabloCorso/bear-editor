@@ -8,6 +8,8 @@ export type TransformHandle = {
   cursor: string;
 };
 
+export type TransformFrameCorners = [Position, Position, Position, Position];
+
 export function getTransformBounds(points: Position[]): WorldRect | null {
   if (!points.length) return null;
   return points.reduce(
@@ -110,37 +112,45 @@ export function getResizeTransform(
 }
 
 // Skew uses side handles only. A flat selection can skew along its nonzero axis.
-export function getSkewHandles(bounds: WorldRect): TransformHandle[] {
-  const center = getTransformCenter(bounds);
+export function getSkewHandles(
+  corners: TransformFrameCorners,
+): TransformHandle[] {
+  const [topLeft, topRight, bottomRight, bottomLeft] = corners;
+  const midpoint = (a: Position, b: Position): Position => ({
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  });
   const handles: TransformHandle[] = [];
-  if (bounds.maxY > bounds.minY) {
+  if (
+    Math.hypot(bottomLeft.x - topLeft.x, bottomLeft.y - topLeft.y) > 1e-9
+  ) {
     handles.push(
       {
         x: 0,
         y: -1,
-        position: { x: center.x, y: bounds.minY },
+        position: midpoint(topLeft, topRight),
         cursor: "ew-resize",
       },
       {
         x: 0,
         y: 1,
-        position: { x: center.x, y: bounds.maxY },
+        position: midpoint(bottomLeft, bottomRight),
         cursor: "ew-resize",
       },
     );
   }
-  if (bounds.maxX > bounds.minX) {
+  if (Math.hypot(topRight.x - topLeft.x, topRight.y - topLeft.y) > 1e-9) {
     handles.push(
       {
         x: -1,
         y: 0,
-        position: { x: bounds.minX, y: center.y },
+        position: midpoint(topLeft, bottomLeft),
         cursor: "ns-resize",
       },
       {
         x: 1,
         y: 0,
-        position: { x: bounds.maxX, y: center.y },
+        position: midpoint(topRight, bottomRight),
         cursor: "ns-resize",
       },
     );
@@ -149,24 +159,45 @@ export function getSkewHandles(bounds: WorldRect): TransformHandle[] {
 }
 
 export function getSkewTransform(
-  bounds: WorldRect,
+  corners: TransformFrameCorners,
   handle: TransformHandle,
   delta: Position,
 ): (point: Position) => Position {
+  const [origin, topRight, , bottomLeft] = corners;
+  const xAxis = { x: topRight.x - origin.x, y: topRight.y - origin.y };
+  const yAxis = { x: bottomLeft.x - origin.x, y: bottomLeft.y - origin.y };
+  const determinant = xAxis.x * yAxis.y - xAxis.y * yAxis.x;
+
+  const getFrameCoordinates = (point: Position): Position => {
+    const relative = { x: point.x - origin.x, y: point.y - origin.y };
+    if (Math.abs(determinant) > 1e-9) {
+      return {
+        x: (relative.x * yAxis.y - relative.y * yAxis.x) / determinant,
+        y: (xAxis.x * relative.y - xAxis.y * relative.x) / determinant,
+      };
+    }
+    const xLengthSquared = xAxis.x ** 2 + xAxis.y ** 2;
+    const yLengthSquared = yAxis.x ** 2 + yAxis.y ** 2;
+    return {
+      x: xLengthSquared
+        ? (relative.x * xAxis.x + relative.y * xAxis.y) / xLengthSquared
+        : 0,
+      y: yLengthSquared
+        ? (relative.x * yAxis.x + relative.y * yAxis.y) / yLengthSquared
+        : 0,
+    };
+  };
+
   if (handle.y) {
-    const anchorY = handle.y < 0 ? bounds.maxY : bounds.minY;
-    const height = handle.position.y - anchorY;
-    if (!height) return (point) => point;
-    return (point) => ({
-      x: point.x + delta.x * ((point.y - anchorY) / height),
-      y: point.y,
-    });
+    return (point) => {
+      const { y } = getFrameCoordinates(point);
+      const influence = handle.y < 0 ? 1 - y : y;
+      return { x: point.x + delta.x * influence, y: point.y };
+    };
   }
-  const anchorX = handle.x < 0 ? bounds.maxX : bounds.minX;
-  const width = handle.position.x - anchorX;
-  if (!width) return (point) => point;
-  return (point) => ({
-    x: point.x,
-    y: point.y + delta.y * ((point.x - anchorX) / width),
-  });
+  return (point) => {
+    const { x } = getFrameCoordinates(point);
+    const influence = handle.x < 0 ? 1 - x : x;
+    return { x: point.x, y: point.y + delta.y * influence };
+  };
 }

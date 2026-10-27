@@ -9,6 +9,7 @@ import {
 } from "~/editor/elma-types";
 import { defaultTools } from "./default-tools";
 import { SelectTool, type SelectToolState } from "./select-tool";
+import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 
 function position(x: number, y: number): Position {
   return { x, y } as Position;
@@ -170,6 +171,49 @@ describe("SelectTool mirroring", () => {
       { ...pictures[1], position: position(-5, -5) },
     ]);
   });
+
+  it.each(["horizontal", "vertical"] as const)(
+    "mirrors the level start from its wheel midpoint on the %s axis",
+    (direction) => {
+      const { store, tool, firstApple } = createTool();
+      const start = position(10, 20);
+      store.getState().actions.setStart(start);
+      store
+        .getState()
+        .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+          selectedObjects: [start, firstApple],
+        });
+
+      const wheels = getKuskiSelectionCircles({ start }).slice(0, 2);
+      const wheelMidpoint = position(
+        (wheels[0].x + wheels[1].x) / 2,
+        (wheels[0].y + wheels[1].y) / 2,
+      );
+      const center = position(
+        (wheelMidpoint.x + firstApple.x) / 2,
+        (wheelMidpoint.y + firstApple.y) / 2,
+      );
+      const reflectedWheelMidpoint = position(
+        direction === "horizontal"
+          ? 2 * center.x - wheelMidpoint.x
+          : wheelMidpoint.x,
+        direction === "vertical"
+          ? 2 * center.y - wheelMidpoint.y
+          : wheelMidpoint.y,
+      );
+      const expectedStart = position(
+        reflectedWheelMidpoint.x - wheelMidpoint.x + start.x,
+        reflectedWheelMidpoint.y - wheelMidpoint.y + start.y,
+      );
+
+      tool.mirrorSelection(direction);
+
+      expect(store.getState().start).toEqual(expectedStart);
+      tool.mirrorSelection(direction);
+      expect(store.getState().start.x).toBeCloseTo(start.x);
+      expect(store.getState().start.y).toBeCloseTo(start.y);
+    },
+  );
 });
 
 describe("SelectTool right-click selection context menu", () => {
@@ -612,12 +656,24 @@ describe("SelectTool skewing", () => {
     expect(store.temporal.getState().pastStates).toHaveLength(0);
   });
 
-  it("rebuilds bounds for the next skew and switches cleanly to resize and rotate", () => {
+  it("keeps the skewed frame for the next skew and switches cleanly to resize and rotate", () => {
     const { store, tool } = createSkewTool();
     dragMarquee(tool, position(10, 0), position(16, 0));
-    // New bounds are x=0..26; the next top handle is at x=13.
-    expect(tool.getCursor(context(position(13, 0)))).toBe("ew-resize");
-    dragMarquee(tool, position(13, 0), position(19, 0));
+    const skewedFrame = [
+      position(6, 0),
+      position(26, 0),
+      position(20, 30),
+      position(0, 30),
+    ];
+    expect(
+      tool
+        .getWorldOverlays({
+          viewportRect: { minX: -100, minY: -100, maxX: 100, maxY: 100 },
+        })
+        .find((item) => item.type === "polyline")?.points,
+    ).toEqual(skewedFrame);
+    expect(tool.getCursor(context(position(16, 0)))).toBe("ew-resize");
+    dragMarquee(tool, position(16, 0), position(22, 0));
     expect(store.getState().polygons[0].vertices[0]).toEqual(position(12, 0));
     expect(store.temporal.getState().pastStates).toHaveLength(2);
     tool.toggleTransform();
@@ -672,6 +728,36 @@ describe("SelectTool skewing", () => {
       position(20, 10),
       position(20, 30),
       position(0, 30),
+    ]);
+  });
+
+  it("skews both copies of a repeated grass endpoint", () => {
+    const { store, tool } = createTool();
+    const grass = {
+      grass: true,
+      vertices: [position(0, 0), position(20, 0), position(20, 0)],
+    };
+    store.getState().actions.setPolygons([grass]);
+    store.getState().actions.setZoom(100);
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedVertices: grass.vertices.map((vertex) => ({
+          polygon: grass,
+          vertex,
+        })),
+      });
+    tool.toggleTransform(true);
+
+    const selectedVertices = getSelection(store)?.selectedVertices ?? [];
+    expect(selectedVertices[1]?.vertex).not.toBe(selectedVertices[2]?.vertex);
+
+    dragMarquee(tool, position(20, 0), position(20, 10));
+
+    expect(store.getState().polygons[0].vertices).toEqual([
+      position(0, 0),
+      position(20, 10),
+      position(20, 10),
     ]);
   });
 });
