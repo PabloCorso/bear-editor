@@ -83,6 +83,8 @@ import {
 import { cn, useModifier } from "~/utils/misc";
 import kuskiSrc from "~/assets/kuski.png";
 
+import { ReplaceSelectionDialog } from "./toolbars/replace-selection-dialog";
+
 const TOOLBAR_COLLISION_PADDING_PX = 8;
 
 type PointAnchor = {
@@ -90,6 +92,37 @@ type PointAnchor = {
 };
 
 export function EditorContextMenu() {
+  const tool = useEditorActiveTool<SelectTool>();
+  const sessionId = useEditor(
+    (state) => state.documentSession.clipboardSessionId,
+  );
+  const [replaceSession, setReplaceSession] = useState<string | null>(null);
+  if (
+    replaceSession &&
+    (replaceSession !== sessionId || !(tool instanceof SelectTool))
+  ) {
+    setReplaceSession(null);
+  }
+  const replacing = replaceSession === sessionId && tool instanceof SelectTool;
+  return (
+    <>
+      <SelectionContextToolbar
+        onReplace={() => {
+          setReplaceSession(sessionId);
+          tool?.closeContextMenu();
+        }}
+      />
+      {replacing && (
+        <ReplaceSelectionDialog
+          tool={tool}
+          onClose={() => setReplaceSession(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function SelectionContextToolbar({ onReplace }: { onReplace: () => void }) {
   const { setApples, setPictures, setPolygons } = useEditorActions();
   const selectToolState = useEditorToolState<SelectToolState>(
     defaultTools.select.id,
@@ -293,6 +326,8 @@ export function EditorContextMenu() {
   const selectionActionsIndex = toolbarSections.length;
   toolbarSections.push(
     <SelectionActionsMenu
+      canReplace={(selectTool?.getReplacementCount() ?? 0) > 0}
+      onReplace={onReplace}
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(selectToolState.transformMode)}
       onTransform={() => selectTool?.toggleTransform()}
@@ -583,6 +618,8 @@ function useSelectionGroupIcons(): Record<
 }
 
 function SelectionActionsMenu({
+  canReplace,
+  onReplace,
   canTransform,
   transforming,
   onTransform,
@@ -594,6 +631,8 @@ function SelectionActionsMenu({
   onDuplicate,
   onDelete,
 }: {
+  canReplace: boolean;
+  onReplace: () => void;
   canTransform: boolean;
   transforming: boolean;
   onTransform: () => void;
@@ -639,6 +678,9 @@ function SelectionActionsMenu({
         </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          <DropdownMenuItem disabled={!canReplace} onClick={onReplace}>
+            Replace selection…
+          </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!canDuplicate}
             shortcut={`${modifier} + C`}

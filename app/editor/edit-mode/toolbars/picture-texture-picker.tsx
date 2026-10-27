@@ -108,6 +108,7 @@ export function PictureTexturePicker({
                 className={cn(
                   "flex items-baseline justify-between gap-1 text-[10px] leading-3",
                   pickerLabelClassName,
+                  compact && "max-w-full",
                 )}
               >
                 <span
