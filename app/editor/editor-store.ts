@@ -651,6 +651,7 @@ export function createEditorStore({
             );
             set({
               ...normalizedLevel,
+              toolState: { ...get().toolState, measure: { measurements: [] } },
               documentSession: createDocumentSession(
                 { ...document, level: normalizedLevel },
                 defaultLevelTitle,

@@ -170,6 +170,8 @@ export class EditorEngine {
     this.pressedKeys.clear();
     this.updateModifierPressed(false);
     this.cancelTouchContextMenuTimer();
+    if (this.store.getState().activeToolId === "measure")
+      this.store.getState().actions.getActiveTool()?.clear?.();
   };
 
   constructor(
@@ -423,11 +425,12 @@ export class EditorEngine {
 
     const state = this.store.getState();
     if (
-      state.activeToolId === "vertex" &&
-      state.actions.getToolState<VertexToolState>("vertex")?.variant ===
-        "cutConnect"
+      state.activeToolId === "measure" ||
+      (state.activeToolId === "vertex" &&
+        state.actions.getToolState<VertexToolState>("vertex")?.variant ===
+          "cutConnect")
     ) {
-      // A second finger begins a camera gesture, rather than applying a stroke.
+      // A second finger begins a camera gesture, rather than applying a draft.
       state.actions.getActiveTool()?.clear?.();
       this.activeTouchToolPointerId = null;
       return;
@@ -644,6 +647,7 @@ export class EditorEngine {
 
   private handlePointerCancel = (event: PointerEvent) => {
     const activeTool = this.store.getState().actions.getActiveTool();
+    if (activeTool?.meta.id === "measure") activeTool.clear?.();
     if (
       activeTool instanceof VertexTool &&
       this.store.getState().actions.getToolState<VertexToolState>("vertex")
@@ -1061,6 +1065,10 @@ export class EditorEngine {
     this.pressedKeys.delete(event.code);
     const state = this.store.getState();
     this.refreshSelectionHoverForModifierKeys(state, event);
+    if (!state.isPlayMode && !isUserTyping())
+      state.actions
+        .getActiveTool()
+        ?.onKeyUp?.(event, this.getKeyboardEventContext(state));
   };
 
   private zoomInOut(step: number) {

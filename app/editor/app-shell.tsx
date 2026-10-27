@@ -4,6 +4,7 @@ import { ControlToolbar } from "~/editor/edit-mode/toolbars/control-toolbar";
 import { HeaderToolbar } from "~/editor/edit-mode/toolbars/header-toolbar";
 import { CanvasToolbar } from "~/editor/edit-mode/toolbars/canvas-toolbar";
 import { EditorContextMenu } from "~/editor/edit-mode/context-menu";
+import { MeasureOverlay } from "~/editor/edit-mode/measure-overlay";
 import { PlacementPropertiesMenu } from "~/editor/edit-mode/placement-properties-menu";
 import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import {
@@ -46,6 +47,7 @@ export function EditorShell({
     <>
       <div className="relative flex-1">
         <EditorView ref={canvasRef} />
+        <MeasureOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
             <LazyPlayModeOverlay rendererBackend={rendererBackend} />

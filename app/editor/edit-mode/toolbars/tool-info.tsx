@@ -21,6 +21,10 @@ import {
   CanvasTipKey,
   CanvasTipKeyButton,
 } from "./canvas-tip";
+import {
+  MeasureTool,
+  type MeasureToolState,
+} from "~/editor/edit-mode/tools/measure-tool";
 import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
 import { useModifier } from "~/utils/misc";
 import {
@@ -53,6 +57,7 @@ export function ToolInfo() {
   const hasPictures = useEditor((state) => state.pictures.length > 0);
   const registeredTools = useEditorRegisteredTools();
   const vertex = useEditorToolState<VertexToolState>("vertex");
+  const measure = useEditorToolState<MeasureToolState>("measure");
   const select = useEditorToolState<SelectToolState>("select");
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
@@ -62,6 +67,36 @@ export function ToolInfo() {
   const toolName =
     activeTool?.name ??
     (activeToolId === "ai-chat" ? "AI Assistant" : activeToolId);
+
+  if (activeToolId === "measure") {
+    return (
+      <CanvasTipGroup title="Measure" aria-label="Active tool info">
+        <CanvasTipSegment>Click an edge or two points</CanvasTipSegment>
+        <CanvasTipSegment>
+          Horizontal / vertical <CanvasTipKey>Shift</CanvasTipKey>
+        </CanvasTipSegment>
+        <CanvasTipSegment>
+          Skip snapping <CanvasTipKey>Alt</CanvasTipKey>
+        </CanvasTipSegment>
+        <CanvasTipSegment>
+          <CanvasTipKeyButton
+            aria-label="Remove selected measurement"
+            disabled={measure?.selectedId === undefined || !!measure?.anchor}
+            onClick={() => getActiveTool<MeasureTool>()?.removeSelected()}
+          >
+            Delete
+          </CanvasTipKeyButton>
+          <CanvasTipKeyButton
+            aria-label="Clear measurements"
+            disabled={!measure?.measurements?.length && !measure?.anchor}
+            onClick={() => getActiveTool<MeasureTool>()?.clearAll()}
+          >
+            Clear all
+          </CanvasTipKeyButton>
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
 
   if (activeToolId === "select" && select?.transformMode) {
     return (

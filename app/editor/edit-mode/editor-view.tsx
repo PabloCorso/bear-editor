@@ -17,6 +17,7 @@ import {
 } from "~/editor/helpers/level-parser";
 import { ColorTool } from "~/editor/edit-mode/tools/color-tool";
 import { PictureTool } from "~/editor/edit-mode/tools/picture-tool";
+import { MeasureTool } from "~/editor/edit-mode/tools/measure-tool";
 import { HandTool } from "~/editor/edit-mode/tools/hand-tool";
 import { TextureTool } from "~/editor/edit-mode/tools/texture-tool";
 import { cn } from "~/utils/misc";
@@ -113,6 +114,7 @@ export function useEditorView({
       const tools = [
         SelectTool,
         HandTool,
+        MeasureTool,
         VertexTool,
         AppleTool,
         KillerTool,

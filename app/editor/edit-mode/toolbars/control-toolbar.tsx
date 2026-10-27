@@ -1,4 +1,8 @@
-import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  HandIcon,
+  RulerIcon,
+  SparkleIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
 import {
@@ -47,6 +51,7 @@ export function ControlToolbar({
   const navigationToolIds = new Set<string>([
     defaultTools.select.id,
     defaultTools.hand.id,
+    defaultTools.measure.id,
   ]);
   const navigationTools = orderedTools.filter((tool) =>
     navigationToolIds.has(tool.id),
@@ -100,6 +105,13 @@ function RegisteredToolControl({
 }: ToolControlButtonProps & { meta: ToolMeta }) {
   if (meta.id === defaultTools.select.id) {
     return <SelectToolControl {...props} />;
+  }
+  if (meta.id === defaultTools.measure.id) {
+    return (
+      <ToolControlButton {...defaultTools.measure} {...props}>
+        <RulerIcon weight="light" />
+      </ToolControlButton>
+    );
   }
   if (meta.id === defaultTools.hand.id) {
     return <HandToolControl {...props} />;

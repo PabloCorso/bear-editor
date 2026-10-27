@@ -2,6 +2,7 @@ import type { DialogProps } from "~/components/ui/dialog";
 import {
   CursorIcon,
   HandIcon,
+  RulerIcon,
   PaintBucketIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -502,6 +503,37 @@ function getShortcutGroups(
               src={toolIcons.textureSprite}
             />
           ),
+        },
+      ],
+    },
+    {
+      title: "Measure",
+      items: [
+        {
+          shortcut: defaultTools.measure.shortcut,
+          label: "Select Measure tool",
+          icon: <RulerIcon className="h-5 w-5" />,
+        },
+        { shortcut: "Click twice", label: "Place a ruler between two points" },
+        { shortcut: "Click edge", label: "Measure a polygon edge" },
+        { shortcut: "Click ruler", label: "Select a measurement" },
+        { shortcut: "Drag endpoint", label: "Adjust a measurement" },
+        {
+          shortcut: "Shift",
+          label: "Constrain ruler to horizontal or vertical",
+        },
+        { shortcut: "Alt", label: "Bypass vertex snapping and edge picking" },
+        {
+          shortcut: ["Delete", "Backspace"],
+          label: "Remove selected measurement",
+        },
+        {
+          shortcut: ["Esc", "Right click"],
+          label: "Cancel unfinished ruler or endpoint edit",
+        },
+        {
+          shortcut: "Esc",
+          label: "Return to Select when no ruler is being drawn",
         },
       ],
     },

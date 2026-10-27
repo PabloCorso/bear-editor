@@ -39,6 +39,7 @@ export abstract class Tool<T extends ToolState = ToolState> {
   onPointerMove?(event: PointerEvent, context: EventContext): boolean;
   onPointerUp?(event: PointerEvent, context: EventContext): boolean;
   onKeyDown?(event: KeyboardEvent, context: EventContext): boolean;
+  onKeyUp?(event: KeyboardEvent, context: EventContext): boolean;
   onRightClick?(event: MouseEvent, context: EventContext): boolean;
   getCursor?(context: EventContext): ToolCursor | undefined;
   isInteracting?(): boolean;

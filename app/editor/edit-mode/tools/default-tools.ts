@@ -10,6 +10,7 @@ export type ToolMeta = {
 
 export const defaultTools = {
   select: { id: "select", name: "Select tool", shortcut: "S" },
+  measure: { id: "measure", name: "Measure", shortcut: "M" },
   hand: { id: "hand", name: "Hand tool", shortcut: "H" },
   vertex: {
     id: "vertex",
@@ -38,6 +39,7 @@ export type DefaultToolMeta = (typeof defaultTools)[DefaultToolId];
 export const defaultToolOrder: string[] = [
   defaultTools.select.id,
   defaultTools.hand.id,
+  defaultTools.measure.id,
   defaultTools.vertex.id,
   defaultTools.apple.id,
   defaultTools.killer.id,
