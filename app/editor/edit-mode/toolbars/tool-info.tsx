@@ -84,6 +84,11 @@ export function ToolInfo() {
   if (activeToolId === "select") {
     return (
       <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        {select?.variant === "lasso" && (
+          <CanvasTipSegment>
+            Drag on empty canvas to draw a lasso. Release to select.
+          </CanvasTipSegment>
+        )}
         {hasPictures && (
           <CanvasTipSegment>
             Pick behind images
