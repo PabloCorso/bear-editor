@@ -259,8 +259,13 @@ function getShortcutGroups(
               label: "Select all visible",
             },
             {
-              shortcut: ["Shift", "Alt"],
+              shortcut: "Shift",
               label: "Select object behind images",
+            },
+            { shortcut: "Alt + Click", label: "Select edge endpoints" },
+            {
+              shortcut: `${modifier} + Alt + Click`,
+              label: "Add edge endpoints to selection",
             },
             {
               shortcut: "Right click",
