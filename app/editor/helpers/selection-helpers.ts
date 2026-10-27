@@ -126,6 +126,31 @@ export function findPolygonEdgeNearPosition(
   return null;
 }
 
+/** Resolve an edge without changing the whole-polygon selection helper. */
+export function findPolygonEdgeVerticesNearPosition(
+  position: Position,
+  polygons: Polygon[],
+  threshold: number,
+  shouldConsiderEdge: (polygon: Polygon, edgeIndex: number) => boolean,
+): { polygon: Polygon; vertices: [Position, Position] } | null {
+  const polygon = findPolygonEdgeNearPosition(
+    position,
+    polygons,
+    threshold,
+    shouldConsiderEdge,
+  );
+  if (!polygon) return null;
+  for (let index = 0; index < polygon.vertices.length; index++) {
+    if (!shouldConsiderEdge(polygon, index)) continue;
+    const from = polygon.vertices[index];
+    const to = polygon.vertices[(index + 1) % polygon.vertices.length];
+    if (distanceToLineSegment(position, from, to) <= threshold) {
+      return { polygon, vertices: [from, to] };
+    }
+  }
+  return null;
+}
+
 function distanceToLineSegment(
   point: Position,
   lineStart: Position,

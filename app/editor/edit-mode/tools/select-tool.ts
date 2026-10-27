@@ -10,6 +10,7 @@ import {
   findVertexNearPosition,
   findObjectNearPosition,
   findPolygonEdgeNearPosition,
+  findPolygonEdgeVerticesNearPosition,
   isVertexSelected,
   isObjectSelected,
   getAllObjects,
@@ -91,6 +92,7 @@ export type SelectToolState = {
   selectedObjects: Position[];
   selectedPictures: Position[];
   isDragging: boolean;
+  edgeSelectionMode?: boolean;
   transformMode?: boolean;
   skewMode?: boolean;
   isMarqueeSelecting?: boolean;
@@ -450,11 +452,12 @@ export class SelectTool extends Tool<SelectToolState> {
     );
 
     const modifier = checkModifierKey(event);
-    const forceObjectSelection = event.altKey || event.shiftKey;
+    const forceObjectSelection = event.shiftKey;
     const isSingleSelect = !modifier;
 
     if (
       isSingleSelect &&
+      !event.altKey &&
       this.isExistingSelectionHit(context.worldPos, hoveredPicture)
     ) {
       this.startDragging(context.worldPos);
@@ -525,6 +528,23 @@ export class SelectTool extends Tool<SelectToolState> {
       this.selectObject(object);
       this.startDragging(context.worldPos);
       return true;
+    }
+
+    // Alt selects endpoints; Shift retains pick-behind-images behavior.
+    if (event.altKey && this.isPolygonSelectable()) {
+      const edge = findPolygonEdgeVerticesNearPosition(
+        context.worldPos,
+        state.polygons,
+        selectionThresholds.polygonEdge / state.zoom,
+        this.isSelectablePolygonEdge,
+      );
+      if (edge) {
+        if (!modifier) this.clear();
+        for (const vertex of edge.vertices)
+          this.selectVertex(edge.polygon, vertex);
+        this.startDragging(context.worldPos);
+        return true;
+      }
     }
 
     const vertex = this.isPolygonSelectable()
@@ -1470,7 +1490,7 @@ export class SelectTool extends Tool<SelectToolState> {
             state.polygons,
             selectionThresholds.vertex / state.zoom,
           );
-          if (hoveredVertex) {
+          if (hoveredVertex && !toolState.edgeSelectionMode) {
             if (isPointVisible(hoveredVertex.vertex, viewportRect)) {
               overlays.push(
                 createSelectionHandleOverlay(
@@ -1488,7 +1508,37 @@ export class SelectTool extends Tool<SelectToolState> {
             selectionThresholds.polygonEdge / state.zoom,
             this.isSelectablePolygonEdge,
           );
-          if (!hoveredVertex && hoveredPolygon) {
+          const hoveredEdge = toolState.edgeSelectionMode
+            ? findPolygonEdgeVerticesNearPosition(
+                state.mousePosition,
+                state.polygons,
+                selectionThresholds.polygonEdge / state.zoom,
+                this.isSelectablePolygonEdge,
+              )
+            : null;
+          if (hoveredEdge) {
+            overlays.push({
+              type: "polyline",
+              points: hoveredEdge.vertices,
+              color: uiColors.boundsHover,
+              width: hoverLineWidth,
+              layer: "top",
+            });
+            for (const vertex of hoveredEdge.vertices) {
+              overlays.push(
+                createSelectionHandleOverlay(
+                  vertex,
+                  handleSize,
+                  handleStrokeWidth,
+                ),
+              );
+            }
+          }
+          if (
+            !toolState.edgeSelectionMode &&
+            !hoveredVertex &&
+            hoveredPolygon
+          ) {
             const hoveredPolygonBoundsColor = uiColors.boundsHover;
             const polygonSelectionCount = toolState.selectedVertices.filter(
               (sv) => sv.polygon === hoveredPolygon,

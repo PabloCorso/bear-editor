@@ -327,9 +327,14 @@ export class EditorEngine {
     );
     this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
-    const forceObjectSelection = event.shiftKey || event.altKey;
+    const forceObjectSelection = event.shiftKey;
     const activeTool = state.actions.getActiveTool();
-    this.updateSelectHoverState(state, context.worldPos, forceObjectSelection);
+    this.updateSelectHoverState(
+      state,
+      context.worldPos,
+      forceObjectSelection,
+      event.altKey,
+    );
 
     if (phase === "down") {
       activeTool?.onPointerDown?.(event, context);
@@ -1466,7 +1471,8 @@ export class EditorEngine {
     this.updateSelectHoverState(
       state,
       state.mousePosition,
-      event.shiftKey || event.altKey,
+      event.shiftKey,
+      event.altKey,
     );
   }
 
@@ -1484,6 +1490,7 @@ export class EditorEngine {
     state: EditorState,
     worldPos: Position,
     forceObjectSelection = false,
+    edgeSelectionMode = false,
   ) {
     const activeTool = state.actions.getActiveTool();
     if (activeTool?.meta.id !== "select") {
@@ -1506,6 +1513,7 @@ export class EditorEngine {
     const nextPictureBounds = nextHover.hoveredPictureBounds;
 
     const isSameHover =
+      currentHover?.edgeSelectionMode === edgeSelectionMode &&
       currentHover?.hoveredObject === nextHover.hoveredObject &&
       currentPictureBounds?.position === nextPictureBounds?.position &&
       currentPictureBounds?.width === nextPictureBounds?.width &&
@@ -1513,7 +1521,10 @@ export class EditorEngine {
       currentPictureBounds?.distance === nextPictureBounds?.distance;
     if (isSameHover) return;
 
-    state.actions.setToolState<SelectToolState>("select", nextHover);
+    state.actions.setToolState<SelectToolState>("select", {
+      ...nextHover,
+      edgeSelectionMode,
+    });
   }
 
   private clearSelectHoverState(state: EditorState) {
