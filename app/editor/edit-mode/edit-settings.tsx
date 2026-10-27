@@ -672,8 +672,8 @@ function PictureSelectionPreferences() {
       key: "area",
       label: "Area selection",
       options: [
-        { value: "bounds", label: "Touch image bounds" },
-        { value: "anchor", label: "Enclose top-left point" },
+        { value: "bounds", label: "Touch bounds" },
+        { value: "anchor", label: "Enclose anchor" },
       ],
     },
   ] as const;
