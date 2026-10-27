@@ -39,8 +39,10 @@ export function buildEditorWorldScene({
   viewportSize,
   viewportRect,
   resolvePictureDimensions,
+  includeDrafts = true,
 }: {
   state: EditorState;
+  includeDrafts?: boolean;
   viewportSize: { width: number; height: number };
   viewportRect: WorldRect;
   resolvePictureDimensions?: (picture: {
@@ -49,7 +51,7 @@ export function buildEditorWorldScene({
     mask?: string;
   }) => { width: number; height: number } | null;
 }): EditorWorldScene {
-  const scenePolygons = getScenePolygons(state);
+  const scenePolygons = getScenePolygons(state, includeDrafts);
 
   return {
     clearColor: "#1a1a2e",
@@ -91,7 +93,12 @@ export function buildEditorWorldScene({
           opacity: polygon.opacity,
         };
       }),
-    drawItems: getDrawItemQueue(state, viewportRect, resolvePictureDimensions),
+    drawItems: getDrawItemQueue(
+      state,
+      viewportRect,
+      resolvePictureDimensions,
+      includeDrafts,
+    ),
   };
 }
 
@@ -134,8 +141,9 @@ function getDrawItemQueue(
     texture?: string;
     mask?: string;
   }) => { width: number; height: number } | null,
+  includeDrafts = true,
 ): EditorWorldDrawItem[] {
-  const activeTool = state.actions.getActiveTool();
+  const activeTool = includeDrafts ? state.actions.getActiveTool() : undefined;
   const drafts = activeTool?.getDrafts?.() ?? {};
   const {
     showObjects,
@@ -321,7 +329,11 @@ function getDrawItemQueue(
   ].sort((a, b) => b.distance - a.distance);
 }
 
-function getScenePolygons(state: EditorState): ScenePolygon[] {
+function getScenePolygons(
+  state: EditorState,
+  includeDrafts: boolean,
+): ScenePolygon[] {
+  if (!includeDrafts) return state.polygons;
   const activeTool = state.actions.getActiveTool();
   const drafts = activeTool?.getDrafts?.();
   if (drafts?.replacementPolygons) return drafts.replacementPolygons;

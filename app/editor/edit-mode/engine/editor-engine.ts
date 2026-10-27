@@ -4,6 +4,11 @@ import {
   getSessionArtifacts,
   findSessionArtifact,
 } from "~/editor/session-artifacts";
+import { calculateBoundingBox } from "~/editor/helpers/level-helpers";
+import {
+  ImageExport,
+  type ImageExportOptions,
+} from "~/editor/helpers/image-export";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import { type EditorState } from "~/editor/editor-state";
 import {
@@ -1248,6 +1253,106 @@ export class EditorEngine {
     this.requestRender();
   }
 
+  public createImageExport(): ImageExport {
+    const state = this.store.getState();
+    const scenes = new Map<string, ReturnType<typeof this.buildScene>>();
+    for (const area of ["view", "level"] as const) {
+      let cameraState = state;
+      let viewportSize = {
+        width: this.canvas.width,
+        height: this.canvas.height,
+      };
+      if (area === "level") {
+        let zoom = state.zoom;
+        let offset = state.viewPortOffset;
+        const pictureBounds = state.pictures.flatMap((picture) => {
+          const size = getPictureWorldDimensions(picture, this.lgrAssets);
+          return size
+            ? [
+                picture.position,
+                {
+                  x: picture.position.x + size.width,
+                  y: picture.position.y + size.height,
+                },
+              ]
+            : [picture.position];
+        });
+        fitToView({
+          canvas: this.canvas,
+          polygons: state.polygons,
+          apples: state.apples,
+          killers: [...state.killers, ...pictureBounds],
+          flowers: state.flowers,
+          start: state.start,
+          minZoom: this.minZoom,
+          maxZoom: this.maxZoom,
+          setCamera: (x, y) => {
+            offset = { x, y };
+          },
+          setZoom: (value) => {
+            zoom = value;
+          },
+        });
+        const bounds = calculateBoundingBox({
+          polygons: state.polygons,
+          apples: state.apples,
+          killers: [...state.killers, ...pictureBounds],
+          flowers: state.flowers,
+          start: state.start,
+        });
+        // Frame the level itself instead of retaining the editor window's aspect ratio.
+        const padding = 2;
+        viewportSize = {
+          width: Math.max(
+            1,
+            Math.ceil((bounds.maxX - bounds.minX + padding * 2) * zoom),
+          ),
+          height: Math.max(
+            1,
+            Math.ceil((bounds.maxY - bounds.minY + padding * 2) * zoom),
+          ),
+        };
+        offset = {
+          x: -(bounds.minX - padding) * zoom,
+          y: -(bounds.minY - padding) * zoom,
+        };
+        cameraState = { ...state, zoom, viewPortOffset: offset };
+      }
+      for (const appearance of ["shown", "game"] as const) {
+        const game = appearance === "game";
+        const exportState = game
+          ? {
+              ...cameraState,
+              levelVisibility: {
+                ...cameraState.levelVisibility,
+                useGroundSkyTextures: true,
+                useGrassTextures: true,
+                zoomTextures: true,
+                showObjects: true,
+                showPictures: true,
+                showTextures: true,
+                showPolygons: true,
+                showGroundBounds: false,
+                showGrassBounds: false,
+                showObjectBounds: false,
+                showPictureBounds: false,
+                showTextureBounds: false,
+              },
+            }
+          : cameraState;
+        scenes.set(
+          `${area}-${appearance}`,
+          this.buildScene(exportState, !game, viewportSize),
+        );
+      }
+    }
+    return new ImageExport(
+      this.lgrAssets,
+      (options: ImageExportOptions) =>
+        scenes.get(`${options.area}-${options.appearance}`)!,
+    );
+  }
+
   private flushRender() {
     const shouldAnimate = this.shouldAnimate();
     if (!this.needsRender && !shouldAnimate) {
@@ -1299,38 +1404,45 @@ export class EditorEngine {
     });
   }
 
-  private render() {
-    const state = this.store.getState();
+  private buildScene(
+    state = this.store.getState(),
+    includeEditor = true,
+    viewportSize = { width: this.canvas.width, height: this.canvas.height },
+  ) {
     const viewportRect = getViewportWorldRectFromOffset({
-      width: this.canvas.width,
-      height: this.canvas.height,
+      width: viewportSize.width,
+      height: viewportSize.height,
       offsetX: state.viewPortOffset.x,
       offsetY: state.viewPortOffset.y,
       zoom: state.zoom,
     });
     const scene = buildEditorWorldScene({
       state,
-      viewportSize: {
-        width: this.canvas.width,
-        height: this.canvas.height,
-      },
+      includeDrafts: includeEditor,
+      viewportSize,
       viewportRect,
       resolvePictureDimensions: (picture) =>
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
     const activeTool = state.actions.getActiveTool();
-    const overlays = [
-      ...this.getEditorOverlays(state, viewportRect),
-      ...(activeTool?.getWorldOverlays?.({
-        viewportRect,
-        modifierPressed: this.modifierPressed,
-      }) ?? []),
-    ];
+    const overlays = includeEditor
+      ? [
+          ...this.getEditorOverlays(state, viewportRect),
+          ...(activeTool?.getWorldOverlays?.({
+            viewportRect,
+            modifierPressed: this.modifierPressed,
+          }) ?? []),
+        ]
+      : [];
     scene.overlays = [
       ...overlays.filter((overlay) => overlay.layer !== "top"),
       ...overlays.filter((overlay) => overlay.layer === "top"),
     ];
-    this.worldRenderer.render(scene);
+    return scene;
+  }
+
+  private render() {
+    this.worldRenderer.render(this.buildScene());
   }
 
   private refreshSelectionHoverForModifierKeys(

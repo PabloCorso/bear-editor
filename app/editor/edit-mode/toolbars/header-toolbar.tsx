@@ -39,6 +39,7 @@ import {
   FloppyDiskIcon,
   FolderOpenIcon,
   GearIcon,
+  ImageIcon,
   WarningDiamondIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -87,6 +88,9 @@ import { LevelFolderTip } from "./level-folder-tip";
 import { ToolInfo } from "./tool-info";
 import { CanvasTips } from "./canvas-tip";
 import "./level-file-name.css";
+import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
+import { ExportImageDialog } from "./export-image-dialog";
+import type { ImageExport } from "~/editor/helpers/image-export";
 
 const ISSUE_FOCUS_MIN_ZOOM = 0.2;
 const ISSUE_FOCUS_MAX_ZOOM = 10000;
@@ -94,6 +98,7 @@ const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
 type HeaderToolbarProps = ToolbarProps & {
   isLoading?: boolean;
+  engineRef: React.RefObject<EditorEngine | null>;
   fileNameEntrance: ReturnType<typeof useLevelFileNameEntrance>;
 };
 
@@ -136,6 +141,7 @@ export function HeaderToolbar({
   className,
   isLoading,
   fileNameEntrance,
+  engineRef,
   ...props
 }: HeaderToolbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -144,6 +150,26 @@ export function HeaderToolbar({
     useState<TopologyCheckResult | null>(null);
   const menuActions = useMainMenuActions();
   const { handleNew, handleOpenFile, handleSave } = menuActions;
+  const store = useEditorStore();
+
+  const [imageExport, setImageExport] = useState<{
+    snapshot: ImageExport;
+    fileName?: string;
+  } | null>(null);
+  const handleExportImage = () => {
+    try {
+      const engine = engineRef.current;
+      if (!engine)
+        throw new Error("The level is still loading. Please try again.");
+      const { fileSession, documentSession } = store.getState();
+      setImageExport({
+        snapshot: engine.createImageExport(),
+        fileName: fileSession.fileName ?? documentSession.displayName,
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to export image.");
+    }
+  };
 
   useEffect(
     function registerMainMenuHotkeys() {
@@ -203,6 +229,13 @@ export function HeaderToolbar({
 
   return (
     <>
+      {imageExport && (
+        <ExportImageDialog
+          snapshot={imageExport.snapshot}
+          initialFileName={imageExport.fileName}
+          onClose={() => setImageExport(null)}
+        />
+      )}
       <div
         className={cn(
           "pointer-events-none absolute inset-x-4 top-4 z-10",
@@ -213,6 +246,8 @@ export function HeaderToolbar({
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
             actions={menuActions}
+            onExportImage={handleExportImage}
+            isLoading={isLoading}
             onOpenSettings={() => setSettingsOpen(true)}
           />
           <LevelVisibilityControl />
@@ -230,6 +265,8 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
               actions={menuActions}
+              onExportImage={handleExportImage}
+              isLoading={isLoading}
               onOpenSettings={() => setSettingsOpen(true)}
             />
             <LevelVisibilityControl />
@@ -501,9 +538,13 @@ function useMainMenuActions() {
 function MainDropdownMenu({
   onOpenSettings,
   actions,
+  onExportImage,
+  isLoading,
 }: {
   onOpenSettings: () => void;
   actions: ReturnType<typeof useMainMenuActions>;
+  onExportImage: () => void;
+  isLoading?: boolean;
 }) {
   const { handleNew, handleOpenFile, handleSave, handleSaveAs } = actions;
   const modifier = useModifier();
@@ -571,6 +612,15 @@ function MainDropdownMenu({
                 Save as…
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem
+              iconBefore={<ImageIcon />}
+              disabled={isLoading}
+              onClick={() => {
+                void onExportImage();
+              }}
+            >
+              Export image…
+            </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
