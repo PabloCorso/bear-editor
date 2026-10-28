@@ -5,6 +5,8 @@ export type VertexEdgeClickBehavior = "default" | "internal";
 export type EditorPreferences = Pick<
   EditorState,
   | "defaultLevelTitle"
+  | "showSmartGuides"
+  | "snapToSmartGuides"
   | "animateSprites"
   | "isUIVisible"
   | "levelVisibility"

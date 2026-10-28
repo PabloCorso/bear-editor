@@ -87,6 +87,8 @@ export type EditorState = EditorLevel & {
   defaultLevelTitle: string;
 
   // View settings
+  showSmartGuides: boolean;
+  snapToSmartGuides: boolean;
   animateSprites: boolean;
   showSprites: boolean;
   levelVisibility: LevelVisibilitySettings;
@@ -163,6 +165,7 @@ export type EditorState = EditorLevel & {
     setLevelFolder: (folder?: LevelFolder) => void;
 
     // View operations
+    toggleSmartGuides: (key: "showSmartGuides" | "snapToSmartGuides") => void;
     toggleAnimateSprites: () => void;
     toggleShowSprites: () => void;
     setLevelVisibility: (settings: Partial<LevelVisibilitySettings>) => void;

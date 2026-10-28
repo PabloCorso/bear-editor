@@ -286,6 +286,10 @@ function getShortcutGroups(
               label: "Move selected vertices along an edge",
             },
             {
+              shortcut: "Alt + Drag",
+              label: "Temporarily bypass smart guides",
+            },
+            {
               shortcut: "R",
               label: "Toggle resize & rotate",
             },

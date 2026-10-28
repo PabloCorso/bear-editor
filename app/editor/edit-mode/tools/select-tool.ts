@@ -1,3 +1,8 @@
+import {
+  SmartGuideDrag,
+  getGuideBoundsAnchors,
+  type GuideMatch,
+} from "~/editor/helpers/smart-guides";
 import rotateCursorSvg from "~/assets/rotate-cursor.svg?raw";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
@@ -155,6 +160,10 @@ export class SelectTool extends Tool<SelectToolState> {
     map: (point: Position) => Position;
   } | null = null;
 
+  private guideDrag: SmartGuideDrag | null = null;
+  private guideMatches: GuideMatch[] = [];
+  private guideViewport: WorldRect | null = null;
+  private lastDragDelta: Position = { x: 0, y: 0 };
   private isDragging = false;
   private dragStartPos = { x: 0, y: 0 };
   private dragOriginPositions: Position[] = [];
@@ -187,6 +196,8 @@ export class SelectTool extends Tool<SelectToolState> {
       contextMenuPosition: undefined,
     });
     this.isDragging = false;
+    this.guideDrag = null;
+    this.guideMatches = [];
     this.isMarqueeSelecting = false;
     this.dragOriginPositions = [];
     this.dragConstraintDirections = [];
@@ -568,7 +579,7 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
     if (this.isDragging) {
-      this.handleDragging(context.worldPos, event.shiftKey);
+      this.handleDragging(context.worldPos, event.shiftKey, event.altKey);
       return true;
     }
 
@@ -587,6 +598,8 @@ export class SelectTool extends Tool<SelectToolState> {
     }
     if (this.isDragging) {
       this.isDragging = false;
+      this.guideDrag = null;
+      this.guideMatches = [];
       this.getState().setToolState({ isDragging: false });
       this.endDragHistoryBatch(true);
       return true;
@@ -1224,6 +1237,8 @@ export class SelectTool extends Tool<SelectToolState> {
       .map((picture) => picture.position);
 
     this.isDragging = false;
+    this.guideDrag = null;
+    this.guideMatches = [];
     this.isMarqueeSelecting = false;
     this.dragOriginPositions = [];
     this.endDragHistoryBatch(false);
@@ -1249,6 +1264,7 @@ export class SelectTool extends Tool<SelectToolState> {
   }: {
     viewportRect: WorldRect;
   }): WorldRenderOverlayItem[] {
+    this.guideViewport = viewportRect;
     this.pruneHiddenSelection();
     const { state, toolState } = this.getState();
     if (!toolState) return [];
@@ -1478,6 +1494,47 @@ export class SelectTool extends Tool<SelectToolState> {
       );
     }
 
+    if (this.isDragging && state.showSmartGuides) {
+      for (const { axis, source, target } of this.guideMatches) {
+        const from =
+          axis === "x"
+            ? { x: target.x, y: source.y }
+            : { x: source.x, y: target.y };
+        const padding = 8 / state.zoom;
+        const to = { ...target };
+        const along = axis === "x" ? "y" : "x";
+        const direction = from[along] <= to[along] ? 1 : -1;
+        from[along] -= padding * direction;
+        to[along] += padding * direction;
+        overlays.push({
+          type: "line",
+          from,
+          to,
+          color: "#ed66d5",
+          width: 1 / state.zoom,
+          layer: "top",
+        });
+        for (const point of [source, target]) {
+          const radius = 3 / state.zoom;
+          overlays.push({
+            type: "line",
+            from: { x: point.x - radius, y: point.y },
+            to: { x: point.x + radius, y: point.y },
+            color: "#ed66d5",
+            width: 1 / state.zoom,
+            layer: "top",
+          });
+          overlays.push({
+            type: "line",
+            from: { x: point.x, y: point.y - radius },
+            to: { x: point.x, y: point.y + radius },
+            color: "#ed66d5",
+            width: 1 / state.zoom,
+            layer: "top",
+          });
+        }
+      }
+    }
     return overlays;
   }
 
@@ -1656,6 +1713,96 @@ export class SelectTool extends Tool<SelectToolState> {
     this.dragConstraintDirections = getVertexDragConstraintDirections(
       toolState.selectedVertices,
     );
+    this.lastDragDelta = { x: 0, y: 0 };
+    this.guideMatches = [];
+    this.guideDrag = this.createSmartGuideDrag();
+  }
+
+  private createSmartGuideDrag(): SmartGuideDrag | null {
+    const { state, toolState } = this.getState();
+    if (!toolState || (!state.showSmartGuides && !state.snapToSmartGuides))
+      return null;
+    const selectedVertices = new Set(
+      toolState.selectedVertices.map(({ vertex }) => vertex),
+    );
+    const selectedObjects = new Set(toolState.selectedObjects);
+    const selectedPictures = new Set(toolState.selectedPictures);
+    const movingPoints: Position[] = [...this.dragOriginPositions];
+    const targets: Position[] = [];
+    const viewport = this.guideViewport;
+    const margin = 10 / state.zoom;
+    const addTargets = (points: Position[]) => {
+      for (const point of points) {
+        if (
+          !viewport ||
+          (point.x >= viewport.minX - margin &&
+            point.x <= viewport.maxX + margin &&
+            point.y >= viewport.minY - margin &&
+            point.y <= viewport.maxY + margin)
+        )
+          targets.push(point);
+      }
+    };
+    for (const polygon of state.polygons) {
+      const visibility = state.levelVisibility;
+      if (
+        !(
+          visibility.showPolygons ||
+          visibility.showPolygonHandles ||
+          (polygon.grass
+            ? visibility.showGrassBounds
+            : visibility.showGroundBounds)
+        )
+      )
+        continue;
+      const stationary = polygon.vertices.filter(
+        (vertex) => !selectedVertices.has(vertex),
+      );
+      addTargets(stationary);
+      // Never infer a stationary polygon's bounds from a partially moving shape.
+      if (stationary.length === polygon.vertices.length) {
+        const bounds = getTransformBounds(stationary);
+        if (bounds) addTargets(getGuideBoundsAnchors(bounds));
+      }
+    }
+    if (this.isObjectSelectable()) {
+      addTargets(
+        getAllObjects(
+          state.apples.map((a) => a.position),
+          state.killers,
+          state.flowers,
+          state.start,
+        )
+          .map(({ obj }) => obj)
+          .filter((point) => !selectedObjects.has(point)),
+      );
+    }
+    for (const picture of state.pictures) {
+      if (!this.isPictureSelectable(picture)) continue;
+      const size = this.pictureDimensionsResolver(picture);
+      const bounds = size
+        ? {
+            minX: picture.position.x,
+            minY: picture.position.y,
+            maxX: picture.position.x + size.width,
+            maxY: picture.position.y + size.height,
+          }
+        : null;
+      if (selectedPictures.has(picture.position)) {
+        if (bounds) movingPoints.push({ x: bounds.maxX, y: bounds.maxY });
+      } else {
+        addTargets(bounds ? getGuideBoundsAnchors(bounds) : [picture.position]);
+      }
+    }
+    // Individual vertices/objects use their stored point; groups and pictures
+    // use the whole selection's bounds, preserving all internal spacing.
+    const bounds = getTransformBounds(movingPoints);
+    const sources =
+      bounds &&
+      (this.dragOriginPositions.length > 1 || selectedPictures.size > 0)
+        ? getGuideBoundsAnchors(bounds)
+        : movingPoints;
+    return new SmartGuideDrag(sources, targets);
   }
 
   private startMarqueeSelection(worldPos: Position, modifier: boolean): void {
@@ -1672,24 +1819,53 @@ export class SelectTool extends Tool<SelectToolState> {
     this.marqueeEndPos = worldPos;
   }
 
-  private handleDragging(worldPos: Position, shouldConstrain: boolean): void {
-    const { toolState } = this.getState();
+  private handleDragging(
+    worldPos: Position,
+    shouldConstrain: boolean,
+    bypassGuides = false,
+  ): void {
+    const { state, toolState } = this.getState();
     if (!toolState) return;
 
     const rawDelta = {
       x: worldPos.x - this.dragStartPos.x,
       y: worldPos.y - this.dragStartPos.y,
     };
-    const totalDelta =
+    let totalDelta =
       shouldConstrain && toolState.selectedVertices.length > 0
         ? constrainDeltaToClosestDirection(
             rawDelta,
             this.dragConstraintDirections,
           )
         : rawDelta;
+    this.guideMatches = [];
+    // Preserve the existing Shift constraint, including sloping edge movement.
+    if (
+      bypassGuides ||
+      (shouldConstrain && toolState.selectedVertices.length > 0)
+    ) {
+      this.guideDrag?.reset();
+    } else if (state.showSmartGuides || state.snapToSmartGuides) {
+      const resolved = this.guideDrag?.resolve(
+        totalDelta,
+        state.zoom,
+        state.snapToSmartGuides,
+      );
+      if (resolved) {
+        totalDelta = resolved.delta;
+        this.guideMatches = resolved.matches;
+      }
+    } else {
+      this.guideDrag?.reset();
+    }
     const totalDeltaX = totalDelta.x;
     const totalDeltaY = totalDelta.y;
-    if (totalDeltaX === 0 && totalDeltaY === 0) return;
+    if (
+      totalDeltaX === this.lastDragDelta.x &&
+      totalDeltaY === this.lastDragDelta.y
+    )
+      return;
+    this.lastDragDelta = { ...totalDelta };
     this.dragHasChanges = true;
 
     if (toolState.selectedVertices.length > 0) {

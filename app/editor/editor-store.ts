@@ -400,6 +400,8 @@ export function createEditorStore({
         defaultLevelTitle,
 
         // View settings
+        showSmartGuides: initialPreferences?.showSmartGuides ?? false,
+        snapToSmartGuides: initialPreferences?.snapToSmartGuides ?? false,
         animateSprites: initialPreferences?.animateSprites ?? true,
         showSprites: true,
         levelVisibility:
@@ -586,6 +588,7 @@ export function createEditorStore({
           setLevelFolder: (folder) => set({ levelFolder: folder }),
 
           // View operations
+          toggleSmartGuides: (key) => set((state) => ({ [key]: !state[key] })),
           toggleAnimateSprites: () =>
             set((state) => ({ animateSprites: !state.animateSprites })),
 

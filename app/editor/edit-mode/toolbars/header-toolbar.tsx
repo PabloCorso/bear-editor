@@ -25,6 +25,9 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
@@ -460,6 +463,9 @@ function MainDropdownMenu({
 }) {
   const { handleNew, handleOpenFile, handleSave, handleSaveAs } = actions;
   const modifier = useModifier();
+  const showSmartGuides = useEditor((state) => state.showSmartGuides);
+  const snapToSmartGuides = useEditor((state) => state.snapToSmartGuides);
+  const { toggleSmartGuides } = useEditorActions();
 
   return (
     <>
@@ -525,6 +531,30 @@ function MainDropdownMenu({
               </DropdownMenuItem>
             )}
           </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>View</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  role="menuitemcheckbox"
+                  aria-checked={showSmartGuides}
+                  iconAfter={showSmartGuides ? <CheckIcon /> : undefined}
+                  onClick={() => toggleSmartGuides("showSmartGuides")}
+                >
+                  Show smart guides
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  role="menuitemcheckbox"
+                  aria-checked={snapToSmartGuides}
+                  iconAfter={snapToSmartGuides ? <CheckIcon /> : undefined}
+                  onClick={() => toggleSmartGuides("snapToSmartGuides")}
+                >
+                  Snap to smart guides
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem
