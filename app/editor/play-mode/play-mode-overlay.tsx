@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@mantine/hooks";
 import {
   ArrowsClockwiseIcon,
+  RewindIcon,
+  MapPinPlusIcon,
   ArrowDownIcon,
   ArrowBendUpLeftIcon,
   ArrowBendUpRightIcon,
@@ -23,6 +25,7 @@ import { PlaySettingsDialog } from "~/editor/edit-mode/edit-settings";
 import { Button } from "~/components/ui/button";
 import {
   useEditorActions,
+  useEditor,
   useEditorStore,
   usePlaySettings,
 } from "~/editor/use-editor-store";
@@ -41,6 +44,8 @@ import {
   getTimeCentiseconds,
   type GameState,
 } from "~/editor/play-mode/engine/game/game-loop";
+import { RideHistory } from "~/editor/play-mode/engine/game/ride-history";
+import { formatShortcutCode } from "~/editor/edit-mode/toolbars/keyboard-shortcuts";
 import type { LevelData } from "~/editor/play-mode/engine/level";
 import {
   DEFAULT_KEYS,
@@ -138,6 +143,14 @@ export function PlayModeOverlay({
     playSettings.runEndBehavior,
   );
   const restartRequestedRef = useRef(false);
+  const captureRequestedRef = useRef(false);
+  const rewindPointerRef = useRef(false);
+  const settingsOpenRef = useRef(false);
+  const [rewindState, setRewindState] = useState({
+    available: false,
+    active: false,
+  });
+  const activeStartName = useEditor((state) => activeTestStart(state).name);
   const playTimeTextRef = useRef<HTMLDivElement>(null);
   const lastPlayTimeRef = useRef("00:00,00");
   const { setPlayModeZoom, stopPlayMode } = useEditorActions();
@@ -279,6 +292,9 @@ export function PlayModeOverlay({
       if (nextOpen) {
         releaseMobileControls();
       }
+      captureRequestedRef.current = false;
+      settingsOpenRef.current = nextOpen;
+      rewindPointerRef.current = false;
       setPlaySettingsOpen(nextOpen);
     },
     [releaseMobileControls],
@@ -375,10 +391,6 @@ export function PlayModeOverlay({
       const container = containerRef.current;
       if (!canvas || !container) return;
 
-      const testStartState = {
-        start: store.getState().start,
-        testStarts: store.getState().testStarts,
-      };
       let levelData: LevelData;
       try {
         levelData = convertLevelToGameData(
@@ -406,6 +418,10 @@ export function PlayModeOverlay({
       const keyBindings = keyBindingsRef.current;
 
       let gameState: GameState = createGame(levelData, input, keyBindings);
+      let history = new RideHistory(
+        gameState,
+        activeTestStart(store.getState()).ride,
+      );
       gameStateRef.current = gameState;
       gameState.lastTimestamp = performance.now();
       gameState.camera.zoom = clamp(
@@ -446,9 +462,19 @@ export function PlayModeOverlay({
       canvas.addEventListener("wheel", handleWheel, { passive: false });
 
       const resetGame = () => {
+        const active = activeTestStart(store.getState());
+        // The active start can change during this play session after a capture.
+        levelData = convertLevelToGameData(
+          elmaLevelFromEditorState({
+            ...store.getState(),
+            start: active.position,
+          }),
+        );
         gameState = createGame(levelData, input, keyBindingsRef.current);
+        history = new RideHistory(gameState, active.ride);
         gameStateRef.current = gameState;
-        input.seedJustPressedKey(keyBindingsRef.current.turn);
+        input.update();
+        if (!active.ride) input.seedJustPressedKey(keyBindingsRef.current.turn);
         gameState.lastTimestamp = performance.now();
         gameState.camera.zoom = clamp(
           store.getState().playModeZoom || DEFAULT_PLAY_MODE_ZOOM,
@@ -475,18 +501,73 @@ export function PlayModeOverlay({
       };
 
       let animationFrame = 0;
+      let lastFrameTimestamp = performance.now();
+      const releaseRewind = () => {
+        rewindPointerRef.current = false;
+      };
+      window.addEventListener("blur", releaseRewind);
       const loop = (timestamp: number) => {
+        const wallSeconds = Math.min(
+          Math.max(0, (timestamp - lastFrameTimestamp) / 1000),
+          0.1,
+        );
+        lastFrameTimestamp = timestamp;
+        if (settingsOpenRef.current || document.hidden) {
+          gameState.lastTimestamp = timestamp;
+          rewindPointerRef.current = false;
+          input.update();
+          animationFrame = requestAnimationFrame(loop);
+          return;
+        }
+        if (input.isDown(keyBindingsRef.current.escape)) {
+          stopPlayMode();
+          return;
+        }
         if (restartRequestedRef.current || input.wasJustPressed("Enter")) {
           resetGame();
         }
 
-        gameFrame(gameState, timestamp);
-        if (
-          (gameState.result === "dead" || gameState.result === "won") &&
-          handleRunEnd()
-        ) {
-          return;
+        const bindings = store.getState().playSettings.keyBindings;
+        const rewindHeld =
+          rewindPointerRef.current || input.isDown(bindings.rewind);
+        if (rewindHeld && (history.canRewind || history.rewinding)) {
+          gameFrame(gameState, timestamp, false);
+          history.rewind(gameState, wallSeconds);
+        } else if (history.rewinding) {
+          // Restore the precise physics state behind the visual preview. The
+          // release frame does not also advance physics or consume a turn.
+          history.resume(gameState, timestamp);
+        } else {
+          const previousResult = gameState.result;
+          gameFrame(gameState, timestamp);
+          history.record(gameState);
+          // Only new terminal transitions trigger auto restart/exit. A captured
+          // dead start must stay frozen so its saved approach can be rewound.
+          if (
+            previousResult === "playing" &&
+            (gameState.result === "dead" || gameState.result === "won") &&
+            handleRunEnd()
+          )
+            return;
         }
+        if (
+          captureRequestedRef.current ||
+          input.wasJustPressed(bindings.captureStart)
+        ) {
+          const moment = history.captureStart();
+          const wheel = moment.snapshot.motor.leftWheel.r;
+          store
+            .getState()
+            .actions.addTestStart({ x: wheel.x, y: -wheel.y }, moment);
+          captureRequestedRef.current = false;
+        }
+        setRewindState((previous) => {
+          const available = history.canRewind || history.rewinding;
+          const active = history.rewinding;
+          return previous.available === available && previous.active === active
+            ? previous
+            : { available, active };
+        });
         syncStoredZoom(gameState.camera.zoom);
         setActiveMobileControls((currentState) => {
           const nextState = getActiveMobileControlState(
@@ -502,7 +583,10 @@ export function PlayModeOverlay({
         });
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
         renderer.render(gameState, {
-          testStartState,
+          testStartState: {
+            start: store.getState().start,
+            testStarts: store.getState().testStarts,
+          },
           visibility: {
             ...store.getState().levelVisibility,
             showGrassBounds: false,
@@ -522,6 +606,9 @@ export function PlayModeOverlay({
 
       return () => {
         cancelAnimationFrame(animationFrame);
+        window.removeEventListener("blur", releaseRewind);
+        rewindPointerRef.current = false;
+        captureRequestedRef.current = false;
         canvas.removeEventListener("wheel", handleWheel);
         observer.disconnect();
         releaseMobileControls();
@@ -548,12 +635,18 @@ export function PlayModeOverlay({
       ref={containerRef}
       className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[1px] select-none"
     >
-      <div className="pointer-events-none absolute top-4 right-4 z-10 flex items-center gap-4">
+      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-wrap items-center justify-end gap-2">
         <div
           ref={playTimeTextRef}
           className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
         >
           {lastPlayTimeRef.current}
+          <div
+            aria-live="polite"
+            className="max-w-48 truncate text-xs font-normal text-secondary"
+          >
+            {activeStartName}
+          </div>
         </div>
         <Toolbar className="pointer-events-auto gap-2">
           <ToolButton
@@ -563,6 +656,60 @@ export function PlayModeOverlay({
             <GearIcon weight="fill" />
           </ToolButton>
           <ToolbarSeparator />
+          <ToolButton
+            name="Rewind (hold)"
+            shortcut={formatShortcutCode(playSettings.keyBindings.rewind)}
+            disabled={!rewindState.available || playSettingsOpen}
+            aria-pressed={rewindState.active}
+            className={cn(
+              "touch-none",
+              rewindState.active && "bg-primary-active",
+            )}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              rewindPointerRef.current = true;
+            }}
+            onPointerUp={() => {
+              rewindPointerRef.current = false;
+            }}
+            onPointerCancel={() => {
+              rewindPointerRef.current = false;
+            }}
+            onLostPointerCapture={() => {
+              rewindPointerRef.current = false;
+            }}
+            onKeyDown={(event) => {
+              if (event.key === " " || event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                rewindPointerRef.current = true;
+              }
+            }}
+            onKeyUp={(event) => {
+              if (event.key === " " || event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                rewindPointerRef.current = false;
+              }
+            }}
+            onBlur={() => {
+              rewindPointerRef.current = false;
+            }}
+          >
+            <RewindIcon weight="fill" />
+          </ToolButton>
+          <ToolButton
+            name="Capture test start"
+            shortcut={formatShortcutCode(playSettings.keyBindings.captureStart)}
+            disabled={playSettingsOpen}
+            onClick={() => {
+              captureRequestedRef.current = true;
+            }}
+          >
+            <MapPinPlusIcon />
+          </ToolButton>
           <ToolButton name="Restart run" onClick={restartPlayMode}>
             <ArrowsClockwiseIcon weight="fill" />
           </ToolButton>

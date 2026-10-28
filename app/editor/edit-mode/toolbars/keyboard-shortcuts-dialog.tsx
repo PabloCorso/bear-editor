@@ -37,6 +37,7 @@ import {
 } from "./vertex-tool-control";
 import {
   getNewLevelShortcut,
+  formatShortcutCode,
   GO_TO_PLAY_START_SHORTCUT,
   OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
 } from "./keyboard-shortcuts";
@@ -634,6 +635,14 @@ function getShortcutGroups(
           label: "Alo volt",
         },
         {
+          shortcut: formatShortcutCode(toolIcons.playKeyBindings.rewind),
+          label: "Hold to rewind; release to continue",
+        },
+        {
+          shortcut: formatShortcutCode(toolIcons.playKeyBindings.captureStart),
+          label: "Capture ride and history as the active test start",
+        },
+        {
           shortcut: "Esc",
           label: "Exit play mode",
         },
@@ -706,16 +715,4 @@ function getShortcutGroups(
       ],
     },
   ];
-}
-
-function formatShortcutCode(code: string): string {
-  if (code === "") return "Unassigned";
-  if (code === "ArrowLeft") return "←";
-  if (code === "ArrowUp") return "↑";
-  if (code === "ArrowRight") return "→";
-  if (code === "ArrowDown") return "↓";
-  if (code === "Equal") return "=";
-  if (code === "Minus") return "-";
-  if (code.startsWith("Key")) return code.slice(3);
-  return code;
 }

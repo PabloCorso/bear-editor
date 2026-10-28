@@ -161,6 +161,8 @@ export type WorldRenderScene = {
   ground: string;
   sky: string;
   animateSprites: boolean;
+  /** Optional simulation clock in milliseconds; editor animation uses wall time. */
+  animationTime?: number;
   groundClipMode: "always" | "when-polygons-visible";
   viewport: WorldRenderViewport;
   visibility: WorldRenderVisibility;

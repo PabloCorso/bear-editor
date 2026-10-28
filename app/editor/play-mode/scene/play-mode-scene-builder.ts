@@ -1,5 +1,8 @@
 import { Clip, Gravity } from "~/editor/elma-types";
-import { FRAME_INDEX_TO_TIME } from "~/editor/play-mode/engine/core/constants";
+import {
+  FRAME_INDEX_TO_TIME,
+  GAME_TIME_PER_SECOND,
+} from "~/editor/play-mode/engine/core/constants";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
 import type { LevelData, Polygon } from "~/editor/play-mode/engine/level";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
@@ -75,6 +78,7 @@ export function buildPlayModeScene({
     ground: state.level.foregroundName,
     sky: state.level.backgroundName,
     animateSprites: true,
+    animationTime: (state.gameTime / GAME_TIME_PER_SECOND) * 1000,
     groundClipMode: "always",
     level: state.level,
     viewport: {

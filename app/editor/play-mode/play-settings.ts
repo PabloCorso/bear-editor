@@ -5,6 +5,8 @@ export type PlayKeyBindings = {
   voltLeft: string;
   voltRight: string;
   aloVolt: string;
+  rewind: string;
+  captureStart: string;
 };
 
 export type PlayRunEndBehavior = "restart" | "pause" | "exit";
@@ -28,5 +30,23 @@ export const defaultPlaySettings: PlaySettings = {
     voltLeft: "ArrowLeft",
     voltRight: "ArrowRight",
     aloVolt: "KeyA",
+    rewind: "Backspace",
+    captureStart: "KeyS",
   },
 };
+
+/** Preserve existing custom controls when introducing the history shortcuts. */
+export function loadPlayKeyBindings(
+  saved: Partial<PlayKeyBindings> = {},
+): PlayKeyBindings {
+  const bindings = { ...defaultPlaySettings.keyBindings, ...saved };
+  for (const key of ["rewind", "captureStart"] as const) {
+    if (
+      saved[key] === undefined &&
+      Object.values(saved).includes(bindings[key])
+    ) {
+      bindings[key] = "";
+    }
+  }
+  return bindings;
+}

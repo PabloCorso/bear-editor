@@ -345,6 +345,7 @@ export class WebGLWorldItemDrawer {
 
       const frame = getObjectFrame(sprite, {
         animate: scene.animateSprites && scene.visibility.showObjectAnimations,
+        now: scene.animationTime,
       });
       this.drawTexturedRect({
         sprite,

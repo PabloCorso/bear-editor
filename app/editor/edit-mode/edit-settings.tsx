@@ -714,6 +714,16 @@ export function PlaySettingsPanel() {
             value={playSettings.keyBindings.aloVolt}
             onChange={(value) => setPlayKeyBinding("aloVolt", value)}
           />
+          <PlayKeyField
+            label="Rewind (hold)"
+            value={playSettings.keyBindings.rewind}
+            onChange={(value) => setPlayKeyBinding("rewind", value)}
+          />
+          <PlayKeyField
+            label="Capture test start"
+            value={playSettings.keyBindings.captureStart}
+            onChange={(value) => setPlayKeyBinding("captureStart", value)}
+          />
         </div>
       </div>
       <div className="flex flex-col gap-3">

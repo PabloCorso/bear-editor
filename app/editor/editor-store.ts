@@ -467,13 +467,14 @@ export function createEditorStore({
           setLgr: (lgr) => set({ lgr }),
           setGround: (ground) => set({ ground }),
           setSky: (sky) => set({ sky }),
-          addTestStart: (position) =>
+          addTestStart: (position, ride) =>
             set((state) => {
               const session = state.testStarts;
               const number = session.nextNumber;
               const item = {
                 id: crypto.randomUUID(),
                 name: `Test start ${number}`,
+                ride,
                 position: { ...position },
                 color: testStartColors[(number - 1) % testStartColors.length],
               };
@@ -492,7 +493,9 @@ export function createEditorStore({
               testStarts: {
                 ...state.testStarts,
                 items: state.testStarts.items.map((item) =>
-                  item.id === id ? { ...item, position } : item,
+                  item.id === id
+                    ? { ...item, position, ride: undefined }
+                    : item,
                 ),
               },
             })),
@@ -549,6 +552,7 @@ export function createEditorStore({
                       ...candidate,
                       position: { ...state.start },
                       name: before.levelName,
+                      ride: undefined,
                     }
                   : candidate,
               ),
