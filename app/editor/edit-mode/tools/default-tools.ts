@@ -1,10 +1,12 @@
 type DefaultToolVariant = { name: string; shortcut: string };
 
+export type ToolMenuBehavior = "toolGroup" | "options";
+
 export type ToolMeta = {
   id: string;
   name: string;
   shortcut: string;
-  hasMenu?: boolean;
+  menuBehavior?: ToolMenuBehavior;
   variants?: Record<string, DefaultToolVariant>;
 };
 
@@ -14,24 +16,39 @@ export const defaultTools = {
   vertex: {
     id: "vertex",
     name: "Vertex",
-    hasMenu: true,
+    menuBehavior: "toolGroup",
     shortcut: "V",
     variants: {
       grass: { name: "Grass", shortcut: "G" },
       brush: { name: "Brush", shortcut: "B" },
       draw: { name: "Draw", shortcut: "D" },
       pipe: { name: "Pipe", shortcut: "Shift + P" },
-      cutConnect: { name: "Cut & Connect", shortcut: "C" },
+      cutConnect: { name: "Cut & Connect", shortcut: "X" },
       frame: { name: "Frame", shortcut: "Shift + F" },
       autoGrass: { name: "AutoGrass", shortcut: "Shift + G" },
     },
   },
-  apple: { hasMenu: true, id: "apple", name: "Apple", shortcut: "A" },
+  apple: { menuBehavior: "options", id: "apple", name: "Apple", shortcut: "A" },
   killer: { id: "killer", name: "Killer", shortcut: "K" },
   flower: { id: "flower", name: "Flower", shortcut: "F" },
-  picture: { hasMenu: true, id: "picture", name: "Picture", shortcut: "P" },
-  color: { hasMenu: true, id: "color", name: "Color", shortcut: "C" },
-  texture: { hasMenu: true, id: "texture", name: "Texture", shortcut: "T" },
+  picture: {
+    menuBehavior: "options",
+    id: "picture",
+    name: "Picture",
+    shortcut: "P",
+  },
+  color: {
+    menuBehavior: "options",
+    id: "color",
+    name: "Color",
+    shortcut: "C",
+  },
+  texture: {
+    menuBehavior: "options",
+    id: "texture",
+    name: "Texture",
+    shortcut: "T",
+  },
 } as const satisfies Record<string, ToolMeta>;
 
 export type DefaultToolId = keyof typeof defaultTools;

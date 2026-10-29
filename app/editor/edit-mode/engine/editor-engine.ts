@@ -912,25 +912,6 @@ export class EditorEngine {
     const modifier = checkModifierKey(event);
 
     if (
-      key === "C" &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey &&
-      !event.shiftKey &&
-      !event.isComposing
-    ) {
-      const vertexState = state.actions.getToolState<VertexToolState>("vertex");
-      if (
-        state.activeToolId !== "vertex" ||
-        vertexState?.variant !== "cutConnect"
-      ) {
-        state.actions.activateTool("vertex", "cutConnect");
-      }
-      event.preventDefault();
-      return;
-    }
-
-    if (
       key === "G" &&
       event.shiftKey &&
       modifier &&
@@ -945,7 +926,7 @@ export class EditorEngine {
     const vertexVariantShortcuts: Partial<Record<string, VertexToolVariant>> =
       event.shiftKey
         ? { P: "pipe", F: "frame", G: "autoGrass" }
-        : { B: "brush", D: "draw" };
+        : { B: "brush", D: "draw", X: "cutConnect" };
     const variant = vertexVariantShortcuts[key];
     if (
       variant &&
@@ -993,7 +974,7 @@ export class EditorEngine {
 
     const currentTool = state.actions.getActiveTool();
     if (
-      currentTool?.meta.hasMenu &&
+      currentTool?.meta.menuBehavior === "options" &&
       currentTool.meta.shortcut.toUpperCase() === key &&
       !modifier &&
       !event.altKey &&
@@ -1036,7 +1017,15 @@ export class EditorEngine {
         !event.ctrlKey &&
         !event.altKey
       ) {
-        if (!event.repeat) state.actions.activateTool(tool.meta.id);
+        if (!event.repeat) {
+          state.actions.activateTool(
+            tool.meta.id,
+            tool.meta.menuBehavior === "toolGroup" ? "normal" : undefined,
+          );
+          if (tool.meta.menuBehavior === "options") {
+            state.actions.setToolMenuOpen(true);
+          }
+        }
         event.preventDefault();
         return;
       }
