@@ -345,6 +345,7 @@ export class WebGLWorldItemDrawer {
 
       const frame = getObjectFrame(sprite, {
         animate: scene.animateSprites && scene.visibility.showObjectAnimations,
+        now: scene.animationTime,
       });
       this.drawTexturedRect({
         sprite,
@@ -448,12 +449,11 @@ export class WebGLWorldItemDrawer {
   }
 
   private drawBikeFallback(
-    fallback: Extract<
-      WorldRenderScene["drawItems"][number],
-      { type: "bike" }
-    >["fallback"],
+    item: Extract<WorldRenderScene["drawItems"][number], { type: "bike" }>,
     scene: WorldRenderScene,
   ) {
+    const fallback = item.fallback;
+    const opacity = item.opacity ?? 1;
     const lineWidth = 2 / Math.max(scene.viewport.zoom, 1);
     this.shapes.drawLine(
       fallback.leftWheel,
@@ -461,6 +461,7 @@ export class WebGLWorldItemDrawer {
       lineWidth,
       "#111111",
       scene,
+      opacity,
     );
     this.shapes.drawLine(
       fallback.rightWheel,
@@ -468,6 +469,7 @@ export class WebGLWorldItemDrawer {
       lineWidth,
       "#111111",
       scene,
+      opacity,
     );
     this.shapes.drawLine(
       fallback.bike,
@@ -475,27 +477,51 @@ export class WebGLWorldItemDrawer {
       lineWidth,
       "#111111",
       scene,
+      opacity,
     );
-    this.shapes.drawCircle(fallback.leftWheel, 0.26, "#111111", scene);
-    this.shapes.drawCircle(fallback.rightWheel, 0.26, "#111111", scene);
-    this.shapes.drawCircle(fallback.head, 0.16, "#f5d0a9", scene);
+    this.shapes.drawCircle(fallback.leftWheel, 0.26, "#111111", scene, opacity);
+    this.shapes.drawCircle(
+      fallback.rightWheel,
+      0.26,
+      "#111111",
+      scene,
+      opacity,
+    );
+    this.shapes.drawCircle(fallback.head, 0.16, "#f5d0a9", scene, opacity);
   }
 
   private drawBike(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "bike" }>,
     scene: WorldRenderScene,
   ) {
-    const kuskiSprites = this.lgrAssets?.getKuskiSprites();
-    const hasKuskiSprites = kuskiSprites
-      ? standardSprites.kuski.every((spriteName) => kuskiSprites[spriteName])
-      : false;
+    if (scene.visibility.showObjects || item.forceVisible) {
+      const kuskiSprites = this.lgrAssets?.getKuskiSprites();
+      const hasKuskiSprites = kuskiSprites
+        ? standardSprites.kuski.every((spriteName) => kuskiSprites[spriteName])
+        : false;
 
-    if (!kuskiSprites || !hasKuskiSprites) {
-      this.drawBikeFallback(item.fallback, scene);
-      return;
+      if (!kuskiSprites || !hasKuskiSprites) {
+        this.drawBikeFallback(item, scene);
+      } else {
+        this.drawKuski(item, scene, kuskiSprites as Record<string, ImageBitmap>);
+      }
     }
 
-    this.drawKuski(item, scene, kuskiSprites as Record<string, ImageBitmap>);
+    if (item.showBounds) {
+      for (const circle of getKuskiSelectionCircles({
+        start: item.start,
+        coords: item.coords,
+      })) {
+        this.shapes.drawCircleOutline(
+          { x: circle.x, y: circle.y },
+          circle.radius,
+          item.boundsLineWidth ?? 0.02,
+          item.boundsColor ?? colors.selection,
+          scene,
+          item.boundsOpacity ?? 1,
+        );
+      }
+    }
   }
 
   private bikeColor: [number, number, number, number] = [1, 1, 1, 1];

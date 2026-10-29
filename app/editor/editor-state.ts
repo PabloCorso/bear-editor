@@ -124,7 +124,10 @@ export type EditorState = EditorLevel & {
   levelFolder: LevelFolder;
 
   actions: {
-    addTestStart: (position: Position) => void;
+    addTestStart: (
+      position: Position,
+      ride?: import("./play-mode/engine/game/ride-history").RideMoment,
+    ) => void;
     moveTestStart: (id: string, position: Position) => void;
     renameTestStart: (id: string | null, name: string) => void;
     activateTestStart: (id: string | null) => void;

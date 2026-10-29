@@ -5,6 +5,7 @@ export type TestStart = {
   name: string;
   position: Position;
   color: string;
+  ride?: import("./play-mode/engine/game/ride-history").RideMoment;
 };
 export type TestStartSession = {
   items: TestStart[];
@@ -43,6 +44,7 @@ export function activeTestStart(
       name: state.testStarts.levelName,
       position: state.start,
       color: state.testStarts.levelColor,
+      ride: undefined,
     }
   );
 }

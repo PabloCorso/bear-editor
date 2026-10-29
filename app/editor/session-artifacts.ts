@@ -2,6 +2,7 @@ import type { EditorState } from "./editor-state";
 import type { Position } from "./elma-types";
 import { getKuskiSelectionCircles } from "./kuski-geometry";
 import { isStartObjectHit } from "./helpers/selection-helpers";
+import { buildRideMomentBikeSceneItem } from "./play-mode/scene/play-mode-scene-builder";
 
 /** A session-only point object participating in the regular canvas selection.
  * Optional action handlers are capabilities: unsupported actions skip the item.
@@ -21,20 +22,29 @@ type SessionArtifactProvider = (state: EditorState) => SessionArtifact[];
 // Add future session artifact types here; selection and action dispatch stay shared.
 const providers: SessionArtifactProvider[] = [
   (state) =>
-    state.testStarts.items.map((item) => ({
-      key: `test-start:${item.id}`,
-      position: item.position,
-      selectionCircles: getKuskiSelectionCircles({ start: item.position }),
-      hitTest: (point, useImage) =>
-        isStartObjectHit(
-          point,
-          item.position,
-          useImage ? "boundsWithImage" : "boundsOnly",
-          useImage,
-        ),
-      move: (position) => state.actions.moveTestStart(item.id, position),
-      remove: () => state.actions.deleteTestStart(item.id),
-    })),
+    state.testStarts.items.map((item) => {
+      const coords = item.ride
+        ? buildRideMomentBikeSceneItem(item.ride).coords
+        : undefined;
+      return {
+        key: `test-start:${item.id}`,
+        position: item.position,
+        selectionCircles: getKuskiSelectionCircles({
+          start: item.position,
+          coords,
+        }),
+        hitTest: (point, useImage) =>
+          isStartObjectHit(
+            point,
+            item.position,
+            useImage ? "boundsWithImage" : "boundsOnly",
+            useImage,
+            coords,
+          ),
+        move: (position) => state.actions.moveTestStart(item.id, position),
+        remove: () => state.actions.deleteTestStart(item.id),
+      };
+    }),
 ];
 
 // A snapshot is immutable. Cache adapters so React selectors and hit testing

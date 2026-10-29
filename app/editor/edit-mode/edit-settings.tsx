@@ -4,6 +4,7 @@ import {
 } from "~/editor/helpers/level-title";
 import { ToolSettingsPanel } from "./tool-settings";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import {
   useVertexEdgeClickPreference,
   useEditorLevelFolderName,
+  usePlayModeZoom,
   usePlaySettings,
   useEditorStore,
   useEditor,
@@ -64,6 +66,8 @@ import { cn, useModifier } from "~/utils/misc";
 import { useForceUpdate } from "@mantine/hooks";
 import {
   DEFAULT_PLAY_MODE_ZOOM,
+  PLAY_MODE_MAX_ZOOM,
+  PLAY_MODE_MIN_ZOOM,
   defaultPlaySettings,
   type PlayRunEndBehavior,
   type PlayKeyBindings,
@@ -647,8 +651,9 @@ function PreferencesSettingsPanel() {
 
 export function PlaySettingsPanel() {
   const store = useEditorStore();
+  const playModeZoom = usePlayModeZoom();
   const playSettings = usePlaySettings();
-  const { setPlaySettings } = store.getState().actions;
+  const { setPlayModeZoom, setPlaySettings } = store.getState().actions;
   const setPlayKeyBinding = (
     binding: keyof PlayKeyBindings,
     nextValue: string,
@@ -675,12 +680,15 @@ export function PlaySettingsPanel() {
         >
           <Button
             type="button"
-            onClick={() => setPlaySettings(defaultPlaySettings)}
+            onClick={() => {
+              setPlaySettings(defaultPlaySettings);
+              setPlayModeZoom(DEFAULT_PLAY_MODE_ZOOM);
+            }}
             className="ml-auto h-6 px-2"
             size="sm"
             iconBefore={<ArrowCounterClockwiseIcon />}
           >
-            Reset
+            Reset all
           </Button>
         </SettingsSectionHeading>
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
@@ -714,6 +722,16 @@ export function PlaySettingsPanel() {
             value={playSettings.keyBindings.aloVolt}
             onChange={(value) => setPlayKeyBinding("aloVolt", value)}
           />
+          <PlayKeyField
+            label="Rewind (hold)"
+            value={playSettings.keyBindings.rewind}
+            onChange={(value) => setPlayKeyBinding("rewind", value)}
+          />
+          <PlayKeyField
+            label="Capture test start"
+            value={playSettings.keyBindings.captureStart}
+            onChange={(value) => setPlayKeyBinding("captureStart", value)}
+          />
         </div>
       </div>
       <div className="flex flex-col gap-3">
@@ -746,6 +764,35 @@ export function PlaySettingsPanel() {
                 ))}
               </SelectContent>
             </Select>
+          </label>
+        </div>
+      </div>
+      <div className="flex flex-col gap-3">
+        <SettingsSectionHeading
+          title="View"
+          description="Remember the last zoom used in play mode."
+        />
+        <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+          <label className="flex items-center justify-between">
+            <span className="flex min-w-24 flex-col text-sm">
+              Zoom
+              <span className="text-xs text-secondary">Default: 1.6</span>
+            </span>
+            <NumberInput
+              aria-label="Play mode zoom"
+              value={playModeZoom}
+              min={PLAY_MODE_MIN_ZOOM}
+              max={PLAY_MODE_MAX_ZOOM}
+              step={0.05}
+              format={{ maximumFractionDigits: 2 }}
+              className="w-32 justify-between"
+              inputProps={{ className: "min-w-0 flex-1" }}
+              onValueChange={(value) => {
+                if (value !== null && Number.isFinite(value)) {
+                  setPlayModeZoom(value);
+                }
+              }}
+            />
           </label>
         </div>
       </div>

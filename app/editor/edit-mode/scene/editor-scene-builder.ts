@@ -13,6 +13,7 @@ import {
   type EditorWorldScene,
 } from "./editor-scene";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
+import { buildRideMomentBikeSceneItem } from "~/editor/play-mode/scene/play-mode-scene-builder";
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldPoint } from "~/editor/render/world-scene";
 import {
@@ -105,14 +106,18 @@ export function buildEditorWorldScene({
 export function getEditorHoverableItems(
   state: EditorState,
 ): EditorHoverableWorldItem[] {
-  const items = getDrawItemQueue(state).filter(
-    (item) =>
-      item.type !== "start" ||
-      !state.testStarts.items.some((test) => test.position === item.position),
-  );
-  return items.map((item) => {
+  const hoverableItems: EditorHoverableWorldItem[] = [];
+  for (const item of getDrawItemQueue(state)) {
+    // Recorded test starts are bikes in the draw queue, but session artifacts
+    // provide their stable selection identity and pose-aware hit area.
+    if (item.type === "bike") continue;
+    if (
+      item.type === "start" &&
+      state.testStarts.items.some((test) => test.position === item.position)
+    )
+      continue;
     if (item.type === "picture") {
-      return {
+      hoverableItems.push({
         kind: "picture",
         picture: {
           clip: item.clip,
@@ -122,15 +127,17 @@ export function getEditorHoverableItems(
           position: item.position,
           texture: item.texture ?? "",
         } as Picture,
-      };
+      });
+      continue;
     }
 
-    return {
+    hoverableItems.push({
       kind: "object",
       type: item.type === "start" ? "start" : item.objectKind,
       position: item.position,
-    };
-  });
+    });
+  }
+  return hoverableItems;
 }
 
 function getDrawItemQueue(
@@ -311,20 +318,30 @@ function getDrawItemQueue(
         ]
       : []),
     ...(showAnyObjects
-      ? state.testStarts.items.map((item) => ({
-          type: "start" as const,
-          ...DEFAULT_DISTANCE_AND_CLIP,
-          position: item.position,
-          color: item.color,
-          opacity:
-            item.id === state.testStarts.activeId
-              ? 1
-              : testStartGhostOpacity.editor,
-          showBounds: showObjectBounds,
-          boundsLineWidth: idleBoundsLineWidth,
-          boundsColor: idleBoundsColor,
-          boundsOpacity: idleBoundsOpacity,
-        }))
+      ? state.testStarts.items.map((item) => {
+          const appearance = {
+            color: item.color,
+            opacity:
+              item.id === state.testStarts.activeId
+                ? 1
+                : testStartGhostOpacity.editor,
+            showBounds: showObjectBounds,
+            boundsLineWidth: idleBoundsLineWidth,
+            boundsColor: idleBoundsColor,
+            boundsOpacity: idleBoundsOpacity,
+          };
+          return item.ride
+            ? {
+                ...buildRideMomentBikeSceneItem(item.ride),
+                ...appearance,
+              }
+            : {
+                type: "start" as const,
+                ...DEFAULT_DISTANCE_AND_CLIP,
+                position: item.position,
+                ...appearance,
+              };
+        })
       : []),
   ].sort((a, b) => b.distance - a.distance);
 }

@@ -1,6 +1,7 @@
 import type { Picture } from "~/editor/elma-types";
 import type {
   WorldRenderObjectItem,
+  WorldRenderBikeItem,
   WorldRenderPictureItem,
   WorldRenderScene,
   WorldRenderStartItem,
@@ -17,6 +18,7 @@ export type EditorFlowerSceneItem = WorldRenderObjectItem & {
   objectKind: "flower";
 };
 export type EditorStartSceneItem = WorldRenderStartItem;
+export type EditorBikeSceneItem = WorldRenderBikeItem;
 type EditorObjectSceneItem =
   | EditorAppleSceneItem
   | EditorKillerSceneItem
@@ -24,7 +26,8 @@ type EditorObjectSceneItem =
 export type EditorWorldDrawItem =
   | EditorPictureSceneItem
   | EditorObjectSceneItem
-  | EditorStartSceneItem;
+  | EditorStartSceneItem
+  | EditorBikeSceneItem;
 export type EditorWorldScene = Omit<WorldRenderScene, "drawItems"> & {
   drawItems: EditorWorldDrawItem[];
 };

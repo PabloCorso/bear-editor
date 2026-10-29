@@ -9,6 +9,7 @@ import { defaultLevelVisibility } from "./level-visibility";
 import {
   DEFAULT_PLAY_MODE_ZOOM,
   defaultPlaySettings,
+  loadPlayKeyBindings,
 } from "./play-mode/play-settings";
 import type { EditorStore } from "./editor-store";
 import type {
@@ -99,10 +100,7 @@ export function loadEditorPreferences(): EditorPreferences {
     playSettings: {
       ...defaultPlaySettings,
       ...(preferences?.playSettings ?? {}),
-      keyBindings: {
-        ...defaultPlaySettings.keyBindings,
-        ...(preferences?.playSettings?.keyBindings ?? {}),
-      },
+      keyBindings: loadPlayKeyBindings(preferences?.playSettings?.keyBindings),
     },
     vertexEdgeClickBehavior: loadVertexEdgeClickBehavior(
       preferences?.vertexEdgeClickBehavior,

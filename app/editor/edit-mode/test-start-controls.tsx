@@ -148,6 +148,14 @@ export function TestStartPicker({ mobile = false }: { mobile?: boolean }) {
                   }
                 >
                   <span className="flex-1 truncate text-left">{item.name}</span>
+                  {"ride" in item && item.ride && (
+                    <span
+                      title="Recorded ride and rewind history"
+                      className="text-xs text-secondary"
+                    >
+                      Ride
+                    </span>
+                  )}
                 </Button>
               )}
               <ToolButton
@@ -352,6 +360,15 @@ function TestStartActions({
             Move level start here
           </DropdownMenuItem>
         </>
+      )}
+      {id !== null && "ride" in item && item.ride && (
+        <DropdownMenuItem
+          onClick={() =>
+            run(() => store.getState().actions.moveTestStart(id, item.position))
+          }
+        >
+          Use position only
+        </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />
       <DropdownMenuItem

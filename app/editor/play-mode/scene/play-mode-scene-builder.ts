@@ -1,8 +1,13 @@
 import { Clip, Gravity } from "~/editor/elma-types";
-import { FRAME_INDEX_TO_TIME } from "~/editor/play-mode/engine/core/constants";
+import {
+  FRAME_INDEX_TO_TIME,
+  GAME_TIME_PER_SECOND,
+} from "~/editor/play-mode/engine/core/constants";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
+import type { RideMoment } from "~/editor/play-mode/engine/game/ride-history";
 import type { LevelData, Polygon } from "~/editor/play-mode/engine/level";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
+import type { WorldRenderBikeItem } from "~/editor/render/world-scene";
 import {
   getViewportWorldRectFromCenter,
   type WorldRect,
@@ -75,6 +80,7 @@ export function buildPlayModeScene({
     ground: state.level.foregroundName,
     sky: state.level.backgroundName,
     animateSprites: true,
+    animationTime: (state.gameTime / GAME_TIME_PER_SECOND) * 1000,
     groundClipMode: "always",
     level: state.level,
     viewport: {
@@ -148,7 +154,18 @@ function getDrawItemQueue(
   return drawItems;
 }
 
-function buildBikeSceneItem(state: GameState): PlayModeSceneDrawItem {
+type BikeSceneState = Pick<
+  GameState,
+  "motor" | "gameTime" | "lastVoltDirection" | "lastVoltTime" | "lastTurnTime"
+>;
+
+export function buildRideMomentBikeSceneItem(
+  moment: RideMoment,
+): WorldRenderBikeItem {
+  return { ...buildBikeSceneItem(moment.snapshot), forceVisible: false };
+}
+
+function buildBikeSceneItem(state: BikeSceneState): WorldRenderBikeItem {
   const motor = state.motor;
   const rawVoltProgress =
     state.lastVoltDirection == null
@@ -183,6 +200,7 @@ function buildBikeSceneItem(state: GameState): PlayModeSceneDrawItem {
       rotation: motor.bike.rotation,
     },
     type: "bike",
+    forceVisible: true,
     distance: DEFAULT_OBJECT_RENDER_DISTANCE,
     start: {
       x: motor.leftWheel.r.x,
