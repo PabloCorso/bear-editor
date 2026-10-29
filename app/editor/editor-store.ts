@@ -624,7 +624,7 @@ export function createEditorStore({
             const tool = state.toolsMap.get(state.activeToolId);
             set({
               openToolMenuId:
-                open && tool?.meta.hasMenu ? state.activeToolId : null,
+                open && tool?.meta.menuBehavior ? state.activeToolId : null,
             });
           },
           registerTool: (tool) =>

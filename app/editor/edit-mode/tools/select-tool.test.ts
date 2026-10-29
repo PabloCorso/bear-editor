@@ -761,3 +761,76 @@ describe("SelectTool skewing", () => {
     ]);
   });
 });
+
+describe("SelectTool transform measurements", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function setup() {
+    const result = createTool();
+    const polygon = {
+      grass: false,
+      vertices: [
+        position(0, 0),
+        position(10, 0),
+        position(10, 20),
+        position(0, 20),
+      ],
+    };
+    result.store.getState().actions.setPolygons([polygon]);
+    result.store.getState().actions.setZoom(100);
+    result.store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedVertices: polygon.vertices.map((vertex) => ({ polygon, vertex })),
+    });
+    result.store.temporal.getState().clear();
+    result.tool.toggleTransform();
+    return { ...result, polygon };
+  }
+
+  it("updates live during pointer resize and rotation, restores on cancel, and resets when reactivated", () => {
+    const { tool } = setup();
+    const event = {
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+    } as PointerEvent;
+    const context = (worldPos: Position) => ({
+      worldPos,
+      screenX: 0,
+      screenY: 0,
+    });
+    tool.onPointerDown(event, context(position(10, 10)));
+    tool.onPointerMove(event, context(position(5, 10)));
+    expect(tool.getTransformMeasurements()).toMatchObject({
+      width: 5,
+      height: 20,
+      scaleX: 50,
+    });
+    tool.onPointerUp(event, context(position(5, 10)));
+    tool.onPointerDown(event, context(position(5.1, -0.1)));
+    tool.onPointerMove(event, context(position(12.6, 12.6)));
+    expect(tool.getTransformMeasurements()?.angle).not.toBe(0);
+    expect(tool.getTransformMeasurements()?.width).toBeCloseTo(5);
+    expect(tool.getTransformMeasurements()?.height).toBeCloseTo(20);
+    tool.onPointerUp(
+      { ...event, type: "pointercancel" } as PointerEvent,
+      context(position(12.6, 12.6)),
+    );
+    expect(tool.getTransformMeasurements()).toMatchObject({
+      width: 5,
+      angle: 0,
+      scaleX: 50,
+    });
+    tool.toggleTransform();
+    tool.toggleTransform();
+    expect(tool.getTransformMeasurements()).toMatchObject({
+      width: 5,
+      scaleX: 100,
+      scaleY: 100,
+      angle: 0,
+    });
+  });
+});

@@ -173,6 +173,8 @@ export class SelectTool extends Tool<SelectToolState> {
     map: (point: Position) => Position;
   } | null = null;
 
+  private transformOrigin: { width: number; height: number } | null = null;
+
   private isDragging = false;
   private dragStartPos = { x: 0, y: 0 };
   private dragOriginPositions: Position[] = [];
@@ -715,6 +717,8 @@ export class SelectTool extends Tool<SelectToolState> {
     this.pruneHiddenSelection();
     const { toolState, setToolState } = this.getState();
     this.transformFrame = null;
+    this.transformOrigin = null;
+    this.getTransformFrame();
     const enabled =
       !(toolState?.transformMode && Boolean(toolState.skewMode) === skew) &&
       this.canTransformSelection();
@@ -726,6 +730,24 @@ export class SelectTool extends Tool<SelectToolState> {
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
     });
+  }
+
+  public getTransformMeasurements() {
+    const frame = this.getTransformFrame();
+    if (!frame || !this.transformOrigin) return null;
+    const width = frame.bounds.maxX - frame.bounds.minX;
+    const height = frame.bounds.maxY - frame.bounds.minY;
+    return {
+      width,
+      height,
+      scaleX: this.transformOrigin.width
+        ? (width / this.transformOrigin.width) * 100
+        : 100,
+      scaleY: this.transformOrigin.height
+        ? (height / this.transformOrigin.height) * 100
+        : 100,
+      angle: (frame.angle * 180) / Math.PI,
+    };
   }
 
   public mirrorSelection(direction: MirrorSelectionDirection): void {
@@ -741,9 +763,7 @@ export class SelectTool extends Tool<SelectToolState> {
     const points = this.getTransformPoints().map((point, index) => {
       const objectIndex = index - vertices;
       const offset = objectOffsets[objectIndex];
-      return offset
-        ? { x: point.x + offset.x, y: point.y + offset.y }
-        : point;
+      return offset ? { x: point.x + offset.x, y: point.y + offset.y } : point;
     });
     const bounds = getTransformBounds(points);
     if (!toolState || !bounds) return;
@@ -757,12 +777,10 @@ export class SelectTool extends Tool<SelectToolState> {
       if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
       if (objects) {
         this.updateSelectedObjects(
-          positions
-            .slice(vertices, vertices + objects)
-            .map((point, index) => ({
-              x: point.x - objectOffsets[index].x,
-              y: point.y - objectOffsets[index].y,
-            })),
+          positions.slice(vertices, vertices + objects).map((point, index) => ({
+            x: point.x - objectOffsets[index].x,
+            y: point.y - objectOffsets[index].y,
+          })),
         );
       }
       if (toolState.selectedPictures.length) {
@@ -875,6 +893,10 @@ export class SelectTool extends Tool<SelectToolState> {
     const bounds = getTransformBounds(points);
     if (!bounds) return null;
     const frame = { bounds, angle: 0 };
+    this.transformOrigin = {
+      width: bounds.maxX - bounds.minX,
+      height: bounds.maxY - bounds.minY,
+    };
     this.transformFrame = { frame, points: points.map(clonePosition) };
     return frame;
   }
@@ -1043,6 +1065,12 @@ export class SelectTool extends Tool<SelectToolState> {
         },
       };
     }
+    this.applyTransformDrag();
+  }
+
+  private applyTransformDrag(): void {
+    const drag = this.transformDrag;
+    if (!drag) return;
     const positions = drag.points.map(drag.map);
     this.dragHasChanges = positions.some(
       (point, index) =>

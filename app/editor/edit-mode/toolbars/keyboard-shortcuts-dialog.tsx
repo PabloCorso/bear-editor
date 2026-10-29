@@ -550,12 +550,15 @@ function getShortcutGroups(
       ],
     },
     {
-      title: "Tool panels",
+      title: "Tool menus",
       items: [
         {
-          shortcut: "Tool key",
-          label:
-            "Switch tools using the current choice; press again to toggle its panel",
+          shortcut: ["A", "P", "T", "C"],
+          label: "Activate and open options; press again to close",
+        },
+        {
+          shortcut: ["V", "G", "…"],
+          label: "Select the tool without opening the Vertex menu",
         },
         {
           shortcut: "Enter",

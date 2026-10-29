@@ -26,7 +26,11 @@ import {
   CanvasTipKey,
   CanvasTipKeyButton,
 } from "./canvas-tip";
-import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
+import { TransformMeasurements } from "./transform-measurements";
+import type {
+  SelectTool,
+  SelectToolState,
+} from "~/editor/edit-mode/tools/select-tool";
 import { useModifier } from "~/utils/misc";
 import {
   DEFAULT_CUT_CONNECT_WIDTH_PX,
@@ -80,8 +84,9 @@ export function ToolInfo() {
   if (activeToolId === "select" && select?.transformMode) {
     return (
       <CanvasTipGroup
-        title={`${toolName} · Resize & Rotate`}
+        title="Resize & Rotate"
         aria-label="Active tool info"
+        className="flex-nowrap"
       >
         <CanvasTipSegment>
           Resize proportionally
@@ -91,6 +96,7 @@ export function ToolInfo() {
           Rotate in 45° steps
           <CanvasTipKey>{modifier}</CanvasTipKey>
         </CanvasTipSegment>
+        <TransformMeasurements tool={getActiveTool<SelectTool>()} />
       </CanvasTipGroup>
     );
   }

@@ -691,18 +691,18 @@ function SelectionActionsMenu({
       >
         {canTransform && (
           <>
-            <DropdownMenuItem shortcut="R" onClick={onTransform}>
-              {transforming ? "Exit resize & rotate" : "Resize & rotate"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onSkew}>
-              {skewing ? "Exit skew" : "Skew"}
-            </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger openOnHover>
-                Mirror
+                Transform
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuGroup>
+                  <DropdownMenuItem shortcut="R" onClick={onTransform}>
+                    {transforming ? "Exit resize & rotate" : "Resize & rotate"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onSkew}>
+                    {skewing ? "Exit skew" : "Skew"}
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => onMirror("horizontal")}>
                     Mirror horizontally
                   </DropdownMenuItem>
