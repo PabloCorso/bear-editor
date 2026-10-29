@@ -135,6 +135,7 @@ export function PlayModeOverlay({
   } | null>(null);
   const store = useEditorStore();
   const { lgr } = useLgrAssets();
+  const playModeZoom = useEditor((state) => state.playModeZoom);
   const playSettings = usePlaySettings();
   const gameStateRef = useRef<GameState | null>(null);
   const inputRef = useRef<InputManager | null>(null);
@@ -386,6 +387,19 @@ export function PlayModeOverlay({
   );
 
   useEffect(
+    function applyStoredPlayModeZoom() {
+      const gameState = gameStateRef.current;
+      if (!gameState) return;
+      gameState.camera.zoom = clamp(
+        playModeZoom,
+        PLAY_MODE_MIN_ZOOM,
+        PLAY_MODE_MAX_ZOOM,
+      );
+    },
+    [playModeZoom],
+  );
+
+  useEffect(
     function setupPlayModeOverlay() {
       const canvas = canvasRef.current;
       const container = containerRef.current;
@@ -462,6 +476,7 @@ export function PlayModeOverlay({
       canvas.addEventListener("wheel", handleWheel, { passive: false });
 
       const resetGame = () => {
+        const currentZoom = gameState.camera.zoom;
         const active = activeTestStart(store.getState());
         // The active start can change during this play session after a capture.
         levelData = convertLevelToGameData(
@@ -477,7 +492,7 @@ export function PlayModeOverlay({
         if (!active.ride) input.seedJustPressedKey(keyBindingsRef.current.turn);
         gameState.lastTimestamp = performance.now();
         gameState.camera.zoom = clamp(
-          store.getState().playModeZoom || DEFAULT_PLAY_MODE_ZOOM,
+          currentZoom,
           PLAY_MODE_MIN_ZOOM,
           PLAY_MODE_MAX_ZOOM,
         );
@@ -623,7 +638,6 @@ export function PlayModeOverlay({
       lgr,
       releaseMobileControls,
       rendererBackend,
-      setPlayModeZoom,
       store,
       stopPlayMode,
       syncStoredZoom,

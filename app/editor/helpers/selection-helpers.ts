@@ -268,12 +268,13 @@ export function isStartObjectHit(
   start: Position,
   mode: StartSelectionMode,
   imageHitAreaReady: boolean,
+  coords?: import("../kuski-geometry").BikeCoords,
 ): boolean {
   const useImageHitArea = mode === "boundsWithImage" && imageHitAreaReady;
 
   if (!useImageHitArea && mode === "boundsOnly") {
     // Keep selected start interactions tied to the visual handle points (head + wheels).
-    const circles = getKuskiSelectionCircles({ start });
+    const circles = getKuskiSelectionCircles({ start, coords });
     return circles.some((circle) => {
       const dx = point.x - circle.x;
       const dy = point.y - circle.y;
@@ -285,6 +286,7 @@ export function isStartObjectHit(
   return isPointInKuskiSelectionArea({
     point,
     start,
+    coords,
     useImageHitArea,
   });
 }

@@ -2,7 +2,10 @@ import { getDevicePixelSnappedViewportCenter } from "~/editor/helpers/camera-hel
 import { LgrAssets } from "~/components/lgr-assets";
 import { testStartGhostOpacity } from "~/editor/test-starts";
 import { PLAY_MODE_PIXELS_PER_METER } from "~/editor/play-mode/play-settings";
-import { buildPlayModeScene } from "~/editor/play-mode/scene/play-mode-scene-builder";
+import {
+  buildPlayModeScene,
+  buildRideMomentBikeSceneItem,
+} from "~/editor/play-mode/scene/play-mode-scene-builder";
 import type { PlayModeRenderVisibility } from "~/editor/play-mode/scene/play-mode-scene";
 import { getPictureWorldDimensions } from "~/editor/render/picture-metrics";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
@@ -107,25 +110,33 @@ export class PlayModeSceneRenderer {
         if (item.type === "bike")
           item.color = active?.color ?? starts.testStarts.levelColor;
       const markers = [
-        ...starts.testStarts.items.filter((item) => item.id !== active?.id),
+        ...starts.testStarts.items,
         ...(active
           ? [{ position: starts.start, color: starts.testStarts.levelColor }]
           : []),
       ];
       const foregroundIndex = scene.drawItems.findIndex(
-        (item) => item.distance < DEFAULT_OBJECT_RENDER_DISTANCE,
+        (item) => item.distance <= DEFAULT_OBJECT_RENDER_DISTANCE,
       );
       scene.drawItems.splice(
         foregroundIndex === -1 ? scene.drawItems.length : foregroundIndex,
         0,
-        ...markers.map((item) => ({
-          type: "start" as const,
-          position: item.position,
-          color: item.color,
-          opacity: testStartGhostOpacity.play,
-          distance: DEFAULT_OBJECT_RENDER_DISTANCE,
-          clip: 0,
-        })),
+        ...markers.map((item) =>
+          "ride" in item && item.ride
+            ? {
+                ...buildRideMomentBikeSceneItem(item.ride),
+                color: item.color,
+                opacity: testStartGhostOpacity.play,
+              }
+            : {
+                type: "start" as const,
+                position: item.position,
+                color: item.color,
+                opacity: testStartGhostOpacity.play,
+                distance: DEFAULT_OBJECT_RENDER_DISTANCE,
+                clip: 0,
+              },
+        ),
       );
     }
     this.worldRenderer.render(scene);

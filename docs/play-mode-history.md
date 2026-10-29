@@ -1,6 +1,6 @@
 # Play mode rewind and captured starts
 
-Hold Backspace or the rewind button to retrace the current ride at normal speed.
+Hold R or the rewind button to retrace the current ride at normal speed.
 Release to continue with the current controls. Rewind works during a live ride
 and after death or finishing with the default pause behavior. Zoom remains live.
 The complete approach is retained, including the initial state; history is not a

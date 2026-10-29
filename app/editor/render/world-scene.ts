@@ -87,6 +87,11 @@ export type WorldRenderBikeItem = {
   type: "bike";
   color?: string;
   opacity?: number;
+  forceVisible?: boolean;
+  showBounds?: boolean;
+  boundsLineWidth?: number;
+  boundsColor?: string;
+  boundsOpacity?: number;
   distance: number;
   start: WorldPoint;
   coords: BikeCoords;

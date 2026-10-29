@@ -30,7 +30,7 @@ export const defaultPlaySettings: PlaySettings = {
     voltLeft: "ArrowLeft",
     voltRight: "ArrowRight",
     aloVolt: "KeyA",
-    rewind: "Backspace",
+    rewind: "KeyR",
     captureStart: "KeyS",
   },
 };
