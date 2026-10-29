@@ -6,16 +6,13 @@ When writing user-facing interface copy, follow
 
 Never create test files unless explicitly requested by a human.
 
-## Agent skills
+## Skill configuration
 
-### Issue tracker
+This side project does not use an issue tracker for planning. Use
+[`ROADMAP.md`](ROADMAP.md), the user prompt, and the current branch or pull
+request as specification sources. Never create or publish issues or tickets
+unless explicitly requested by a human.
 
-Issues are tracked in this repo's GitHub Issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The repo uses the default five triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-This repo is configured as single-context: one root `CONTEXT.md` and one root `docs/adr/`. See `docs/agents/domain.md`.
+Domain language lives in a root `GLOSSARY.md`, and architectural decisions live
+in `docs/adr/`. Create either lazily, only when a skill has a concrete term or
+decision to record.
