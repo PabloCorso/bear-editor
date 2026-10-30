@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-10-30
+
+- Add a configurable canvas grid and snap to grid under Level options → Grid. Hold Alt for free placement and movement.
+
 ## 2026-10-28
 
 - Add Frame, Draw and Brush tools.

@@ -1,3 +1,4 @@
+import { defaultGridSettings, normalizeGridSettings } from "./grid";
 import {
   DEFAULT_LEVEL_TITLE,
   normalizeLevelTitle,
@@ -69,6 +70,7 @@ const defaultEditorPreferences: EditorPreferences = {
   playSettings: defaultPlaySettings,
   vertexEdgeClickBehavior: "default",
   autoGrassOptions: defaultAutoGrassOptions,
+  grid: defaultGridSettings,
 };
 
 function loadVertexEdgeClickBehavior(
@@ -111,6 +113,7 @@ export function loadEditorPreferences(): EditorPreferences {
       preferences?.vertexEdgeClickBehavior,
     ),
     autoGrassOptions: loadAutoGrassOptions(preferences?.autoGrassOptions),
+    grid: normalizeGridSettings(preferences?.grid),
   };
 }
 
@@ -165,6 +168,7 @@ function getComparableEditorPreferences(state: EditorState): EditorPreferences {
     playSettings: state.playSettings,
     vertexEdgeClickBehavior: state.vertexEdgeClickBehavior,
     autoGrassOptions: state.autoGrassOptions,
+    grid: state.grid,
   };
 }
 

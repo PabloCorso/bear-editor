@@ -1,3 +1,4 @@
+import { defaultGridSettings, normalizeGridSettings } from "./grid";
 import {
   getSessionArtifacts,
   findSessionArtifact,
@@ -436,6 +437,11 @@ export function createEditorStore({
         defaultLevelTitle,
         checkTopologyOnSave: initialPreferences?.checkTopologyOnSave ?? true,
 
+        grid: normalizeGridSettings(
+          initialPreferences?.grid ?? defaultGridSettings,
+        ),
+        gridSnapBypassed: false,
+
         // View settings
         animateSprites: initialPreferences?.animateSprites ?? true,
         showSprites: true,
@@ -770,6 +776,15 @@ export function createEditorStore({
 
           setVertexEdgeClickBehavior: (vertexEdgeClickBehavior) =>
             set({ vertexEdgeClickBehavior }),
+
+          setGrid: (settings) =>
+            set((state) => ({
+              grid: normalizeGridSettings({ ...state.grid, ...settings }),
+            })),
+          setGridSnapBypassed: (gridSnapBypassed) => {
+            if (get().gridSnapBypassed !== gridSnapBypassed)
+              set({ gridSnapBypassed });
+          },
 
           setAutoGrassOptions: (options) =>
             set((state) => ({

@@ -1,4 +1,5 @@
 import { Checkbox } from "~/components/ui/checkbox";
+import { defaultGridSettings } from "~/editor/grid";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -950,6 +951,7 @@ function LevelPresetPreview({
               playSettings: defaultPlaySettings,
               vertexEdgeClickBehavior: "default",
               autoGrassOptions: defaultAutoGrassOptions,
+              grid: defaultGridSettings,
             },
           }),
           initialDocument: {

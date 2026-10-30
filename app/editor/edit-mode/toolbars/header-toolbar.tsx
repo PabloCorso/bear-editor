@@ -1,3 +1,4 @@
+import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { getLevelTopology } from "~/editor/helpers/level-topology";
@@ -383,6 +384,7 @@ function LevelOptionsMenu({
         >
           AutoGrass level
         </DropdownMenuItem>
+        <GridMenu />
         <DropdownMenuSeparator />
         <DropdownMenuItem iconBefore={<InfoIcon />} onClick={onOpenProperties}>
           Level properties…

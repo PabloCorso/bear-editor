@@ -174,4 +174,5 @@ export type WorldRenderScene = {
   polygons: WorldRenderPolygonItem[];
   drawItems: WorldRenderDrawItem[];
   overlays?: WorldRenderOverlayItem[];
+  backgroundOverlays?: WorldRenderOverlayItem[];
 };

@@ -1,3 +1,4 @@
+import { buildGridOverlays } from "~/editor/grid";
 import {
   DRAFT_PREVIEW_OPACITY,
   uiColors,
@@ -56,6 +57,7 @@ export function buildEditorWorldScene({
 
   return {
     clearColor: "#1a1a2e",
+    backgroundOverlays: buildGridOverlays(state.grid, viewportRect, state.zoom),
     ground: state.ground,
     sky: state.sky,
     animateSprites: state.animateSprites,

@@ -55,7 +55,7 @@ export class TextureTool extends Tool<TextureToolState> {
     }
     if (!toolState?.texture) return false;
 
-    const position = context.worldPos;
+    const position = this.snapPosition(context.worldPos, _event.altKey);
     const defaults =
       standardSprites.textures.find(
         (texture) => texture.texture === toolState.texture,
@@ -96,7 +96,9 @@ export class TextureTool extends Tool<TextureToolState> {
       name: "",
       texture: toolState.texture,
       mask: maskName,
-      position: toolState.propertiesMenu?.worldPosition ?? state.mousePosition,
+      position: this.snapPosition(
+        toolState.propertiesMenu?.worldPosition ?? state.mousePosition,
+      ),
     };
 
     return {

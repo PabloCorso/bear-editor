@@ -1,3 +1,10 @@
+import { AppleTool, defaultAppleState } from "./apple-tools";
+import { FlowerTool } from "./flower-tool";
+import { KillerTool } from "./killer-tool";
+import { PictureTool, defaultPictureState } from "./picture-tool";
+import { TextureTool, defaultTextureState } from "./texture-tool";
+import { ColorTool } from "./color-tool";
+import { defaultGridSettings, type GridSettings } from "~/editor/grid";
 import { describe, expect, it } from "vitest";
 import type { EditorState } from "~/editor/editor-state";
 import { createEditorStore, type EditorStore } from "~/editor/editor-store";
@@ -287,6 +294,36 @@ describe("Cut & Connect", () => {
   const pointer = { pointerId: 1, type: "pointerup" } as PointerEvent;
   const key = (key: string) => ({ key, preventDefault() {} }) as KeyboardEvent;
 
+  it.each(["click", "drag", "enter"])(
+    "keeps snapped cut preview, overlays and %s commit identical",
+    (method) => {
+      for (const altKey of [false, true]) {
+        const { store, tool } = createCutTool();
+        store.getState().actions.setGrid({ snap: true, size: 2 });
+        store.getState().actions.setGridSnapBypassed(altKey);
+        const event = { ...pointer, altKey } as PointerEvent;
+        tool.onPointerDown(event, context(-2.3, 4.7));
+        if (method !== "drag") tool.onPointerUp(event, context(-2.3, 4.7));
+        store.getState().actions.setMousePosition(position(12.3, 4.7));
+        const preview = tool.getDrafts().replacementPolygons;
+        expect(preview).toBeDefined();
+        const line = tool
+          .getWorldOverlays({
+            viewportRect: { minX: -20, minY: -20, maxX: 20, maxY: 20 },
+          })
+          .find((item) => item.type === "line");
+        expect(line).toMatchObject({
+          to: altKey ? position(12.3, 4.7) : position(12, 4),
+        });
+        if (method === "click") tool.onPointerDown(event, context(12.3, 4.7));
+        if (method === "drag") tool.onPointerUp(event, context(12.3, 4.7));
+        if (method === "enter")
+          tool.onKeyDown({ ...key("Enter"), altKey }, context(12.3, 4.7));
+        expect(store.getState().polygons).toEqual(preview);
+      }
+    },
+  );
+
   it("rejects an invalid preview and commit without changing history", () => {
     const { store, tool } = createCutTool();
     const polygons = [rectangle(0, 0, 4, 6), rectangle(8, 4, 4, 4)];
@@ -379,13 +416,16 @@ function createVertexTool({
   mousePosition,
   toolState,
   mouseOnCanvas = true,
+  grid = defaultGridSettings,
 }: {
   polygons: Polygon[];
   mousePosition: Position;
   toolState: VertexToolState;
   mouseOnCanvas?: boolean;
+  grid?: GridSettings;
 }) {
   const state = {
+    grid,
     polygons,
     mousePosition,
     mouseOnCanvas,
@@ -414,6 +454,56 @@ function createVertexTool({
 }
 
 describe("VertexTool", () => {
+  it.each(["draw", "brush"] as const)(
+    "keeps %s strokes continuous from the first point with snapping enabled",
+    (variant) => {
+      const tool = createVertexTool({
+        polygons: [],
+        mousePosition: position(2.3, 1.7),
+        grid: { visible: false, snap: true, size: 10 },
+        toolState: { variant, drawingPolygon: polygon([]) },
+      });
+      tool.onPointerDown({ altKey: false } as PointerEvent, {
+        worldPos: position(2.3, 1.7),
+        screenX: 0,
+        screenY: 0,
+      });
+      tool.onPointerMove({} as PointerEvent, {
+        worldPos: position(5.3, 1.7),
+        screenX: 30,
+        screenY: 0,
+      });
+      const vertices = tool.getToolState().drawingPolygon.vertices;
+      expect(vertices[0]).toEqual(position(2.3, 1.7));
+      expect(vertices.length).toBeGreaterThan(1);
+      expect(vertices.every((vertex) => vertex.y === 1.7)).toBe(true);
+    },
+  );
+
+  it.each([false, true])(
+    "snaps inserted vertices, with Alt bypass %s",
+    (altKey) => {
+      const tool = createVertexTool({
+        polygons: [],
+        mousePosition: position(2.3, -1.7),
+        grid: { visible: false, snap: true, size: 1 },
+        toolState: {
+          variant: "normal",
+          drawingPolygon: polygon([position(0, 0)]),
+        },
+      });
+      const event = { altKey } as PointerEvent;
+      tool.onPointerDown(event, {
+        worldPos: position(2.3, -1.7),
+        screenX: 0,
+        screenY: 0,
+      });
+      expect(tool.getToolState().drawingPolygon.vertices[1]).toEqual(
+        altKey ? position(2.3, -1.7) : position(2, -2),
+      );
+    },
+  );
+
   it.each([
     { key: "+", field: "depth", delta: 1 },
     { key: "=", field: "depth", delta: 1 },
@@ -746,6 +836,24 @@ describe("VertexTool", () => {
 });
 
 describe("Frame tool", () => {
+  it("targets the previewed polygon using raw coordinates even on a coarse grid", () => {
+    const store = createEditorStore({ historyUpdateThrottle: 0 });
+    const tool = new VertexTool(store);
+    store.getState().actions.setPolygons([rectangle(2, 2, 2, 2)]);
+    store.getState().actions.setGrid({ snap: true, size: 100 });
+    store.getState().actions.setMouseOnCanvas(true);
+    store.getState().actions.setMousePosition(position(3, 3));
+    tool.onActivate("frame");
+    const preview = tool.getDrafts().polygons;
+    expect(preview?.length).toBeGreaterThan(0);
+    tool.onPointerDown({ button: 0, altKey: false } as PointerEvent, {
+      worldPos: position(3, 3),
+      screenX: 0,
+      screenY: 0,
+    });
+    expect(store.getState().polygons).toEqual(preview);
+  });
+
   const square = polygon([
     position(0, 0),
     position(10, 0),
@@ -967,4 +1075,46 @@ describe("Frame tool", () => {
     key(" ");
     expect(tool.getToolState().frameMode).toBe("inside");
   });
+});
+
+describe("Placement tool grid consistency", () => {
+  it.each([
+    [AppleTool, "apples", defaultAppleState],
+    [FlowerTool, "flowers", {}],
+    [KillerTool, "killers", {}],
+    [PictureTool, "pictures", defaultPictureState],
+    [TextureTool, "pictures", defaultTextureState],
+    [ColorTool, "pictures", defaultPictureState],
+  ] as const)(
+    "matches preview and placement for %s",
+    (ToolClass, collection, defaults) => {
+      for (const altKey of [false, true]) {
+        const store = createEditorStore({ historyUpdateThrottle: 0 });
+        const tool = new ToolClass(store);
+        const actions = store.getState().actions;
+        actions.setToolState<Record<string, unknown>>(tool.meta.id, defaults);
+        actions.setGrid({ snap: true, size: 2 });
+        actions.setGridSnapBypassed(altKey);
+        actions.setMouseOnCanvas(true);
+        actions.setMousePosition(position(2.3, -1.7));
+        const preview = tool.getDrafts();
+        const expectedPosition = altKey ? position(2.3, -1.7) : position(2, -2);
+        expect(preview).toMatchObject({
+          [collection]: [
+            collection === "flowers" || collection === "killers"
+              ? expectedPosition
+              : { position: expectedPosition },
+          ],
+        });
+        tool.onPointerDown({ altKey } as PointerEvent, {
+          worldPos: position(2.3, -1.7),
+          screenX: 0,
+          screenY: 0,
+        });
+        expect(store.getState()[collection].at(-1)).toEqual(
+          (preview as Record<string, unknown[]>)[collection][0],
+        );
+      }
+    },
+  );
 });

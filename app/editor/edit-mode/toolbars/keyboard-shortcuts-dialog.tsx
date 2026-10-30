@@ -655,6 +655,10 @@ function getShortcutGroups(
       title: "General",
       items: [
         {
+          shortcut: "Alt",
+          label: "Hold to bypass grid snapping while placing or dragging",
+        },
+        {
           shortcut: "Enter",
           label: "Save player name while renaming",
         },

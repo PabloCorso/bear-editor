@@ -1,4 +1,5 @@
 import type { TopologyInspection } from "./helpers/level-topology";
+import type { GridSettings } from "./grid";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -102,6 +103,9 @@ export type EditorState = EditorLevel & {
   defaultLevelTitle: string;
   checkTopologyOnSave: boolean;
 
+  grid: GridSettings;
+  gridSnapBypassed: boolean;
+
   // View settings
   animateSprites: boolean;
   showSprites: boolean;
@@ -199,6 +203,8 @@ export type EditorState = EditorLevel & {
       keyBindings?: Partial<PlayKeyBindings>;
     }) => void;
     setVertexEdgeClickBehavior: (behavior: VertexEdgeClickBehavior) => void;
+    setGrid: (settings: Partial<GridSettings>) => void;
+    setGridSnapBypassed: (bypassed: boolean) => void;
     setAutoGrassOptions: (options: Partial<AutoGrassOptions>) => void;
     toggleLevelVisibility: (key: keyof LevelVisibilitySettings) => void;
     resetLevelVisibility: () => void;

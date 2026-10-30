@@ -180,6 +180,7 @@ export class EditorEngine {
   private modifierPressed = false;
   private pressedKeys = new Set<string>();
   private handleWindowBlur = () => {
+    this.store.getState().actions.setGridSnapBypassed(false);
     this.pressedKeys.clear();
     this.updateModifierPressed(false);
     this.cancelTouchContextMenuTimer();
@@ -331,6 +332,7 @@ export class EditorEngine {
       state.viewPortOffset,
       state.zoom,
     );
+    this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
     const forceObjectSelection = event.shiftKey || event.altKey;
     const activeTool = state.actions.getActiveTool();
@@ -884,6 +886,7 @@ export class EditorEngine {
   }
 
   private handleKeyDown = (event: KeyboardEvent) => {
+    this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.add(event.code);
     const state = this.store.getState();
@@ -1150,6 +1153,7 @@ export class EditorEngine {
   }
 
   private handleKeyUp = (event: KeyboardEvent) => {
+    this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.delete(event.code);
     const state = this.store.getState();
