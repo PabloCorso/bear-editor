@@ -145,6 +145,7 @@ async function editorLevelFromBuffer(data: ArrayBuffer) {
 
   const level: EditorLevel = {
     levelName: elmaLevel.name,
+    top10: elmaLevel.top10,
     lgr: elmaLevel.lgr || "default",
     ground: elmaLevel.ground || Texture.Ground,
     sky: elmaLevel.sky || Texture.Sky,
@@ -225,6 +226,9 @@ export function elmaLevelFromEditorState(state: EditorState) {
     grass: false,
     vertices: [],
   }));
+
+  // elmajs sorts time lists during serialization; never pass store-owned arrays.
+  level.top10 = structuredClone(state.top10 ?? { single: [], multi: [] });
 
   level.integrity = level.calculateIntegrity();
 
