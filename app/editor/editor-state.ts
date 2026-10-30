@@ -127,6 +127,7 @@ export type EditorState = EditorLevel & {
     addTestStart: (
       position: Position,
       ride?: import("./play-mode/engine/game/ride-history").RideMoment,
+      options?: { select?: boolean },
     ) => void;
     moveTestStart: (id: string, position: Position) => void;
     renameTestStart: (id: string | null, name: string) => void;

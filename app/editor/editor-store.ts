@@ -467,7 +467,7 @@ export function createEditorStore({
           setLgr: (lgr) => set({ lgr }),
           setGround: (ground) => set({ ground }),
           setSky: (sky) => set({ sky }),
-          addTestStart: (position, ride) =>
+          addTestStart: (position, ride, options) =>
             set((state) => {
               const session = state.testStarts;
               const number = session.nextNumber;
@@ -486,6 +486,27 @@ export function createEditorStore({
                   nextNumber: number + 1,
                 },
                 testStartMenu: null,
+                ...(options?.select
+                  ? {
+                      toolState: {
+                        ...state.toolState,
+                        select: {
+                          ...(state.toolState.select as SelectToolState),
+                          selectedVertices: [],
+                          selectedObjects: [item.position],
+                          selectedPictures: [],
+                          isDragging: false,
+                          isMarqueeSelecting: false,
+                          transformMode: false,
+                          skewMode: false,
+                          hoveredObject: undefined,
+                          hoveredPictureBounds: undefined,
+                          contextMenuType: undefined,
+                          contextMenuPosition: undefined,
+                        },
+                      },
+                    }
+                  : {}),
               };
             }),
           moveTestStart: (id, position) =>

@@ -573,7 +573,9 @@ export function PlayModeOverlay({
           const wheel = moment.snapshot.motor.leftWheel.r;
           store
             .getState()
-            .actions.addTestStart({ x: wheel.x, y: -wheel.y }, moment);
+            .actions.addTestStart({ x: wheel.x, y: -wheel.y }, moment, {
+              select: true,
+            });
           captureRequestedRef.current = false;
         }
         setRewindState((previous) => {
