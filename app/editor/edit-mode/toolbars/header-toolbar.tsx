@@ -387,7 +387,7 @@ function LevelOptionsMenu({
         <GridMenu />
         <DropdownMenuSeparator />
         <DropdownMenuItem iconBefore={<InfoIcon />} onClick={onOpenProperties}>
-          Level properties…
+          Level properties
         </DropdownMenuItem>
         <DropdownMenuItem
           iconBefore={<GearIcon />}
