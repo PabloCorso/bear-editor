@@ -36,8 +36,6 @@ Planned features and feedback for Bear Editor.
 - Export to SVG
 - Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
 - Import level
-- Grid
-  - Snap to grid
 - Replace selection
   - Replace with copied content
 - History playback: scrub backward and forward through the existing undo/redo history with a slider, or press play to replay edits sequentially for fun. Could also help show who changed what in multiplayer editing.

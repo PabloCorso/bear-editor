@@ -1,3 +1,4 @@
+import { snapGridTranslation, snapToGrid } from "~/editor/grid";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorStore } from "~/editor/editor-store";
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
@@ -27,6 +28,26 @@ export abstract class Tool<T extends ToolState = ToolState> {
       state.actions.setToolState<T>(this.meta.id, toolStatePatch);
     };
     return { state, toolState, setToolState };
+  }
+
+  // Tool policies and preview/commit conventions: docs/tool-snapping.md.
+  protected snapPosition(position: Position, bypass?: boolean): Position {
+    const state = this.store.getState();
+    return (bypass ?? state.gridSnapBypassed)
+      ? position
+      : snapToGrid(position, state.grid);
+  }
+
+  // Keep one anchor for the whole operation so relative geometry is preserved.
+  protected snapTranslation(
+    anchor: Position,
+    delta: Position,
+    bypass?: boolean,
+  ): Position {
+    const state = this.store.getState();
+    return (bypass ?? state.gridSnapBypassed)
+      ? delta
+      : snapGridTranslation(anchor, delta, state.grid);
   }
 
   // Lifecycle

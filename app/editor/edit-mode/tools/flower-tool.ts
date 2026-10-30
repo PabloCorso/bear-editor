@@ -12,13 +12,13 @@ export class FlowerTool extends Tool {
 
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
     const { state } = this.getState();
-    state.actions.addFlower(context.worldPos);
+    state.actions.addFlower(this.snapPosition(context.worldPos, _event.altKey));
     return true;
   }
 
   getDrafts() {
     const { state } = this.getState();
     if (!state.mouseOnCanvas) return {};
-    return { flowers: [state.mousePosition] };
+    return { flowers: [this.snapPosition(state.mousePosition)] };
   }
 }

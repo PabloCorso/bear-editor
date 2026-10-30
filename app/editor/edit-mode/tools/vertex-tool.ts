@@ -460,7 +460,7 @@ export class VertexTool extends Tool<VertexToolState> {
     const { state, toolState } = this.getState();
     const start = toolState?.drawingPolygon.vertices[0];
     if (!start || (!end && !state.mouseOnCanvas)) return undefined;
-    end ??= state.mousePosition;
+    end ??= this.snapPosition(state.mousePosition);
     const width =
       (toolState?.cutConnectWidthPx ?? DEFAULT_CUT_CONNECT_WIDTH_PX) /
       ELMA_PIXELS_PER_WORLD_UNIT;
@@ -480,9 +480,9 @@ export class VertexTool extends Tool<VertexToolState> {
     return result;
   }
 
-  private commitCut(end: Position): void {
+  private commitCut(end: Position, bypass?: boolean): void {
     const { state } = this.getState();
-    const result = this.getCutPreview(end);
+    const result = this.getCutPreview(this.snapPosition(end, bypass));
     if (result && result.polygons !== state.polygons) {
       this.runHistoryBatch(() => {
         state.actions.setPolygons(result.polygons);
@@ -528,7 +528,7 @@ export class VertexTool extends Tool<VertexToolState> {
       pointer.dragged ||
       Math.hypot(context.screenX - pointer.x, context.screenY - pointer.y) >= 4
     ) {
-      this.commitCut(context.worldPos);
+      this.commitCut(context.worldPos, event.altKey);
     }
     return true;
   }
@@ -624,7 +624,10 @@ export class VertexTool extends Tool<VertexToolState> {
     if (!toolState || toolState.drawingPolygon.vertices.length === 0) return [];
     if (toolState.variant === "brush") return this.getDrawVertices();
     return includeMouse && state.mouseOnCanvas
-      ? [...toolState.drawingPolygon.vertices, state.mousePosition]
+      ? [
+          ...toolState.drawingPolygon.vertices,
+          this.snapPosition(state.mousePosition),
+        ]
       : toolState.drawingPolygon.vertices;
   }
 
@@ -741,7 +744,7 @@ export class VertexTool extends Tool<VertexToolState> {
           {
             vertices: [
               ...toolState.drawingPolygon.vertices,
-              state.mousePosition,
+              this.snapPosition(state.mousePosition),
             ],
             grass: toolState.drawingPolygon.grass,
           },
@@ -753,13 +756,16 @@ export class VertexTool extends Tool<VertexToolState> {
   }
 
   onPointerDown(event: PointerEvent, context: EventContext): boolean {
-    const worldPos = context.worldPos;
     const { state, toolState, setToolState } = this.getState();
     if (!toolState) return false;
+    // Freehand strokes remain continuous, including their first point.
+    const worldPos = isFreehandVariant(toolState.variant)
+      ? context.worldPos
+      : this.snapPosition(context.worldPos, event.altKey);
 
     if (toolState.variant === "cutConnect") {
       if (toolState.drawingPolygon.vertices.length) {
-        this.commitCut(worldPos);
+        this.commitCut(context.worldPos, event.altKey);
       } else {
         this.cutPointer = {
           id: event.pointerId,
@@ -792,7 +798,7 @@ export class VertexTool extends Tool<VertexToolState> {
       toolState.drawingPolygon.vertices.length === 0
     ) {
       const polygon = findPolygonEdgeNearPosition(
-        worldPos,
+        context.worldPos,
         state.polygons,
         selectionThresholds.polygonEdge / state.zoom,
         (candidate) => !candidate.grass,
@@ -804,7 +810,7 @@ export class VertexTool extends Tool<VertexToolState> {
 
     if (toolState.variant === "frame") {
       if (event.button !== 0) return false;
-      const target = this.findFrameTarget(worldPos);
+      const target = this.findFrameTarget(context.worldPos);
       if (!target) return true;
       const polygons = createFramePolygons(
         target,
@@ -855,7 +861,7 @@ export class VertexTool extends Tool<VertexToolState> {
 
     const editTarget = this.findEditTarget(
       state,
-      worldPos,
+      context.worldPos,
       state.vertexEdgeClickBehavior === "default" || checkModifierKey(event),
     );
     if (editTarget) {
@@ -900,7 +906,7 @@ export class VertexTool extends Tool<VertexToolState> {
       }
       if (event.key === "Enter" && toolState.drawingPolygon.vertices.length) {
         if (this.getState().state.mouseOnCanvas)
-          this.commitCut(this.getState().state.mousePosition);
+          this.commitCut(this.getState().state.mousePosition, event.altKey);
         event.preventDefault();
         return true;
       }
@@ -1213,9 +1219,10 @@ export class VertexTool extends Tool<VertexToolState> {
     if (toolState.variant === "cutConnect") {
       const start = toolState.drawingPolygon.vertices[0];
       if (!start || !state.mouseOnCanvas) return [];
-      const preview = this.getCutPreview();
+      const end = this.snapPosition(state.mousePosition);
+      const preview = this.getCutPreview(end);
       const stroke = createPipePolygon(
-        [start, state.mousePosition],
+        [start, end],
         (toolState.cutConnectWidthPx ?? DEFAULT_CUT_CONNECT_WIDTH_PX) /
           ELMA_PIXELS_PER_WORLD_UNIT,
       );
@@ -1237,12 +1244,12 @@ export class VertexTool extends Tool<VertexToolState> {
         {
           type: "line",
           from: start,
-          to: state.mousePosition,
+          to: end,
           color: uiColors.boundsSelected,
           width: 1 / state.zoom,
           opacity: 0.5,
         },
-        ...[start, state.mousePosition].map((point) =>
+        ...[start, end].map((point) =>
           createDraftHandleOverlay(
             point,
             uiSelectionHandle.halfWidthPx / state.zoom,
@@ -1327,7 +1334,7 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     let previewState = toolState;
-    let previewPosition = state.mousePosition;
+    let previewPosition = this.snapPosition(state.mousePosition);
     const isHoverPreview = toolState.drawingPolygon.vertices.length === 0;
     if (isHoverPreview) {
       if (

@@ -585,11 +585,15 @@ export class SelectTool extends Tool<SelectToolState> {
 
   onPointerMove(event: PointerEvent, context: EventContext): boolean {
     if (this.transformDrag) {
-      this.handleTransformDrag(context.worldPos, checkModifierKey(event));
+      this.handleTransformDrag(
+        context.worldPos,
+        checkModifierKey(event),
+        event.altKey,
+      );
       return true;
     }
     if (this.isDragging) {
-      this.handleDragging(context.worldPos, event.shiftKey);
+      this.handleDragging(context.worldPos, event.shiftKey, event.altKey);
       return true;
     }
 
@@ -607,6 +611,8 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
     if (this.isDragging) {
+      if (_event.type !== "pointercancel")
+        this.handleDragging(_context.worldPos, _event.shiftKey, _event.altKey);
       this.isDragging = false;
       this.getState().setToolState({ isDragging: false });
       this.endDragHistoryBatch(true);
@@ -987,15 +993,25 @@ export class SelectTool extends Tool<SelectToolState> {
   private handleTransformDrag(
     worldPos: Position,
     constrainTransform: boolean,
+    bypassGrid?: boolean,
   ): void {
     const drag = this.transformDrag;
     if (!drag) return;
     const center = getTransformCenter(drag.frame.bounds);
     let angle = drag.frame.angle;
     if (drag.handle === "move") {
+      const delta = {
+        x: worldPos.x - this.dragStartPos.x,
+        y: worldPos.y - this.dragStartPos.y,
+      };
+      if (delta.x === 0 && delta.y === 0 && !this.dragHasChanges) return;
+      const anchor = drag.points[0];
+      const translation = anchor
+        ? this.snapTranslation(anchor, delta, bypassGrid)
+        : delta;
       drag.map = (point) => ({
-        x: point.x + worldPos.x - this.dragStartPos.x,
-        y: point.y + worldPos.y - this.dragStartPos.y,
+        x: point.x + translation.x,
+        y: point.y + translation.y,
       });
     } else if (drag.selection.skewMode && typeof drag.handle === "object") {
       drag.map = getSkewTransform(
@@ -1842,7 +1858,11 @@ export class SelectTool extends Tool<SelectToolState> {
     this.marqueeEndPos = worldPos;
   }
 
-  private handleDragging(worldPos: Position, shouldConstrain: boolean): void {
+  private handleDragging(
+    worldPos: Position,
+    shouldConstrain: boolean,
+    bypassGrid?: boolean,
+  ): void {
     const { toolState } = this.getState();
     if (!toolState) return;
 
@@ -1850,16 +1870,22 @@ export class SelectTool extends Tool<SelectToolState> {
       x: worldPos.x - this.dragStartPos.x,
       y: worldPos.y - this.dragStartPos.y,
     };
+    if (rawDelta.x === 0 && rawDelta.y === 0 && !this.dragHasChanges) return;
+    const anchor = this.dragOriginPositions[0];
+    const snappedDelta =
+      anchor && !(shouldConstrain && toolState.selectedVertices.length > 0)
+        ? this.snapTranslation(anchor, rawDelta, bypassGrid)
+        : rawDelta;
     const totalDelta =
       shouldConstrain && toolState.selectedVertices.length > 0
         ? constrainDeltaToClosestDirection(
             rawDelta,
             this.dragConstraintDirections,
           )
-        : rawDelta;
+        : snappedDelta;
     const totalDeltaX = totalDelta.x;
     const totalDeltaY = totalDelta.y;
-    if (totalDeltaX === 0 && totalDeltaY === 0) return;
+    if (totalDeltaX === 0 && totalDeltaY === 0 && !this.dragHasChanges) return;
     this.dragHasChanges = true;
 
     if (toolState.selectedVertices.length > 0) {

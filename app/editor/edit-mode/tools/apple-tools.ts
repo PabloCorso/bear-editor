@@ -28,7 +28,7 @@ export class AppleTool extends Tool<AppleToolState> {
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
     const { state, toolState } = this.getState();
     if (!toolState) return false;
-    const position = context.worldPos;
+    const position = this.snapPosition(context.worldPos, _event.altKey);
     state.actions.addApple({ position, ...toolState });
     return true;
   }
@@ -62,7 +62,7 @@ export class AppleTool extends Tool<AppleToolState> {
   getDrafts() {
     const { state, toolState } = this.getState();
     if (!state.mouseOnCanvas || !toolState) return {};
-    const position = state.mousePosition;
+    const position = this.snapPosition(state.mousePosition);
     const apple: Apple = { position, ...toolState };
     return { apples: [apple] };
   }

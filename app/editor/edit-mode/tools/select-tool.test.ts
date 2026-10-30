@@ -1,3 +1,8 @@
+import {
+  buildGridOverlays,
+  normalizeGridSettings,
+  snapToGrid,
+} from "~/editor/grid";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorStore } from "~/editor/editor-store";
 import {
@@ -439,6 +444,81 @@ describe("SelectTool marquee selection", () => {
 
     expect(getSelection(store)?.selectedPictures).toEqual([picturePosition]);
   });
+});
+
+describe("Grid", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { navigator: { platform: "Linux" } });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+  it("normalizes invalid and legacy preferences", () => {
+    expect(normalizeGridSettings()).toEqual({
+      visible: false,
+      snap: false,
+      size: 1,
+    });
+    expect(normalizeGridSettings({ size: NaN }).size).toBe(1);
+    expect(normalizeGridSettings({ size: 0 }).size).toBe(0.01);
+    expect(
+      snapToGrid(position(-1.7, 2.2), {
+        visible: false,
+        snap: true,
+        size: 0.5,
+      }),
+    ).toEqual(position(-1.5, 2));
+  });
+  it("bounds grid rendering at minimum zoom without changing snap spacing", () => {
+    const grid = { visible: true, snap: true, size: 0.01 };
+    const lines = buildGridOverlays(
+      grid,
+      { minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 },
+      0.2,
+    );
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines.length).toBeLessThan(2005);
+    expect(grid.size).toBe(0.01);
+  });
+  it.each([false, true])(
+    "moves a selection by one shared translation with Alt bypass %s",
+    (altKey) => {
+      const { store, tool, firstApple, secondApple } = createTool();
+      // Pointer modifiers must override stale stored preview modifiers.
+      store.getState().actions.setGridSnapBypassed(!altKey);
+      store.getState().actions.setGrid({ snap: true, size: 3 });
+      store.getState().actions.setToolState<SelectToolState>("select", {
+        selectedObjects: [firstApple, secondApple],
+      });
+      const event = {
+        altKey,
+        shiftKey: false,
+        metaKey: false,
+        ctrlKey: false,
+      } as PointerEvent;
+      tool.onPointerDown(event, {
+        worldPos: firstApple,
+        screenX: 0,
+        screenY: 0,
+      });
+      const destination = position(104.2, 102.2);
+      tool.onPointerMove(event, {
+        worldPos: destination,
+        screenX: 4,
+        screenY: 2,
+      });
+      tool.onPointerUp(event, {
+        worldPos: destination,
+        screenX: 4,
+        screenY: 2,
+      });
+      const [first, second] = store.getState().apples;
+      expect(first.position.x).toBeCloseTo(altKey ? 104.2 : 105);
+      expect(first.position.y).toBeCloseTo(altKey ? 102.2 : 102);
+      expect(second.position.x - first.position.x).toBeCloseTo(100);
+      expect(second.position.y - first.position.y).toBeCloseTo(0);
+    },
+  );
 });
 
 // Exercise the public pointer workflow so preview, cancellation and history

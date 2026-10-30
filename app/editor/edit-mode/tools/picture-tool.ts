@@ -50,7 +50,7 @@ export class PictureTool extends Tool<PictureToolState> {
     }
     if (!toolState?.name) return false;
 
-    const position = context.worldPos;
+    const position = this.snapPosition(context.worldPos, _event.altKey);
     const defaults =
       standardSprites.pictures.find((pic) => pic.name === toolState.name) ||
       defaultPictureState;
@@ -81,7 +81,9 @@ export class PictureTool extends Tool<PictureToolState> {
       name: toolState.name,
       texture: "",
       mask: "",
-      position: toolState.propertiesMenu?.worldPosition ?? state.mousePosition,
+      position: this.snapPosition(
+        toolState.propertiesMenu?.worldPosition ?? state.mousePosition,
+      ),
     };
 
     return {

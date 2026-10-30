@@ -71,6 +71,9 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
       this.polygonDrawer.drawGrassPolygons(scene);
     }
 
+    if (scene.backgroundOverlays?.length) {
+      this.overlayDrawer.draw({ ...scene, overlays: scene.backgroundOverlays });
+    }
     this.polygonDrawer.drawPolygonEdges(scene);
     this.worldItemDrawer.drawQueuedItems(scene, "rest");
     this.worldItemDrawer.drawQueuedItemBounds(scene);

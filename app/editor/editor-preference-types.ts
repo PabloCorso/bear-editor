@@ -13,4 +13,5 @@ export type EditorPreferences = Pick<
   | "playSettings"
   | "vertexEdgeClickBehavior"
   | "autoGrassOptions"
+  | "grid"
 >;

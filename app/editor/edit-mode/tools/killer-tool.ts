@@ -12,13 +12,13 @@ export class KillerTool extends Tool {
 
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
     const { state } = this.getState();
-    state.actions.addKiller(context.worldPos);
+    state.actions.addKiller(this.snapPosition(context.worldPos, _event.altKey));
     return true;
   }
 
   getDrafts() {
     const { state } = this.getState();
     if (!state.mouseOnCanvas) return {};
-    return { killers: [state.mousePosition] };
+    return { killers: [this.snapPosition(state.mousePosition)] };
   }
 }
