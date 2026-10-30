@@ -11,6 +11,7 @@ export default defineConfig([
       "build/**",
       "dist/**",
       ".react-router/**",
+      ".agents/**",
       "node_modules/**",
       "public/**",
     ],

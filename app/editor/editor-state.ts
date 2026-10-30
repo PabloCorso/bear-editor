@@ -31,6 +31,7 @@ type EditorDocumentSnapshot = Pick<
   | "flowers"
   | "start"
   | "pictures"
+  | "top10"
 >;
 
 export type EditorDocumentOriginKind =

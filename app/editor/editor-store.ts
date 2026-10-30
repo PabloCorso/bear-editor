@@ -55,6 +55,7 @@ export type PartialEditorState = Pick<
   | "flowers"
   | "start"
   | "pictures"
+  | "top10"
 >;
 export type EditorHistoryState = PartialEditorState &
   Pick<EditorState, "testStarts">;
@@ -76,6 +77,7 @@ export function getLevelSnapshot(
     | "flowers"
     | "start"
     | "pictures"
+    | "top10"
   >,
 ): PartialEditorState {
   return {
@@ -89,6 +91,7 @@ export function getLevelSnapshot(
     flowers: state.flowers,
     start: state.start,
     pictures: state.pictures,
+    top10: state.top10,
   };
 }
 
@@ -138,6 +141,7 @@ function normalizeLevelSnapshot(
     flowers: level.flowers,
     start: level.start,
     pictures: level.pictures ?? [],
+    top10: level.top10,
   };
 }
 

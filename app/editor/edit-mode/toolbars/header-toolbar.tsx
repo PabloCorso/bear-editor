@@ -40,6 +40,7 @@ import {
   FolderOpenIcon,
   GearIcon,
   ImageIcon,
+  InfoIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -79,6 +80,7 @@ import {
 } from "~/components/ui/tooltip.js";
 
 import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
+import { LevelPropertiesDialog } from "./level-properties-dialog";
 import { LevelFolderTip } from "./level-folder-tip";
 import { ToolInfo } from "./tool-info";
 import { CanvasTips } from "./canvas-tip";
@@ -146,6 +148,7 @@ export function HeaderToolbar({
 }: HeaderToolbarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [highlightLevelFolder, setHighlightLevelFolder] = useState(false);
   const topologyOpen = useEditor((state) => state.topologyInspection !== null);
   const { setTopologyInspection } = useEditorActions();
@@ -264,6 +267,7 @@ export function HeaderToolbar({
           <LevelVisibilityControl />
           <LevelOptionsMenu
             isLoading={isLoading}
+            onOpenProperties={() => setPropertiesOpen(true)}
             onOpenToolSettings={() => {
               setSettingsTab("tools");
               setSettingsOpen(true);
@@ -290,6 +294,7 @@ export function HeaderToolbar({
             <LevelVisibilityControl />
             <LevelOptionsMenu
               isLoading={isLoading}
+              onOpenProperties={() => setPropertiesOpen(true)}
               onOpenToolSettings={() => {
                 setSettingsTab("tools");
                 setSettingsOpen(true);
@@ -330,6 +335,10 @@ export function HeaderToolbar({
         />
         <ToolInfo />
       </CanvasTips>
+      <LevelPropertiesDialog
+        open={propertiesOpen}
+        onOpenChange={setPropertiesOpen}
+      />
       <SettingsDialog
         open={settingsOpen}
         initialTab={settingsTab}
@@ -345,9 +354,11 @@ export function HeaderToolbar({
 
 function LevelOptionsMenu({
   isLoading,
+  onOpenProperties,
   onOpenToolSettings,
 }: {
   isLoading?: boolean;
+  onOpenProperties: () => void;
   onOpenToolSettings: () => void;
 }) {
   const { getTool } = useEditorActions();
@@ -373,6 +384,9 @@ function LevelOptionsMenu({
           AutoGrass level
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem iconBefore={<InfoIcon />} onClick={onOpenProperties}>
+          Level properties…
+        </DropdownMenuItem>
         <DropdownMenuItem
           iconBefore={<GearIcon />}
           onClick={onOpenToolSettings}

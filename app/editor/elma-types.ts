@@ -64,7 +64,10 @@ export type Apple = {
   gravity: Gravity;
 };
 
+export type LevelTop10 = ElmaLevel["top10"];
+
 export type EditorLevel = {
+  top10?: LevelTop10;
   levelName: string;
   lgr: string;
   ground: string;
