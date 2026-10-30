@@ -63,7 +63,7 @@ function LevelProperties() {
       <section className="pb-4">
         <dl className="flex flex-col text-sm">
           <DetailRow label="File" value={fileName} />
-          <DetailRow label="Title" value={title || "None"} />
+          <DetailRow label="Title" value={title} />
           <DetailRow label="LGR" value={lgrFileName} />
           <DetailRow label="Ground texture" value={ground} />
           <DetailRow label="Sky texture" value={sky} />
