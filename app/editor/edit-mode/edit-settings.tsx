@@ -1,3 +1,4 @@
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -238,6 +239,7 @@ function GeneralSettingsPanel({
   const store = useEditorStore();
   const levelFolderName = useEditorLevelFolderName();
   const lgrAssets = useLgrAssets();
+  const checkTopologyOnSave = useEditor((state) => state.checkTopologyOnSave);
   const forceUpdate = useForceUpdate();
   const canPickFolder =
     supportsFilePickers() && "showDirectoryPicker" in window;
@@ -377,6 +379,31 @@ function GeneralSettingsPanel({
         {lgrAssets.folderError && (
           <p className="text-sm text-secondary">{lgrAssets.folderError}</p>
         )}
+      </section>
+
+      <section className="flex flex-col gap-3" aria-labelledby="saving-heading">
+        <SettingsSectionHeading
+          id="saving-heading"
+          title="Saving"
+          description="Choose when to check for level issues."
+        />
+        <div className="flex flex-col gap-1.5">
+          <Checkbox
+            checked={checkTopologyOnSave}
+            onCheckedChange={(checked) =>
+              store.getState().actions.setCheckTopologyOnSave(checked)
+            }
+            aria-describedby="check-topology-on-save-description"
+          >
+            Check topology on save
+          </Checkbox>
+          <p
+            id="check-topology-on-save-description"
+            className="pl-6 text-xs text-secondary"
+          >
+            Show errors and warnings after saving. Saving still completes.
+          </p>
+        </div>
       </section>
 
       <footer className="-mr-2.5 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
@@ -912,6 +939,7 @@ function LevelPresetPreview({
           store: createEditorStore({
             initialPreferences: {
               defaultLevelTitle: DEFAULT_LEVEL_TITLE,
+              checkTopologyOnSave: true,
               animateSprites: false,
               isUIVisible: true,
               levelVisibility: {

@@ -24,7 +24,7 @@ export class Segments {
   private iterIndex = 0;
 
   constructor(level: LevelData) {
-    // Load all solid polygons (non-grass)
+    // Load all ground polygons (non-grass)
     for (const poly of level.polygons) {
       if (poly.isGrass) continue;
       for (let j = 0; j < poly.vertices.length; j++) {

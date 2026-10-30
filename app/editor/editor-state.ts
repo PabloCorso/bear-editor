@@ -1,3 +1,4 @@
+import type { TopologyInspection } from "./helpers/level-topology";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -86,6 +87,7 @@ export type EditorState = EditorLevel & {
   documentSession: EditorDocumentSession;
 
   // Editor state
+  topologyInspection: TopologyInspection | null;
   activeToolId: string;
   openToolMenuId: string | null;
   mousePosition: Position;
@@ -97,6 +99,7 @@ export type EditorState = EditorLevel & {
   playModeZoom: number;
 
   defaultLevelTitle: string;
+  checkTopologyOnSave: boolean;
 
   // View settings
   animateSprites: boolean;
@@ -135,6 +138,7 @@ export type EditorState = EditorLevel & {
     deleteTestStart: (id: string) => void;
     promoteTestStart: (id: string) => void;
     // Level data operations
+    setTopologyInspection: (inspection: TopologyInspection | null) => void;
     setStart: (position: Position) => void;
     addApple: (apple: Apple) => void;
     updateApple: (apple: Partial<Apple>) => void;
@@ -150,6 +154,7 @@ export type EditorState = EditorLevel & {
     setFlowers: (flowers: Position[]) => void;
     setPictures: (pictures: Picture[]) => void;
 
+    setCheckTopologyOnSave: (enabled: boolean) => void;
     setDefaultLevelTitle: (title: string) => void;
     setLevelName: (name: string) => void;
     setLgr: (lgr: string) => void;

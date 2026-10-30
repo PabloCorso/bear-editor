@@ -14,11 +14,9 @@ Planned features and feedback for Bear Editor.
   - Merge/subtract polygons
   - Image to polygon
 
-- Topology check improvements and completeness
-  - Polygons, vertices and object limits
-  - Help find objects inside polygons as warnings
-  - Show level maximum boundaries
-  - Automatic or action to fix issue when possible
+- Further topology repair options
+  - Current checks, exact issue navigation, size guides and conservative repair previews are described in [Topology checks](docs/topology-checks.md).
+  - Explore previewed simplification, polygon-operation repairs and object relocation where the intended result is clear.
 
 - Faster loads
   - Prioritize the initial HTML response delay. [Investigation](docs/elmajs-bundling.md#priority-relative-to-server-response-time) measured 8.7 s to first byte on the initial request versus 1.0 s on the next; confirm whether SSR function cold starts are responsible, then evaluate a static/prerendered editor shell or HTML caching. The cause and any connection to Netlify's free tier remain unconfirmed.

@@ -9,6 +9,7 @@ import {
   ImageExport,
   type ImageExportOptions,
 } from "~/editor/helpers/image-export";
+import { getTopologyOverlays } from "../scene/topology-overlays";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import { type EditorState } from "~/editor/editor-state";
 import {
@@ -1431,6 +1432,7 @@ export class EditorEngine {
     const overlays = includeEditor
       ? [
           ...this.getEditorOverlays(state, viewportRect),
+          ...getTopologyOverlays(state, this.lgrAssets),
           ...(activeTool?.getWorldOverlays?.({
             viewportRect,
             modifierPressed: this.modifierPressed,

@@ -17,6 +17,11 @@ All notable changes to this project will be documented in this file.
 - Update toolbars interaction, close panel after selection to reduce clutter.
 - Add fancy boosted Default.lgr by default and color pictures tool.
 - Refine pictures/textures/colors tools.
+- Add a saved preference to check topology after saving, enabled by default. Issues open the existing panel without blocking the save.
+
+## 2026-10-25
+
+- Expand topology checks with EOL limits, exact issue markers and navigation, object and LGR diagnostics, size guides, and undoable repair previews.
 
 ## 2026-10-24
 
