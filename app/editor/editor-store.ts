@@ -417,6 +417,7 @@ export function createEditorStore({
         ),
 
         // Editor state
+        topologyInspection: null,
         activeToolId: initialToolId,
         openToolMenuId: null,
         mousePosition: { x: 0, y: 0 },
@@ -429,6 +430,7 @@ export function createEditorStore({
           initialPreferences?.playModeZoom ?? DEFAULT_PLAY_MODE_ZOOM,
 
         defaultLevelTitle,
+        checkTopologyOnSave: initialPreferences?.checkTopologyOnSave ?? true,
 
         // View settings
         animateSprites: initialPreferences?.animateSprites ?? true,
@@ -460,6 +462,8 @@ export function createEditorStore({
         levelFolder: new LevelFolder(store as EditorStore),
 
         actions: {
+          setCheckTopologyOnSave: (checkTopologyOnSave) =>
+            set({ checkTopologyOnSave }),
           // Level data operations
           setDefaultLevelTitle: (title) =>
             set({ defaultLevelTitle: normalizeLevelTitle(title) }),
@@ -637,6 +641,8 @@ export function createEditorStore({
           setCamera: (x, y) => set({ viewPortOffset: { x, y } }),
           setZoom: (zoom) => set({ zoom }),
           setPlayModeZoom: (playModeZoom) => set({ playModeZoom }),
+          setTopologyInspection: (topologyInspection) =>
+            set({ topologyInspection }),
           setPolygons: (polygons) => set({ polygons }),
 
           // Tools
@@ -802,6 +808,7 @@ export function createEditorStore({
               testStarts: emptyTestStarts(),
               testStartRename: null,
               testStartMenu: null,
+              topologyInspection: null,
               documentSession: createDocumentSession(
                 { ...document, level: normalizedLevel },
                 defaultLevelTitle,

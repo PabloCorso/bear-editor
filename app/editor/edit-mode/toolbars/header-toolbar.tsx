@@ -1,4 +1,6 @@
 import { TestStartPicker } from "../test-start-controls";
+import { useLgrAssets } from "~/components/use-lgr-assets";
+import { getLevelTopology } from "~/editor/helpers/level-topology";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -33,15 +35,11 @@ import {
   CaretRightIcon,
   CaretLeftIcon,
   CaretDownIcon,
-  CheckIcon,
-  ChecksIcon,
-  CursorClickIcon,
   FilePlusIcon,
   FloppyDiskIcon,
   FolderOpenIcon,
   GearIcon,
   ImageIcon,
-  WarningDiamondIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -71,14 +69,7 @@ import { checkModifierKey, cn, getModifier, useModifier } from "~/utils/misc";
 import { LevelVisibilityControl } from "./level-visibility-control";
 import { LevelPropertiesControl } from "./level-properties-control";
 import type { EditorDocumentOrigin } from "~/editor/editor-state";
-import {
-  getTopologySelection,
-  type TopologyCheckResult,
-  type TopologyIssue,
-  validateLevelTopology,
-} from "~/editor/helpers/level-topology";
-import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
-import { focusPositionsInView } from "~/editor/helpers/camera-helpers";
+import { TopologyCheck, TopologyResultPanel } from "./topology-check";
 import { Logo } from "~/components/logo";
 import { ToolButton } from "~/components/tool-button";
 import {
@@ -103,8 +94,6 @@ import {
 } from "./vertex-tool-control";
 import type { VertexTool } from "../tools/vertex-tool";
 
-const ISSUE_FOCUS_MIN_ZOOM = 0.2;
-const ISSUE_FOCUS_MAX_ZOOM = 10000;
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
 type HeaderToolbarProps = ToolbarProps & {
@@ -158,8 +147,8 @@ export function HeaderToolbar({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [highlightLevelFolder, setHighlightLevelFolder] = useState(false);
-  const [topologyResult, setTopologyResult] =
-    useState<TopologyCheckResult | null>(null);
+  const topologyOpen = useEditor((state) => state.topologyInspection !== null);
+  const { setTopologyInspection } = useEditorActions();
   const menuActions = useMainMenuActions();
   const { handleNew, handleOpenFile, handleSave } = menuActions;
   const store = useEditorStore();
@@ -186,9 +175,9 @@ export function HeaderToolbar({
   useEffect(
     function registerMainMenuHotkeys() {
       const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === "Escape" && topologyResult) {
+        if (event.key === "Escape" && topologyOpen) {
           event.preventDefault();
-          setTopologyResult(null);
+          setTopologyInspection(null);
           return;
         }
 
@@ -237,7 +226,13 @@ export function HeaderToolbar({
         window.removeEventListener("keydown", handleKeyDown);
       };
     },
-    [handleNew, handleOpenFile, handleSave, topologyResult],
+    [
+      handleNew,
+      handleOpenFile,
+      handleSave,
+      topologyOpen,
+      setTopologyInspection,
+    ],
   );
 
   return (
@@ -276,10 +271,7 @@ export function HeaderToolbar({
           />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
-          <TopologyCheck
-            setTopologyResult={setTopologyResult}
-            isLoading={isLoading}
-          />
+          <TopologyCheck isLoading={isLoading} />
           <TestStartPicker mobile />
           <PlayModeControl />
         </Toolbar>
@@ -308,10 +300,7 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
             <LevelPropertiesControl />
             <LevelNameControl isLoading={isLoading} />
-            <TopologyCheck
-              setTopologyResult={setTopologyResult}
-              isLoading={isLoading}
-            />
+            <TopologyCheck isLoading={isLoading} />
           </Toolbar>
 
           <Toolbar className="pointer-events-auto w-fit gap-2 justify-self-end">
@@ -328,11 +317,7 @@ export function HeaderToolbar({
         />
 
         <div className="pointer-events-none mt-2 flex justify-center">
-          <TopologyResultPanel
-            key={getTopologyResultKey(topologyResult)}
-            result={topologyResult}
-            onClose={() => setTopologyResult(null)}
-          />
+          <TopologyResultPanel />
         </div>
       </div>
       <CanvasTips>
@@ -424,6 +409,7 @@ function useMainMenuActions() {
 
   const store = useEditorStore();
   const activeTool = useEditorActiveTool();
+  const { lgr } = useLgrAssets();
   const { confirmDiscardChanges } = useEditorDocumentGuard();
   const defaultLevelPreset = useDefaultLevelPreset();
   const customDefaultLevelTemplate = useCustomDefaultLevelTemplate();
@@ -528,6 +514,28 @@ function useMainMenuActions() {
     setDocumentSaveState(dirty ? "dirty" : "clean");
   }, [setDocumentSaveState, store]);
 
+  const checkSavedLevel = useCallback(() => {
+    const state = store.getState();
+    if (!state.checkTopologyOnSave) return;
+    // A diagnostic failure must not turn an already completed save into a
+    // reported save failure. Inspection never mutates the document.
+    try {
+      const result = getLevelTopology(state, lgr);
+      if (result.issues.length || result.truncated) {
+        state.actions.setTopologyInspection(
+          state.topologyInspection ?? {
+            activeIssueId: null,
+            activeCheckId: null,
+            previewIssueId: null,
+            showBounds: false,
+          },
+        );
+      }
+    } catch (error) {
+      console.error("Topology check failed after saving:", error);
+    }
+  }, [store, lgr]);
+
   const handleSaveAs = useCallback(async () => {
     if (store.getState().documentSession.saveState === "saving") return;
     await runWithPickerGuard(async () => {
@@ -553,6 +561,7 @@ function useMainMenuActions() {
             `${level.name}.lev`,
           hasExternalHandle,
         });
+        checkSavedLevel();
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to save level.";
@@ -561,6 +570,7 @@ function useMainMenuActions() {
       }
     });
   }, [
+    checkSavedLevel,
     markDocumentSaved,
     resetSaveState,
     runWithPickerGuard,
@@ -594,6 +604,7 @@ function useMainMenuActions() {
           `${store.getState().levelName || "Untitled"}.lev`,
         hasExternalHandle,
       });
+      checkSavedLevel();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to save level.";
@@ -601,6 +612,7 @@ function useMainMenuActions() {
       alert(message);
     }
   }, [
+    checkSavedLevel,
     handleSaveAs,
     markDocumentSaved,
     resetSaveState,
@@ -712,196 +724,6 @@ function MainDropdownMenu({
       </DropdownMenu>
     </>
   );
-}
-
-function TopologyCheck({
-  setTopologyResult,
-  isLoading,
-  className,
-  ...props
-}: React.ComponentProps<typeof ToolbarButton> & {
-  setTopologyResult: React.Dispatch<
-    React.SetStateAction<TopologyCheckResult | null>
-  >;
-  isLoading?: boolean;
-}) {
-  const handleCheckTopology = useTopologyCheckAction(setTopologyResult);
-  return (
-    <Tooltip>
-      <TooltipTrigger>
-        <ToolbarButton
-          aria-label="Topology check"
-          onClick={handleCheckTopology}
-          disabled={isLoading || props.disabled}
-          className={cn({ "animate-pulse": isLoading }, className)}
-          {...props}
-        >
-          <CheckIcon className={cn({ invisible: isLoading })} />
-        </ToolbarButton>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Typology check</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function useTopologyCheckAction(
-  setTopologyResult: React.Dispatch<
-    React.SetStateAction<TopologyCheckResult | null>
-  >,
-) {
-  const store = useEditorStore();
-
-  return useCallback(() => {
-    const state = store.getState();
-    const result = validateLevelTopology({
-      polygons: state.polygons,
-      flowers: state.flowers,
-    });
-    setTopologyResult(result);
-  }, [setTopologyResult, store]);
-}
-
-function useTopologyIssueSelection() {
-  const store = useEditorStore();
-  const { activateTool, setToolState } = useEditorActions();
-
-  return useCallback(
-    (issue: TopologyIssue) => {
-      const state = store.getState();
-      const selectedVertices = getTopologySelection(state.polygons, [issue]);
-      const canvas = document.querySelector("canvas");
-      const viewportWidth = canvas?.clientWidth ?? window.innerWidth;
-      const viewportHeight = canvas?.clientHeight ?? window.innerHeight;
-
-      activateTool("select");
-      setToolState<SelectToolState>("select", {
-        selectedVertices,
-        selectedObjects: [],
-        selectedPictures: [],
-        hoveredObject: undefined,
-        hoveredPictureBounds: undefined,
-        contextMenuType: undefined,
-      });
-
-      if (issue.vertices.length > 0) {
-        focusPositionsInView({
-          positions: issue.vertices,
-          viewportWidth,
-          viewportHeight,
-          minZoom: ISSUE_FOCUS_MIN_ZOOM,
-          maxZoom: ISSUE_FOCUS_MAX_ZOOM,
-          setCamera: state.actions.setCamera,
-          setZoom: state.actions.setZoom,
-        });
-      }
-    },
-    [activateTool, setToolState, store],
-  );
-}
-
-function TopologyResultPanel({
-  className,
-  result,
-  onClose,
-  ...props
-}: Omit<React.ComponentPropsWithRef<"section">, "children"> & {
-  result: TopologyCheckResult | null;
-  onClose: () => void;
-}) {
-  const selectIssue = useTopologyIssueSelection();
-  const [activeIssueIndex, setActiveIssueIndex] = useState<number | null>(null);
-
-  if (!result) return null;
-
-  const hasIssues = result.issues.length > 0;
-
-  return (
-    <section
-      className={cn(
-        "pointer-events-auto max-w-2xl rounded-xl bg-screen p-2 shadow-sm",
-        className,
-      )}
-      aria-live="polite"
-      {...props}
-    >
-      <header className="flex items-center gap-2 pl-2">
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            {hasIssues ? (
-              <Icon className="text-red-400">
-                <WarningDiamondIcon />
-              </Icon>
-            ) : (
-              <Icon className="text-green-400">
-                <ChecksIcon />
-              </Icon>
-            )}
-            {hasIssues
-              ? `Found ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"}`
-              : "Everything seems to be all right."}
-          </p>
-        </div>
-        <IconButton
-          size="sm"
-          className="text-secondary"
-          aria-label="Close topology results"
-          onClick={onClose}
-        >
-          <XIcon />
-        </IconButton>
-      </header>
-
-      {hasIssues && (
-        <div className="p-1.5 pt-2">
-          <div className="max-h-32 overflow-y-auto">
-            <ol className="flex flex-col gap-1.5">
-              {result.issues.map((issue, index) => {
-                const canSelectIssue = issue.vertices.length > 0;
-                return (
-                  <li
-                    key={`${issue.type}-${index}`}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg bg-white/5 p-1 pl-3",
-                      activeIssueIndex === index &&
-                        "bg-white/10 ring-1 ring-white/15",
-                    )}
-                  >
-                    <div className="min-w-0 flex-1 text-sm text-white/90">
-                      <span className="font-medium text-white">
-                        {index + 1}.
-                      </span>{" "}
-                      {issue.message}
-                    </div>
-                    {canSelectIssue && (
-                      <IconButton
-                        size="sm"
-                        onClick={() => {
-                          setActiveIssueIndex(index);
-                          selectIssue(issue);
-                        }}
-                        className="ml-auto"
-                        aria-label="View issue"
-                      >
-                        <CursorClickIcon />
-                      </IconButton>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function getTopologyResultKey(result: TopologyCheckResult | null) {
-  if (!result) return "topology:none";
-
-  return `topology:${result.issues
-    .map((issue) => `${issue.type}:${issue.message}`)
-    .join("|")}`;
 }
 
 function LevelTitleInput({
