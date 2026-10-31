@@ -444,6 +444,10 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: ["Esc", "Right click"],
+          label: "Cancel polygon operation",
+        },
+        {
           shortcut: defaultTools.vertex.variants.smooth.shortcut,
           label: "Smooth tool",
           icon: (
@@ -527,6 +531,10 @@ function getShortcutGroups(
             {
               shortcut: "N",
               label: "Set no gravity",
+            },
+            {
+              shortcut: ["Shift + ↑", "Shift + ↓", "Shift + ←", "Shift + →"],
+              label: "Set directional gravity",
             },
           ],
         },

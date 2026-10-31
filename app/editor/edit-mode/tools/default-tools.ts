@@ -29,7 +29,16 @@ export const defaultTools = {
       autoGrass: { name: "AutoGrass", shortcut: "Shift + G" },
     },
   },
-  apple: { menuBehavior: "options", id: "apple", name: "Apple", shortcut: "A" },
+  union: { id: "union", name: "Union", shortcut: "" },
+  subtract: { id: "subtract", name: "Subtract", shortcut: "" },
+  exclude: { id: "exclude", name: "Exclude", shortcut: "" },
+  intersect: { id: "intersect", name: "Intersect", shortcut: "" },
+  apple: {
+    menuBehavior: "options",
+    id: "apple",
+    name: "Apple",
+    shortcut: "A",
+  },
   killer: { id: "killer", name: "Killer", shortcut: "K" },
   flower: { id: "flower", name: "Flower", shortcut: "F" },
   picture: {

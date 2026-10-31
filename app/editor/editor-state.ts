@@ -172,7 +172,7 @@ export type EditorState = EditorLevel & {
     setPlayModeZoom: (zoom: number) => void;
     setPolygons: (polygons: Polygon[]) => void;
 
-    setToolMenuOpen: (open: boolean) => void;
+    setToolMenuOpen: (open: boolean, menuId?: string) => void;
     registerTool: (tool: Tool) => void;
     activateTool: (toolId: string, variant?: string) => void;
     getActiveTool: <T extends Tool>(toolId?: string) => T | undefined;

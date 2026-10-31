@@ -656,12 +656,14 @@ export function createEditorStore({
           setPolygons: (polygons) => set({ polygons }),
 
           // Tools
-          setToolMenuOpen: (open) => {
+          setToolMenuOpen: (open, menuId) => {
             const state = get();
             const tool = state.toolsMap.get(state.activeToolId);
             set({
               openToolMenuId:
-                open && tool?.meta.menuBehavior ? state.activeToolId : null,
+                open && (menuId || tool?.meta.menuBehavior)
+                  ? (menuId ?? state.activeToolId)
+                  : null,
             });
           },
           registerTool: (tool) =>

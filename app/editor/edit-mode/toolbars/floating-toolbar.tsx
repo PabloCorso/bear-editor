@@ -72,7 +72,7 @@ export function FloatingViewportToolbar({
       )}
       style={{
         gridTemplateRows:
-          "minmax(var(--toolbar-space), 1fr) auto minmax(1rem, 1fr)",
+          "minmax(var(--toolbar-space), 1fr) auto minmax(var(--toolbar-space), 1fr)",
       }}
       {...props}
     >

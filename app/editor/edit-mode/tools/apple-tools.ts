@@ -1,10 +1,13 @@
-import { Tool } from "./tool-interface";
+import { Tool, type PlacementPropertiesMenuState } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorStore } from "~/editor/editor-store";
 import { defaultTools } from "./default-tools";
 import { Gravity, type Apple, type AppleAnimation } from "~/editor/elma-types";
 
-export type AppleToolState = { animation: AppleAnimation; gravity: Gravity };
+export type AppleToolState = {
+  animation: AppleAnimation;
+  gravity: Gravity;
+} & PlacementPropertiesMenuState;
 
 export const defaultAppleState: AppleToolState = {
   animation: 1 as AppleAnimation,
@@ -25,16 +28,60 @@ export class AppleTool extends Tool<AppleToolState> {
     }
   }
 
+  onRightClick(event: MouseEvent, context: EventContext): boolean {
+    const { state, toolState, setToolState } = this.getState();
+    if (!toolState) return false;
+    state.actions.setToolMenuOpen(false);
+    setToolState({
+      propertiesMenu: {
+        clientPosition: { x: event.clientX, y: event.clientY },
+        worldPosition: context.worldPos,
+      },
+    });
+    return true;
+  }
+
+  onDeactivate() {
+    this.getState().setToolState({ propertiesMenu: undefined });
+  }
+
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
-    const { state, toolState } = this.getState();
+    const { state, toolState, setToolState } = this.getState();
+    if (toolState?.propertiesMenu) {
+      setToolState({ propertiesMenu: undefined });
+      return true;
+    }
     if (!toolState) return false;
     const position = this.snapPosition(context.worldPos, _event.altKey);
-    state.actions.addApple({ position, ...toolState });
+    state.actions.addApple({
+      position,
+      animation: toolState.animation,
+      gravity: toolState.gravity,
+    });
     return true;
   }
 
   onKeyDown(event: KeyboardEvent) {
     const { setToolState } = this.getState();
+    const directionalGravity: Partial<Record<string, Gravity>> = {
+      ArrowUp: Gravity.Up,
+      ArrowDown: Gravity.Down,
+      ArrowLeft: Gravity.Left,
+      ArrowRight: Gravity.Right,
+    };
+    const gravity = directionalGravity[event.key];
+    if (
+      gravity !== undefined &&
+      event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      setToolState({ gravity });
+      event.preventDefault();
+      return true;
+    }
+
     switch (event.key.toUpperCase()) {
       case "N":
         setToolState({ gravity: Gravity.None });
@@ -61,9 +108,16 @@ export class AppleTool extends Tool<AppleToolState> {
 
   getDrafts() {
     const { state, toolState } = this.getState();
-    if (!state.mouseOnCanvas || !toolState) return {};
-    const position = this.snapPosition(state.mousePosition);
-    const apple: Apple = { position, ...toolState };
+    if (!toolState || (!state.mouseOnCanvas && !toolState.propertiesMenu))
+      return {};
+    const position = this.snapPosition(
+      toolState.propertiesMenu?.worldPosition ?? state.mousePosition,
+    );
+    const apple: Apple = {
+      position,
+      animation: toolState.animation,
+      gravity: toolState.gravity,
+    };
     return { apples: [apple] };
   }
 }

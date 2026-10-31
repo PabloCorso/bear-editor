@@ -1,3 +1,4 @@
+import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
 import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
@@ -53,7 +54,9 @@ export function ControlToolbar({
   );
   const drawingTools = orderedTools.filter(
     (tool) =>
-      !navigationTools.some((navigationTool) => navigationTool.id === tool.id),
+      !navigationTools.some(
+        (navigationTool) => navigationTool.id === tool.id,
+      ) && !isPolygonBooleanTool(tool.id),
   );
 
   return (
@@ -61,7 +64,7 @@ export function ControlToolbar({
       className={cn("absolute inset-y-0 left-4 grid", className)}
       style={{
         gridTemplateRows:
-          "minmax(var(--toolbar-space), 1fr) auto minmax(1rem, 1fr)",
+          "minmax(var(--toolbar-space), 1fr) auto minmax(var(--toolbar-space), 1fr)",
       }}
     >
       <Toolbar

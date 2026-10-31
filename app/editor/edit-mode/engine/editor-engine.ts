@@ -514,7 +514,7 @@ export class EditorEngine {
   }
 
   private handlePointerDown = (event: PointerEvent) => {
-    this.store.setState({ testStartMenu: null });
+    this.store.setState({ testStartMenu: null, openToolMenuId: null });
     if (event.pointerType === "touch") {
       event.preventDefault();
       this.trySetPointerCapture(event.pointerId);
