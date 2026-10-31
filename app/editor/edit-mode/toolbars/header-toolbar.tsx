@@ -54,6 +54,8 @@ import {
   useDefaultLevelPreset,
 } from "~/editor/edit-mode/default-level-preset";
 import React, {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
@@ -96,6 +98,12 @@ import {
   getVertexIconProps,
 } from "./vertex-tool-control";
 import type { VertexTool } from "../tools/vertex-tool";
+
+const ImageToPolygonsDialog = lazy(() =>
+  import("~/editor/image-to-polygons/image-to-polygons-dialog").then(
+    (module) => ({ default: module.ImageToPolygonsDialog }),
+  ),
+);
 
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
@@ -147,6 +155,7 @@ export function HeaderToolbar({
   engineRef,
   ...props
 }: HeaderToolbarProps) {
+  const [imageToPolygonsOpen, setImageToPolygonsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -241,6 +250,13 @@ export function HeaderToolbar({
 
   return (
     <>
+      {imageToPolygonsOpen && (
+        <Suspense fallback={null}>
+          <ImageToPolygonsDialog
+            onClose={() => setImageToPolygonsOpen(false)}
+          />
+        </Suspense>
+      )}
       {imageExport && (
         <ExportImageDialog
           snapshot={imageExport.snapshot}
@@ -267,6 +283,7 @@ export function HeaderToolbar({
           />
           <LevelVisibilityControl />
           <LevelOptionsMenu
+            onOpenImageToPolygons={() => setImageToPolygonsOpen(true)}
             isLoading={isLoading}
             onOpenProperties={() => setPropertiesOpen(true)}
             onOpenToolSettings={() => {
@@ -294,6 +311,7 @@ export function HeaderToolbar({
             />
             <LevelVisibilityControl />
             <LevelOptionsMenu
+              onOpenImageToPolygons={() => setImageToPolygonsOpen(true)}
               isLoading={isLoading}
               onOpenProperties={() => setPropertiesOpen(true)}
               onOpenToolSettings={() => {
@@ -354,11 +372,13 @@ export function HeaderToolbar({
 }
 
 function LevelOptionsMenu({
+  onOpenImageToPolygons,
   isLoading,
   onOpenProperties,
   onOpenToolSettings,
 }: {
   isLoading?: boolean;
+  onOpenImageToPolygons: () => void;
   onOpenProperties: () => void;
   onOpenToolSettings: () => void;
 }) {
@@ -385,6 +405,14 @@ function LevelOptionsMenu({
           AutoGrass level
         </DropdownMenuItem>
         <GridMenu />
+        <DropdownMenuItem
+          iconBefore={<ImageIcon />}
+          disabled={isLoading}
+          onClick={onOpenImageToPolygons}
+        >
+          Image to polygons…{" "}
+          <span className="ml-auto text-xs text-secondary">Experimental</span>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem iconBefore={<InfoIcon />} onClick={onOpenProperties}>
           Level properties
