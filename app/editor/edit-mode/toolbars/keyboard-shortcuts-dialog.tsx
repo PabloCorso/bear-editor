@@ -1,6 +1,5 @@
 import type { DialogProps } from "~/components/ui/dialog";
 import {
-  BezierCurveIcon,
   CursorIcon,
   HandIcon,
   PaintBucketIcon,
@@ -447,12 +446,18 @@ function getShortcutGroups(
         {
           shortcut: defaultTools.vertex.variants.smooth.shortcut,
           label: "Smooth tool",
-          icon: <BezierCurveIcon className="h-6 w-6" />,
+          icon: (
+            <VertexIcon {...getVertexIconProps("smooth")} className="h-6 w-6" />
+          ),
           subItems: [
             {
               shortcut: ["-", "+"],
               label:
                 "Adjust amount: negative simplifies, positive rounds corners",
+            },
+            {
+              shortcut: ["[", "]"],
+              label: "Adjust offset",
             },
           ],
         },

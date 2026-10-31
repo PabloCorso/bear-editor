@@ -929,7 +929,7 @@ export class EditorEngine {
 
     const vertexVariantShortcuts: Partial<Record<string, VertexToolVariant>> =
       event.shiftKey
-        ? { P: "pipe", F: "frame", G: "autoGrass" }
+        ? { P: "pipe", F: "frame", G: "autoGrass", S: "smooth" }
         : { B: "brush", D: "draw", X: "cutConnect" };
     const variant = vertexVariantShortcuts[key];
     if (
@@ -1038,7 +1038,11 @@ export class EditorEngine {
         tool.meta.variants || {},
       )) {
         // These variants are handled above with explicit modifier checks.
-        if (["cutConnect", "brush", "draw", "autoGrass"].includes(variantKey))
+        if (
+          ["cutConnect", "brush", "draw", "autoGrass", "smooth"].includes(
+            variantKey,
+          )
+        )
           continue;
         if (variantMeta.shortcut.toUpperCase() === key) {
           // If tool is already active, let onKeyDown handle it (toggle)

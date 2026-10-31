@@ -71,6 +71,9 @@ import {
   DEFAULT_SMOOTH_AMOUNT,
   MIN_SMOOTH_AMOUNT,
   MAX_SMOOTH_AMOUNT,
+  DEFAULT_SMOOTH_VERTEX_OFFSET,
+  MIN_SMOOTH_VERTEX_OFFSET,
+  MAX_SMOOTH_VERTEX_OFFSET,
   transformSmoothPolygon,
   type SmoothResult,
 } from "~/editor/helpers/smooth";
@@ -115,6 +118,7 @@ export type VertexToolState = {
   brushAppleDistance?: number;
   brushAppleCount?: number;
   smoothAmount?: number;
+  smoothVertexOffset?: number;
   pipeStart?: boolean;
   pipeFlower?: boolean;
   pipeWidthPx?: number;
@@ -206,6 +210,7 @@ export class VertexTool extends Tool<VertexToolState> {
   private smoothCache?: {
     source: Polygon;
     amount: number;
+    vertexOffset: number;
     result: SmoothResult;
   };
 
@@ -321,18 +326,21 @@ export class VertexTool extends Tool<VertexToolState> {
       position ?? state.mousePosition,
       state.polygons,
       selectionThresholds.polygonEdge / state.zoom,
-      (polygon) => polygon.vertices.length >= 3,
     );
     if (!source) return null;
     const amount = toolState.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT;
+    const vertexOffset =
+      toolState.smoothVertexOffset ?? DEFAULT_SMOOTH_VERTEX_OFFSET;
     if (
       this.smoothCache?.source !== source ||
-      this.smoothCache.amount !== amount
+      this.smoothCache.amount !== amount ||
+      this.smoothCache.vertexOffset !== vertexOffset
     ) {
       this.smoothCache = {
         source,
         amount,
-        result: transformSmoothPolygon(source, amount),
+        vertexOffset,
+        result: transformSmoothPolygon(source, amount, vertexOffset),
       };
     }
     return { source, ...this.smoothCache.result };
@@ -346,6 +354,20 @@ export class VertexTool extends Tool<VertexToolState> {
         Math.min(
           MAX_SMOOTH_AMOUNT,
           (toolState?.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT) + delta,
+        ),
+      ),
+    });
+  }
+
+  adjustSmoothVertexOffset(delta: number): void {
+    const { toolState, setToolState } = this.getState();
+    setToolState({
+      smoothVertexOffset: Math.max(
+        MIN_SMOOTH_VERTEX_OFFSET,
+        Math.min(
+          MAX_SMOOTH_VERTEX_OFFSET,
+          (toolState?.smoothVertexOffset ?? DEFAULT_SMOOTH_VERTEX_OFFSET) +
+            delta,
         ),
       ),
     });
@@ -1082,6 +1104,19 @@ export class VertexTool extends Tool<VertexToolState> {
     }
 
     if (
+      toolState.variant === "smooth" &&
+      !toolState.previewAutoGrassAll &&
+      ["[", "]"].includes(event.key) &&
+      !event.isComposing &&
+      !event.metaKey &&
+      (!event.ctrlKey || event.getModifierState("AltGraph"))
+    ) {
+      this.adjustSmoothVertexOffset(event.key === "]" ? 1 : -1);
+      event.preventDefault();
+      return true;
+    }
+
+    if (
       toolState.variant === "brush" &&
       [",", "."].includes(event.key) &&
       !event.metaKey &&
@@ -1377,7 +1412,7 @@ export class VertexTool extends Tool<VertexToolState> {
         {
           type: "polyline",
           points: [...vertices, vertices[0]],
-          color: uiColors.boundsSelected,
+          color: preview.polygon.grass ? colors.grass : uiColors.boundsSelected,
           width: uiStrokeWidths.boundsSelectedScreen / state.zoom,
           opacity: 0.85,
         },

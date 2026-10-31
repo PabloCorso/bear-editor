@@ -59,6 +59,9 @@ import {
   DEFAULT_SMOOTH_AMOUNT,
   MIN_SMOOTH_AMOUNT,
   MAX_SMOOTH_AMOUNT,
+  DEFAULT_SMOOTH_VERTEX_OFFSET,
+  MIN_SMOOTH_VERTEX_OFFSET,
+  MAX_SMOOTH_VERTEX_OFFSET,
 } from "~/editor/helpers/smooth";
 
 export function ToolInfo() {
@@ -232,12 +235,16 @@ export function ToolInfo() {
 
   if (vertex?.variant === "smooth" && !isAutoGrass) {
     const amount = vertex.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT;
+    const vertexOffset =
+      vertex.smoothVertexOffset ?? DEFAULT_SMOOTH_VERTEX_OFFSET;
     const preview = getActiveTool<VertexTool>()?.getSmoothPreview();
+    const amountLabel =
+      amount > 0 ? "Round corners" : amount < 0 ? "Simplify" : "No change";
     return (
       <CanvasTipGroup title="Smooth" aria-label="Active tool info">
         <CanvasTipNumberControl
-          label="Amount"
-          accessibleLabel="smoothing amount"
+          label={amountLabel}
+          accessibleLabel={`${amountLabel.toLowerCase()} level`}
           value={amount}
           min={MIN_SMOOTH_AMOUNT}
           max={MAX_SMOOTH_AMOUNT}
@@ -245,17 +252,24 @@ export function ToolInfo() {
             getActiveTool<VertexTool>()?.adjustSmoothAmount(delta)
           }
         />
-        <CanvasTipSegment>
-          {amount > 0 ? "Round corners" : amount < 0 ? "Simplify" : "Unchanged"}
-        </CanvasTipSegment>
+        <CanvasTipNumberControl
+          label="Offset"
+          accessibleLabel="smooth vertex offset percentage"
+          value={vertexOffset}
+          min={MIN_SMOOTH_VERTEX_OFFSET}
+          max={MAX_SMOOTH_VERTEX_OFFSET}
+          decreaseKey="["
+          increaseKey="]"
+          increaseShortcut="]"
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustSmoothVertexOffset(delta)
+          }
+        />
         {preview && (
           <CanvasTipSegment>
             {preview.source.vertices.length} → {preview.polygon.vertices.length}{" "}
             vertices
           </CanvasTipSegment>
-        )}
-        {preview?.message && (
-          <CanvasTipSegment>{preview.message}</CanvasTipSegment>
         )}
       </CanvasTipGroup>
     );

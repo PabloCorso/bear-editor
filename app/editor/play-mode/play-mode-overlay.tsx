@@ -4,7 +4,7 @@ import { useLocalStorage } from "@mantine/hooks";
 import {
   ArrowsClockwiseIcon,
   RewindIcon,
-  MapPinPlusIcon,
+  PushPinIcon,
   ArrowDownIcon,
   ArrowBendUpLeftIcon,
   ArrowBendUpRightIcon,
@@ -651,7 +651,7 @@ export function PlayModeOverlay({
       ref={containerRef}
       className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[1px] select-none"
     >
-      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-wrap items-center justify-end gap-2">
+      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-wrap items-center justify-end gap-3">
         <div
           ref={playTimeTextRef}
           className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
@@ -724,9 +724,13 @@ export function PlayModeOverlay({
               captureRequestedRef.current = true;
             }}
           >
-            <MapPinPlusIcon />
+            <PushPinIcon weight="fill" />
           </ToolButton>
-          <ToolButton name="Restart run" onClick={restartPlayMode}>
+          <ToolButton
+            name="Restart run"
+            shortcut="Enter"
+            onClick={restartPlayMode}
+          >
             <ArrowsClockwiseIcon weight="fill" />
           </ToolButton>
           <ToolButton

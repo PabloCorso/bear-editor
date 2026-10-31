@@ -23,7 +23,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { BezierCurveIcon } from "@phosphor-icons/react/dist/ssr";
 export function getAutoGrassAllShortcut(modifier: string) {
   return `${modifier} + Shift + G`;
 }
@@ -48,12 +47,12 @@ export function VertexToolControl(props: ToolControlButtonProps) {
           }
           shortcut={
             vertexToolState?.variant === "smooth"
-              ? undefined
+              ? defaultTools.vertex.variants.smooth.shortcut
               : defaultTools.vertex.shortcut
           }
         >
           {vertexToolState?.variant === "smooth" ? (
-            <BezierCurveIcon />
+            <VertexIcon {...getVertexIconProps("smooth")} />
           ) : (
             <VertexIcon {...getVertexIconProps(vertexToolState?.variant)} />
           )}
@@ -160,14 +159,14 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
       <ToolControlButton
         {...defaultTools.vertex}
         name={defaultTools.vertex.variants.smooth.name}
-        shortcut={undefined}
+        shortcut={defaultTools.vertex.variants.smooth.shortcut}
         tooltipSide="right"
         size="sm"
         showLabel
         isActive={vertexTool?.variant === "smooth"}
         onClick={() => onVariantChange("smooth")}
       >
-        <BezierCurveIcon />
+        <VertexIcon {...getVertexIconProps("smooth")} />
       </ToolControlButton>
       <div
         role="separator"
@@ -251,6 +250,7 @@ type VertexIconProps = React.ComponentPropsWithoutRef<"svg"> & {
   corridor?: boolean | "narrow";
   frame?: boolean;
   freehand?: boolean;
+  smooth?: boolean;
 };
 
 export function VertexIcon({
@@ -264,6 +264,7 @@ export function VertexIcon({
   corridor,
   frame,
   freehand,
+  smooth,
   ...props
 }: VertexIconProps) {
   const frameClipId = useId();
@@ -282,7 +283,17 @@ export function VertexIcon({
         </clipPath>
       </defs>
 
-      {frame ? (
+      {smooth ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={sky} />
+          <path
+            d="M-1 25C10 25 10 16 12 12S14-1 25-1V25Z"
+            fill={ground}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+        </g>
+      ) : frame ? (
         <g clipPath={`url(#${frameClipId})`}>
           <rect width="24" height="24" fill={sky} />
           <path
@@ -307,7 +318,7 @@ export function VertexIcon({
         <g clipPath={`url(#${frameClipId})`}>
           <rect width="24" height="24" fill={sky} />
           <path
-            d="M0 20L4 16L6 9L10 7L13 12L17 10L24 17V24H0Z"
+            d="M0 20L4 16L6 9L10 7L13 12L17 10L24 17V25H-1Z"
             fill={ground}
             stroke={boundsColor}
             strokeWidth="1.5"
@@ -399,6 +410,7 @@ export function getVertexIconProps(
     };
   }
   if (variant === "frame") return { frame: true };
+  if (variant === "smooth") return { smooth: true };
   if (variant === "brush") return { corridor: true, freehand: true };
 
   if (variant === "draw") return { freehand: true };
