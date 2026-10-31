@@ -56,21 +56,12 @@ export function ToolControlButton({
 }
 
 export function ToolMenu({
-  id,
-  activeToolIds,
   className,
   children,
   ...props
 }: React.ComponentPropsWithoutRef<"div"> & {
-  id: string;
-  activeToolIds?: readonly string[];
   children: React.ReactNode;
 }) {
-  const activeTool = useEditorActiveTool();
-  const isActive =
-    activeTool?.meta.id === id ||
-    Boolean(activeTool && activeToolIds?.includes(activeTool.meta.id));
-  if (!isActive) return null;
   return (
     <FloatingViewportToolbar className={className} {...props}>
       {children}
@@ -80,14 +71,12 @@ export function ToolMenu({
 
 type ToolControlMenuProps = {
   id: string;
-  activeToolIds?: readonly string[];
   button: React.ReactNode;
   children: React.ReactNode;
 };
 
 export function ToolControlMenu({
   id,
-  activeToolIds,
   button,
   children,
 }: ToolControlMenuProps) {
@@ -96,14 +85,12 @@ export function ToolControlMenu({
 
   return (
     <>
-      <ToolSelectionContext.Provider value={() => setToolMenuOpen(!isOpen)}>
+      <ToolSelectionContext.Provider value={() => setToolMenuOpen(!isOpen, id)}>
         {button}
       </ToolSelectionContext.Provider>
       {isOpen && (
         <ToolSelectionContext.Provider value={() => setToolMenuOpen(false)}>
           <ToolMenu
-            id={id}
-            activeToolIds={activeToolIds}
             onKeyDown={(event) => {
               // Let Enter click the focused choice, without reaching canvas shortcuts.
               if (

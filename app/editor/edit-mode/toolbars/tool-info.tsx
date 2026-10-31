@@ -151,6 +151,23 @@ export function ToolInfo() {
     );
   }
 
+  if (activeToolId === "apple") {
+    return (
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        <CanvasTipSegment>
+          Animation
+          <CanvasTipKey>1</CanvasTipKey>
+          <CanvasTipKey>2</CanvasTipKey>
+        </CanvasTipSegment>
+        <CanvasTipSegment>
+          Gravity
+          <CanvasTipKey>N</CanvasTipKey>
+          <CanvasTipKey>Shift + arrows</CanvasTipKey>
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
   if (["picture", "texture", "color"].includes(activeToolId)) {
     return (
       <CanvasTipGroup title={toolName} aria-label="Active tool info">

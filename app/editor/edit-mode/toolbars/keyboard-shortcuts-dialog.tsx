@@ -532,6 +532,10 @@ function getShortcutGroups(
               shortcut: "N",
               label: "Set no gravity",
             },
+            {
+              shortcut: ["Shift + ↑", "Shift + ↓", "Shift + ←", "Shift + →"],
+              label: "Set directional gravity",
+            },
           ],
         },
         {

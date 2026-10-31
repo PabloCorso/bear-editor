@@ -1,11 +1,12 @@
 import { useLgrAssets } from "~/components/use-lgr-assets";
-import { Popover } from "~/components/ui/popover";
+import { Popover, PopoverContent } from "~/components/ui/popover";
 import {
   useEditor,
   useEditorActions,
   useEditorToolState,
 } from "~/editor/use-editor-store";
 import { defaultTools } from "./tools/default-tools";
+import { defaultAppleState, type AppleToolState } from "./tools/apple-tools";
 import {
   defaultPictureState,
   type PictureToolState,
@@ -15,13 +16,14 @@ import {
   type TextureToolState,
 } from "./tools/texture-tool";
 import { PicturePropertiesToolbar } from "./toolbars/picture-properties-toolbar";
+import { AppleToolbar } from "./toolbars/apple-tool-control";
 
 export function PlacementPropertiesMenu() {
   const toolId = useEditor((state) => state.activeToolId);
   const isPlayMode = useEditor((state) => state.isPlayMode);
-  const toolState = useEditorToolState<PictureToolState | TextureToolState>(
-    toolId,
-  );
+  const toolState = useEditorToolState<
+    AppleToolState | PictureToolState | TextureToolState
+  >(toolId);
   const { setToolState } = useEditorActions();
   const { lgr } = useLgrAssets();
   const menu = toolState?.propertiesMenu;
@@ -30,31 +32,13 @@ export function PlacementPropertiesMenu() {
     isPlayMode ||
     !menu ||
     !toolState ||
-    (toolId !== defaultTools.picture.id &&
+    (toolId !== defaultTools.apple.id &&
+      toolId !== defaultTools.picture.id &&
       toolId !== defaultTools.texture.id &&
       toolId !== defaultTools.color.id)
   )
     return null;
 
-  const defaults =
-    "texture" in toolState
-      ? (lgr
-          .getTextureSprites()
-          .find(({ texture }) => texture.texture === toolState.texture)
-          ?.texture ?? defaultTextureState)
-      : (lgr
-          .getPictureSprites()
-          .find(({ picture }) => picture.name === toolState.name)?.picture ??
-        lgr
-          .getColorSprites()
-          .find(({ picture }) => picture.name === toolState.name)?.picture ??
-        defaultPictureState);
-  const title =
-    toolId === defaultTools.texture.id
-      ? "Texture properties"
-      : toolId === defaultTools.color.id
-        ? "Color properties"
-        : "Picture properties";
   const anchor = {
     getBoundingClientRect: () =>
       DOMRect.fromRect({
@@ -64,6 +48,67 @@ export function PlacementPropertiesMenu() {
         height: 0,
       }),
   };
+
+  if (toolId === defaultTools.apple.id) {
+    const appleToolState = toolState as AppleToolState;
+    return (
+      <Popover
+        open
+        modal={false}
+        onOpenChange={(open) => {
+          if (!open) setToolState(toolId, { propertiesMenu: undefined });
+        }}
+      >
+        <PopoverContent
+          anchor={anchor}
+          positionMethod="fixed"
+          side="top"
+          align="center"
+          initialFocus={false}
+          finalFocus={false}
+          className="z-50 outline-hidden"
+        >
+          <AppleToolbar
+            role="group"
+            tabIndex={-1}
+            withShortcuts={false}
+            currentAnimation={
+              appleToolState.animation ?? defaultAppleState.animation
+            }
+            currentGravity={appleToolState.gravity ?? defaultAppleState.gravity}
+            orientation="horizontal"
+            onAnimationChange={(animation) =>
+              setToolState(toolId, { animation })
+            }
+            onGravityChange={(gravity) => setToolState(toolId, { gravity })}
+          />
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  const placementToolState = toolState as PictureToolState | TextureToolState;
+  const defaults =
+    "texture" in placementToolState
+      ? (lgr
+          .getTextureSprites()
+          .find(({ texture }) => texture.texture === placementToolState.texture)
+          ?.texture ?? defaultTextureState)
+      : (lgr
+          .getPictureSprites()
+          .find(({ picture }) => picture.name === placementToolState.name)
+          ?.picture ??
+        lgr
+          .getColorSprites()
+          .find(({ picture }) => picture.name === placementToolState.name)
+          ?.picture ??
+        defaultPictureState);
+  const title =
+    toolId === defaultTools.texture.id
+      ? "Texture properties"
+      : toolId === defaultTools.color.id
+        ? "Color properties"
+        : "Picture properties";
 
   return (
     <Popover
@@ -76,8 +121,8 @@ export function PlacementPropertiesMenu() {
       <PicturePropertiesToolbar
         variant="popover-content"
         propertiesTitle={title}
-        distance={toolState.distance}
-        clip={toolState.clip}
+        distance={placementToolState.distance}
+        clip={placementToolState.clip}
         defaultDistance={defaults.distance}
         defaultClip={defaults.clip}
         onDistanceChange={(distance) => setToolState(toolId, { distance })}

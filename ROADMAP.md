@@ -11,8 +11,8 @@ Planned features and feedback for Bear Editor.
   - Shapes
   - Smoothen
   - Text
-  - Merge/subtract polygons
   - Image to polygon
+    - ofta: Any plans to add image to .lev?
 
 - Further topology repair options
   - Current checks, exact issue navigation, size guides and conservative repair previews are described in [Topology checks](docs/topology-checks.md).

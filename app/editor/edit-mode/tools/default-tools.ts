@@ -33,7 +33,12 @@ export const defaultTools = {
   subtract: { id: "subtract", name: "Subtract", shortcut: "" },
   exclude: { id: "exclude", name: "Exclude", shortcut: "" },
   intersect: { id: "intersect", name: "Intersect", shortcut: "" },
-  apple: { menuBehavior: "options", id: "apple", name: "Apple", shortcut: "A" },
+  apple: {
+    menuBehavior: "options",
+    id: "apple",
+    name: "Apple",
+    shortcut: "A",
+  },
   killer: { id: "killer", name: "Killer", shortcut: "K" },
   flower: { id: "flower", name: "Flower", shortcut: "F" },
   picture: {

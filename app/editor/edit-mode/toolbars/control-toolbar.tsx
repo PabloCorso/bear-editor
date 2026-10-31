@@ -64,7 +64,7 @@ export function ControlToolbar({
       className={cn("absolute inset-y-0 left-4 grid", className)}
       style={{
         gridTemplateRows:
-          "minmax(var(--toolbar-space), 1fr) auto minmax(1rem, 1fr)",
+          "minmax(var(--toolbar-space), 1fr) auto minmax(var(--toolbar-space), 1fr)",
       }}
     >
       <Toolbar

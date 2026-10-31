@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef } from "react";
+import { colors, uiColors } from "~/editor/constants";
 import type { PolygonOperation } from "~/editor/helpers/polygon-boolean";
 
 const paths = {
@@ -14,17 +15,17 @@ export function PolygonOperationIcon({
 }: ComponentPropsWithoutRef<"svg"> & { operation: PolygonOperation }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+      <rect width="24" height="24" rx="4" fill={colors.sky} />
       <path
         d="M3 3H15V15H3Z M9 9H21V21H9Z"
-        stroke="currentColor"
+        stroke={uiColors.vertexDraftLine}
         strokeWidth="1"
-        opacity="0.35"
+        opacity="0.6"
       />
       <path
         d={paths[operation]}
-        fill="currentColor"
-        fillOpacity="0.3"
-        stroke="currentColor"
+        fill={colors.ground}
+        stroke={uiColors.vertexDraftLine}
         strokeWidth="1.5"
         strokeLinejoin="round"
       />
