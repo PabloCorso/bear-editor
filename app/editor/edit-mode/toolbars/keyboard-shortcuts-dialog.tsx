@@ -444,6 +444,24 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: defaultTools.vertex.variants.smooth.shortcut,
+          label: "Smooth tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("smooth")} className="h-6 w-6" />
+          ),
+          subItems: [
+            {
+              shortcut: ["-", "+"],
+              label:
+                "Adjust amount: negative simplifies, positive rounds corners",
+            },
+            {
+              shortcut: ["[", "]"],
+              label: "Adjust offset",
+            },
+          ],
+        },
+        {
           shortcut: defaultTools.vertex.variants.brush.shortcut,
           label: "Select Brush tool",
           icon: (

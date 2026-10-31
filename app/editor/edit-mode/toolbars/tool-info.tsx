@@ -55,6 +55,14 @@ import {
   MIN_FRAME_WIDTH_PX,
   MAX_FRAME_WIDTH_PX,
 } from "~/editor/helpers/frame";
+import {
+  DEFAULT_SMOOTH_AMOUNT,
+  MIN_SMOOTH_AMOUNT,
+  MAX_SMOOTH_AMOUNT,
+  DEFAULT_SMOOTH_VERTEX_OFFSET,
+  MIN_SMOOTH_VERTEX_OFFSET,
+  MAX_SMOOTH_VERTEX_OFFSET,
+} from "~/editor/helpers/smooth";
 
 export function ToolInfo() {
   const modifier = useModifier();
@@ -63,6 +71,9 @@ export function ToolInfo() {
   const registeredTools = useEditorRegisteredTools();
   const vertex = useEditorToolState<VertexToolState>("vertex");
   const select = useEditorToolState<SelectToolState>("select");
+  useEditor((state) => state.mousePosition);
+  useEditor((state) => state.mouseOnCanvas);
+  useEditor((state) => state.polygons);
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
   const activeTool = (
@@ -218,6 +229,48 @@ export function ToolInfo() {
             getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
           }
         />
+      </CanvasTipGroup>
+    );
+  }
+
+  if (vertex?.variant === "smooth" && !isAutoGrass) {
+    const amount = vertex.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT;
+    const vertexOffset =
+      vertex.smoothVertexOffset ?? DEFAULT_SMOOTH_VERTEX_OFFSET;
+    const preview = getActiveTool<VertexTool>()?.getSmoothPreview();
+    const amountLabel =
+      amount > 0 ? "Round corners" : amount < 0 ? "Simplify" : "No change";
+    return (
+      <CanvasTipGroup title="Smooth" aria-label="Active tool info">
+        <CanvasTipNumberControl
+          label={amountLabel}
+          accessibleLabel={`${amountLabel.toLowerCase()} level`}
+          value={amount}
+          min={MIN_SMOOTH_AMOUNT}
+          max={MAX_SMOOTH_AMOUNT}
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustSmoothAmount(delta)
+          }
+        />
+        <CanvasTipNumberControl
+          label="Offset"
+          accessibleLabel="smooth vertex offset percentage"
+          value={vertexOffset}
+          min={MIN_SMOOTH_VERTEX_OFFSET}
+          max={MAX_SMOOTH_VERTEX_OFFSET}
+          decreaseKey="["
+          increaseKey="]"
+          increaseShortcut="]"
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustSmoothVertexOffset(delta)
+          }
+        />
+        {preview && (
+          <CanvasTipSegment>
+            {preview.source.vertices.length} → {preview.polygon.vertices.length}{" "}
+            vertices
+          </CanvasTipSegment>
+        )}
       </CanvasTipGroup>
     );
   }

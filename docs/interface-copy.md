@@ -41,6 +41,7 @@ unavailable.
 
 ## Writing style
 
+- Keep copy clear and succinct. Do not over-explain.
 - Lead with the capability or result, not “You can.”
 - Use the shortest specific label that distinguishes the behavior.
 - Prefer established product terms from the domain docs.

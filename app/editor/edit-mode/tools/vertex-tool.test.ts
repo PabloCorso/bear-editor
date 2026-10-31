@@ -11,7 +11,7 @@ import { createEditorStore, type EditorStore } from "~/editor/editor-store";
 import type { Polygon, Position } from "~/editor/elma-types";
 import { defaultAutoGrassOptions } from "~/editor/helpers/auto-grass";
 import { createFramePolygons, FRAME_MODES } from "~/editor/helpers/frame";
-import { ELMA_PIXEL_SCALE } from "~/editor/constants";
+import { colors, ELMA_PIXEL_SCALE } from "~/editor/constants";
 import { cutAndConnect } from "~/editor/helpers/cut-and-connect";
 import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
 import { validateLevelTopology } from "~/editor/helpers/level-topology";
@@ -1074,6 +1074,80 @@ describe("Frame tool", () => {
     expect(tool.getToolState().frameMode).toBe("centered");
     key(" ");
     expect(tool.getToolState().frameMode).toBe("inside");
+  });
+});
+
+describe("Smooth", () => {
+  it("uses the same closed-ring smoothing for a two-vertex grass polygon", () => {
+    const grass = polygon([position(0, 0), position(10, 0)], true);
+    const tool = createVertexTool({
+      polygons: [grass],
+      mousePosition: position(5, 0),
+      toolState: {
+        variant: "smooth",
+        drawingPolygon: polygon([]),
+        smoothAmount: 1,
+        smoothVertexOffset: 75,
+      },
+    });
+
+    const preview = tool.getSmoothPreview();
+
+    expect(preview?.polygon).not.toBe(grass);
+    expect(preview?.polygon.grass).toBe(true);
+    expect(preview?.polygon.vertices).toEqual([
+      position(2.5, 0),
+      position(7.5, 0),
+    ]);
+    expect(
+      tool.getWorldOverlays({
+        viewportRect: { minX: -1, minY: -1, maxX: 11, maxY: 1 },
+      })[0],
+    ).toMatchObject({
+      type: "polyline",
+      points: [position(2.5, 0), position(7.5, 0), position(2.5, 0)],
+    });
+  });
+
+  it("updates flat grass across amounts and previews it in green", () => {
+    const grass = polygon(
+      [position(0, 0), position(10, 0), position(10, 0)],
+      true,
+    );
+    const tool = createVertexTool({
+      polygons: [grass],
+      mousePosition: position(5, 0),
+      toolState: {
+        variant: "smooth",
+        drawingPolygon: polygon([]),
+        smoothAmount: 1,
+        smoothVertexOffset: 75,
+      },
+    });
+
+    const firstPreview = tool.getSmoothPreview();
+    const key = (value: string) =>
+      tool.onKeyDown(
+        { key: value, preventDefault() {} } as KeyboardEvent,
+        {} as Parameters<VertexTool["onKeyDown"]>[1],
+      );
+    expect(key("+")).toBe(true);
+    const secondPreview = tool.getSmoothPreview();
+    const overlay = tool.getWorldOverlays({
+      viewportRect: { minX: -1, minY: -1, maxX: 11, maxY: 1 },
+    })[0];
+    expect(key("-")).toBe(true);
+    const restoredPreview = tool.getSmoothPreview();
+
+    expect(firstPreview?.polygon).not.toBe(grass);
+    expect(secondPreview?.polygon).not.toBe(grass);
+    expect(secondPreview?.polygon.vertices).not.toEqual(
+      firstPreview?.polygon.vertices,
+    );
+    expect(restoredPreview?.polygon.vertices).toEqual(
+      firstPreview?.polygon.vertices,
+    );
+    expect(overlay).toMatchObject({ type: "polyline", color: colors.grass });
   });
 });
 
