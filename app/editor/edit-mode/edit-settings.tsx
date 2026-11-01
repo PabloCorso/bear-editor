@@ -941,6 +941,7 @@ function LevelPresetPreview({
             initialPreferences: {
               defaultLevelTitle: DEFAULT_LEVEL_TITLE,
               checkTopologyOnSave: true,
+              customShapes: [],
               animateSprites: false,
               isUIVisible: true,
               levelVisibility: {

@@ -1,3 +1,5 @@
+import { ShapeTool } from "./tools/shape-tool";
+import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
 import {
   getSessionArtifacts,
   type SessionArtifact,
@@ -99,7 +101,7 @@ type PointAnchor = {
 };
 
 export function EditorContextMenu() {
-  const { setApples, setPictures, setPolygons } = useEditorActions();
+  const { setApples, setPictures, setPolygons, getTool } = useEditorActions();
   const selectToolState = useEditorToolState<SelectToolState>(
     defaultTools.select.id,
   );
@@ -322,6 +324,14 @@ export function EditorContextMenu() {
       direct={directMenu}
       anchor={anchor}
       onClose={() => selectTool?.closeContextMenu()}
+      canAddShape={
+        getCompleteSelectedPolygons(selectToolState, polygons).length > 0
+      }
+      onAddShape={() =>
+        getTool<ShapeTool>("shape")?.saveShape(
+          getCompleteSelectedPolygons(selectToolState, polygons),
+        )
+      }
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(
         selectToolState.transformMode && !selectToolState.skewMode,
@@ -611,6 +621,8 @@ function SelectionActionsMenu({
   direct,
   anchor,
   onClose,
+  canAddShape,
+  onAddShape,
   canTransform,
   transforming,
   skewing,
@@ -628,6 +640,8 @@ function SelectionActionsMenu({
   direct: boolean;
   anchor: PointAnchor;
   onClose: () => void;
+  canAddShape: boolean;
+  onAddShape: () => void;
   canTransform: boolean;
   transforming: boolean;
   skewing: boolean;
@@ -689,6 +703,11 @@ function SelectionActionsMenu({
         side="bottom"
         sideOffset={direct ? 0 : 12}
       >
+        {canAddShape && (
+          <DropdownMenuItem onClick={onAddShape}>
+            Add to shapes
+          </DropdownMenuItem>
+        )}
         {canTransform && (
           <>
             <DropdownMenuSub>
