@@ -326,7 +326,6 @@ function getShortcutGroups(
           shortcut: "Toolbar",
           label: "Shapes",
           subItems: [
-            { shortcut: "Drag / Click twice", label: "Create a shape" },
             {
               shortcut: "Shift",
               label:

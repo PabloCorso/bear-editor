@@ -254,7 +254,6 @@ export function ShapeToolInfo() {
         "Custom shape"
       }
     >
-      <CanvasTipSegment>Drag or click twice</CanvasTipSegment>
       <CanvasTipSegment>
         Keep proportions <CanvasTipKey>Shift</CanvasTipKey>
       </CanvasTipSegment>

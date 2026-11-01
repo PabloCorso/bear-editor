@@ -6,11 +6,14 @@ import type { Polygon, Position } from "~/editor/elma-types";
 import {
   createShapePolygons,
   normalizeShape,
+  shapeBounds,
+  DEFAULT_SHAPE_SIZE,
   DEFAULT_ELLIPSE_VERTICES,
   DEFAULT_STAR_POINTS,
   DEFAULT_STAR_INNER_RADIUS,
   MAX_SHAPE_POINTS,
   type BuiltinShape,
+  type CustomShape,
 } from "~/editor/helpers/shapes";
 import { findPolygonEdgeNearPosition } from "~/editor/helpers/selection-helpers";
 import {
@@ -110,20 +113,15 @@ export class ShapeTool extends Tool<ShapeToolState> {
   onPointerDown(event: PointerEvent, context: EventContext) {
     if (event.button !== 0) return false;
     const { toolState, setToolState } = this.getState();
-    if (toolState?.start && !toolState.capturing) {
-      setToolState({ end: context.worldPos, constrain: event.shiftKey });
-      this.commit(event.altKey);
-    } else {
-      this.pointerDown = { x: context.screenX, y: context.screenY };
-      this.dragged = false;
-      setToolState({
-        start: toolState?.capturing
-          ? context.worldPos
-          : this.snapPosition(context.worldPos, event.altKey),
-        end: context.worldPos,
-        constrain: event.shiftKey,
-      });
-    }
+    this.pointerDown = { x: context.screenX, y: context.screenY };
+    this.dragged = false;
+    setToolState({
+      start: toolState?.capturing
+        ? context.worldPos
+        : this.snapPosition(context.worldPos, event.altKey),
+      end: context.worldPos,
+      constrain: event.shiftKey,
+    });
     return true;
   }
   onPointerMove(event: PointerEvent, context: EventContext) {
@@ -151,12 +149,11 @@ export class ShapeTool extends Tool<ShapeToolState> {
     if (!this.pointerDown) return false;
     this.onPointerMove(event, context);
     const { toolState } = this.getState();
-    this.pointerDown = undefined;
     if (toolState?.capturing) {
       const polygons = this.capturePolygons();
       this.clear();
       this.saveShape(polygons);
-    } else if (this.dragged) this.commit(event.altKey);
+    } else this.commit(event.altKey);
     return true;
   }
   onRightClick() {
@@ -207,22 +204,57 @@ export class ShapeTool extends Tool<ShapeToolState> {
   }
   getDrafts(bypass?: boolean) {
     const { state, toolState } = this.getState();
-    if (!toolState?.start || !toolState.end || toolState.capturing) return {};
+    if (!toolState || toolState.capturing) return {};
+    if (!toolState.start && !state.mouseOnCanvas) return {};
     const shape =
       state.customShapes.find((s) => s.id === toolState.shapeId) ??
       (["ellipse", "rectangle", "star"].includes(toolState.shapeId)
         ? (toolState.shapeId as BuiltinShape)
         : null);
+    if (!shape) return {};
+    if (toolState.start && toolState.end && this.dragged) {
+      return {
+        polygons: createShapePolygons({
+          shape,
+          ...toolState,
+          start: toolState.start,
+          end: this.snapPosition(toolState.end, bypass),
+        }),
+      };
+    }
     return {
-      polygons: shape
-        ? createShapePolygons({
-            shape,
-            ...toolState,
-            start: toolState.start,
-            end: this.snapPosition(toolState.end, bypass),
-          })
-        : [],
+      polygons: this.getPlacementPolygons(
+        shape,
+        toolState.start ?? this.snapPosition(state.mousePosition, bypass),
+      ),
     };
+  }
+  private getPlacementPolygons(
+    shape: BuiltinShape | CustomShape,
+    position: Position,
+  ): Polygon[] {
+    if (typeof shape === "object") {
+      const bounds = shapeBounds(shape.polygons);
+      const offset = {
+        x: position.x - bounds.minX - bounds.width / 2,
+        y: position.y - bounds.minY - bounds.height / 2,
+      };
+      return shape.polygons.map((polygon) => ({
+        grass: polygon.grass,
+        vertices: polygon.vertices.map((vertex) => ({
+          x: vertex.x + offset.x,
+          y: vertex.y + offset.y,
+        })),
+      }));
+    }
+    const { toolState } = this.getState();
+    const halfSize = DEFAULT_SHAPE_SIZE / 2;
+    return createShapePolygons({
+      ...toolState,
+      shape,
+      start: { x: position.x - halfSize, y: position.y - halfSize },
+      end: { x: position.x + halfSize, y: position.y + halfSize },
+    });
   }
   getWorldOverlays(): WorldRenderOverlayItem[] {
     const { state, toolState } = this.getState();
