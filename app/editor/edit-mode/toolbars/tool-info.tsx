@@ -140,7 +140,7 @@ export function ToolInfo() {
           </CanvasTipSegment>
         )}
         <CanvasTipSegment>
-          Select edge vertices
+          Select edge
           <CanvasTipKey>Alt + Click</CanvasTipKey>
         </CanvasTipSegment>
         {!!select?.selectedVertices.length && (
