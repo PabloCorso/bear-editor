@@ -55,12 +55,12 @@ export function CanvasToolbar({
       !shape?.capturing &&
       ["ellipse", "star"].includes(shape?.shapeId ?? "ellipse")) ||
     (activeToolId === "vertex" &&
-    (vertex?.variant === "autoGrass" ||
-      vertex?.variant === "pipe" ||
-      vertex?.variant === "cutConnect" ||
-      vertex?.variant === "draw" ||
-      vertex?.variant === "brush" ||
-      vertex?.previewAutoGrassAll));
+      (vertex?.variant === "autoGrass" ||
+        vertex?.variant === "pipe" ||
+        vertex?.variant === "cutConnect" ||
+        vertex?.variant === "draw" ||
+        vertex?.variant === "brush" ||
+        vertex?.previewAutoGrassAll));
   const modifier = useModifier();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 

@@ -112,12 +112,14 @@ export class ShapeTool extends Tool<ShapeToolState> {
     const { toolState, setToolState } = this.getState();
     if (toolState?.start && !toolState.capturing) {
       setToolState({ end: context.worldPos, constrain: event.shiftKey });
-      this.commit();
+      this.commit(event.altKey);
     } else {
       this.pointerDown = { x: context.screenX, y: context.screenY };
       this.dragged = false;
       setToolState({
-        start: context.worldPos,
+        start: toolState?.capturing
+          ? context.worldPos
+          : this.snapPosition(context.worldPos, event.altKey),
         end: context.worldPos,
         constrain: event.shiftKey,
       });
@@ -135,7 +137,10 @@ export class ShapeTool extends Tool<ShapeToolState> {
       ) >= 4
     )
       this.dragged = true;
-    setToolState({ end: context.worldPos, constrain: event.shiftKey });
+    setToolState({
+      end: context.worldPos,
+      constrain: event.shiftKey,
+    });
     return true;
   }
   onPointerUp(event: PointerEvent, context: EventContext) {
@@ -151,7 +156,7 @@ export class ShapeTool extends Tool<ShapeToolState> {
       const polygons = this.capturePolygons();
       this.clear();
       this.saveShape(polygons);
-    } else if (this.dragged) this.commit();
+    } else if (this.dragged) this.commit(event.altKey);
     return true;
   }
   onRightClick() {
@@ -200,7 +205,7 @@ export class ShapeTool extends Tool<ShapeToolState> {
   getCursor() {
     return "crosshair";
   }
-  getDrafts() {
+  getDrafts(bypass?: boolean) {
     const { state, toolState } = this.getState();
     if (!toolState?.start || !toolState.end || toolState.capturing) return {};
     const shape =
@@ -214,7 +219,7 @@ export class ShapeTool extends Tool<ShapeToolState> {
             shape,
             ...toolState,
             start: toolState.start,
-            end: toolState.end,
+            end: this.snapPosition(toolState.end, bypass),
           })
         : [],
     };
@@ -293,8 +298,8 @@ export class ShapeTool extends Tool<ShapeToolState> {
       ),
     );
   }
-  private commit() {
-    const polygons = this.getDrafts().polygons ?? [];
+  private commit(bypass?: boolean) {
+    const polygons = this.getDrafts(bypass).polygons ?? [];
     if (polygons.length) {
       const { state } = this.getState();
       state.actions.setPolygons([...state.polygons, ...polygons]);
