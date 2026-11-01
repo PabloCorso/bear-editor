@@ -446,6 +446,145 @@ describe("SelectTool marquee selection", () => {
   });
 });
 
+describe("SelectTool polygon edge dragging", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const event = {
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+  } as PointerEvent;
+  const context = (worldPos: Position) => ({
+    worldPos,
+    screenX: 0,
+    screenY: 0,
+  });
+
+  function setup(selectedVertexIndexes: number[], grass = false) {
+    const { store, tool } = createTool();
+    const polygon = {
+      grass,
+      vertices: [
+        position(0, 0),
+        position(20, 0),
+        position(20, 20),
+        position(0, 20),
+      ],
+    };
+    store.getState().actions.setPolygons([polygon]);
+    store.getState().actions.setZoom(100);
+    store.getState().actions.setMouseOnCanvas(true);
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedVertices: selectedVertexIndexes.map((index) => ({
+          polygon,
+          vertex: polygon.vertices[index],
+        })),
+      });
+    store.temporal.getState().clear();
+    return { store, tool, polygon };
+  }
+
+  function dragTopEdge(tool: SelectTool) {
+    tool.onPointerDown(event, context(position(10, 0)));
+    tool.onPointerMove(event, context(position(13, 4)));
+    tool.onPointerUp(event, context(position(13, 4)));
+  }
+
+  function getPolygonLines(tool: SelectTool) {
+    return tool
+      .getWorldOverlays({
+        viewportRect: { minX: -10, minY: -10, maxX: 30, maxY: 30 },
+      })
+      .filter((item) => item.type === "polyline");
+  }
+
+  it("does not outline the polygon when only one vertex is selected", () => {
+    const { store, tool } = setup([0]);
+    store.getState().actions.setMousePosition(position(10, 10));
+
+    expect(getPolygonLines(tool)).toHaveLength(0);
+  });
+
+  it("moves two selected endpoint vertices when dragging their shared edge", () => {
+    const { store, tool } = setup([0, 1]);
+    store.getState().actions.setMousePosition(position(10, 0));
+
+    expect(getPolygonLines(tool)).toMatchObject([
+      {
+        points: [position(0, 0), position(20, 0)],
+        closed: false,
+      },
+    ]);
+
+    dragTopEdge(tool);
+
+    expect(store.getState().polygons[0].vertices).toEqual([
+      position(3, 4),
+      position(23, 4),
+      position(20, 20),
+      position(0, 20),
+    ]);
+    expect(getSelection(store)?.selectedVertices).toHaveLength(2);
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+  });
+
+  it("does not outline a grass polygon's implicit closing edge", () => {
+    const { store, tool } = setup([0, 1], true);
+    store.getState().actions.setMousePosition(position(10, 0));
+
+    expect(getPolygonLines(tool)).toHaveLength(0);
+  });
+
+  it("does not hover an overlapping polygon above a selected edge", () => {
+    const { store, tool, polygon: selectedPolygon } = setup([0, 1]);
+    const unselectedPolygon = {
+      grass: false,
+      vertices: [
+        position(0, 0),
+        position(20, 0),
+        position(20, 20),
+        position(0, 20),
+      ],
+    };
+    store.getState().actions.setPolygons([unselectedPolygon, selectedPolygon]);
+    store.getState().actions.setMousePosition(position(10, 0));
+
+    expect(getPolygonLines(tool)).toMatchObject([
+      {
+        points: [position(0, 0), position(20, 0)],
+        closed: false,
+      },
+    ]);
+  });
+
+  it("selects and moves the whole polygon when the edge endpoints are not both selected", () => {
+    const { store, tool } = setup([0, 2]);
+    store.getState().actions.setMousePosition(position(10, 0));
+
+    expect(getPolygonLines(tool)).toMatchObject([{ closed: true }]);
+
+    dragTopEdge(tool);
+
+    expect(store.getState().polygons[0].vertices).toEqual([
+      position(3, 4),
+      position(23, 4),
+      position(23, 24),
+      position(3, 24),
+    ]);
+    expect(getSelection(store)?.selectedVertices).toHaveLength(4);
+    expect(store.temporal.getState().pastStates).toHaveLength(1);
+  });
+});
+
 describe("Grid", () => {
   beforeEach(() => {
     vi.stubGlobal("window", { navigator: { platform: "Linux" } });
@@ -750,7 +889,8 @@ describe("SelectTool skewing", () => {
         .getWorldOverlays({
           viewportRect: { minX: -100, minY: -100, maxX: 100, maxY: 100 },
         })
-        .find((item) => item.type === "polyline")?.points,
+        .filter((item) => item.type === "polyline")
+        .find((item) => item.points.length === skewedFrame.length)?.points,
     ).toEqual(skewedFrame);
     expect(tool.getCursor(context(position(16, 0)))).toBe("ew-resize");
     dragMarquee(tool, position(16, 0), position(22, 0));

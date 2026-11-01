@@ -1489,6 +1489,8 @@ export class SelectTool extends Tool<SelectToolState> {
             this.isSelectablePolygonEdge,
           );
           if (!hoveredVertex && hoveredPolygon) {
+            const hoveredSelectedEdge =
+              this.findSelectedPolygonEdgeNearPosition(state.mousePosition);
             const hoveredPolygonBoundsColor = uiColors.boundsHover;
             const polygonSelectionCount = toolState.selectedVertices.filter(
               (sv) => sv.polygon === hoveredPolygon,
@@ -1498,6 +1500,7 @@ export class SelectTool extends Tool<SelectToolState> {
               polygonSelectionCount > 0;
             if (
               !isHoveredPolygonSelected &&
+              !hoveredSelectedEdge &&
               isPolygonVisible(hoveredPolygon, viewportRect)
             ) {
               overlays.push({
@@ -1514,9 +1517,16 @@ export class SelectTool extends Tool<SelectToolState> {
       }
     }
 
-    const selectedPolygons = Array.from(
-      new Set(toolState.selectedVertices.map(({ polygon }) => polygon)),
-    );
+    const selectedVerticesByPolygon = new Map<Polygon, Set<Position>>();
+    toolState.selectedVertices.forEach(({ polygon, vertex }) => {
+      const selectedVertices = selectedVerticesByPolygon.get(polygon);
+      if (selectedVertices) {
+        selectedVertices.add(vertex);
+      } else {
+        selectedVerticesByPolygon.set(polygon, new Set([vertex]));
+      }
+    });
+    const selectedPolygons = Array.from(selectedVerticesByPolygon.keys());
     overlays.push(
       ...selectedPolygons
         .filter(
@@ -1524,18 +1534,34 @@ export class SelectTool extends Tool<SelectToolState> {
             polygon.vertices.length >= 2 &&
             isPolygonVisible(polygon, viewportRect),
         )
-        .map((polygon) => {
+        .flatMap((polygon) => {
           const selectedPolygonBoundsColor = polygon.grass
             ? colors.grass
             : uiColors.boundsSelected;
-          return {
-            type: "polyline" as const,
-            points: polygon.vertices,
-            closed: true,
-            color: selectedPolygonBoundsColor,
-            width: selectedLineWidth,
-            layer: "top" as const,
-          };
+          const selectedVertices = selectedVerticesByPolygon.get(polygon)!;
+          const unselectableGrassEdgeIndex =
+            polygon.grass && selectedVertices.size < polygon.vertices.length
+              ? findLongestPolygonEdgeIndex(polygon)
+              : -1;
+          return polygon.vertices.flatMap((vertex, edgeIndex) => {
+            if (
+              edgeIndex === unselectableGrassEdgeIndex ||
+              !this.isPolygonEdgeSelected(polygon, edgeIndex, selectedVertices)
+            )
+              return [];
+
+            return {
+              type: "polyline" as const,
+              points: [
+                vertex,
+                polygon.vertices[(edgeIndex + 1) % polygon.vertices.length],
+              ],
+              closed: false,
+              color: selectedPolygonBoundsColor,
+              width: selectedLineWidth,
+              layer: "top" as const,
+            };
+          });
         }),
     );
 
@@ -1775,14 +1801,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
     if (
       this.isPolygonSelectable() &&
-      findPolygonEdgeNearPosition(
-        position,
-        state.polygons,
-        selectionThresholds.polygonEdge / state.zoom,
-        (polygon, edgeIndex) =>
-          this.isSelectablePolygonEdge(polygon, edgeIndex) &&
-          this.isPolygonFullySelected(polygon),
-      )
+      this.findSelectedPolygonEdgeNearPosition(position)
     ) {
       return true;
     }
@@ -1790,6 +1809,18 @@ export class SelectTool extends Tool<SelectToolState> {
     return hoveredPicture
       ? toolState.selectedPictures.includes(hoveredPicture.position)
       : false;
+  }
+
+  private findSelectedPolygonEdgeNearPosition(position: Position) {
+    const { state } = this.getState();
+    return findPolygonEdgeNearPosition(
+      position,
+      state.polygons,
+      selectionThresholds.polygonEdge / state.zoom,
+      (polygon, edgeIndex) =>
+        this.isSelectablePolygonEdge(polygon, edgeIndex) &&
+        this.isPolygonEdgeSelected(polygon, edgeIndex),
+    );
   }
 
   private isSelectablePolygonEdge = (polygon: Polygon, edgeIndex: number) => {
@@ -1806,19 +1837,7 @@ export class SelectTool extends Tool<SelectToolState> {
     const n = polygon.vertices.length;
     if (n < 2) return false;
 
-    let longestEdgeIndex = -1;
-    let longestEdgeLength = -1;
-    for (let i = 0; i < n; i++) {
-      const from = polygon.vertices[i];
-      const to = polygon.vertices[(i + 1) % n];
-      const length = Math.hypot(to.x - from.x, to.y - from.y);
-      if (length > longestEdgeLength) {
-        longestEdgeLength = length;
-        longestEdgeIndex = i;
-      }
-    }
-
-    return edgeIndex !== longestEdgeIndex;
+    return edgeIndex !== findLongestPolygonEdgeIndex(polygon);
   };
 
   private startDragging(worldPos: Position): void {
@@ -2093,14 +2112,25 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   }
 
-  private isPolygonFullySelected(polygon: Polygon): boolean {
+  private isPolygonEdgeSelected(
+    polygon: Polygon,
+    edgeIndex: number,
+    selectedVertices?: ReadonlySet<Position>,
+  ): boolean {
     const { toolState } = this.getState();
-    const polygonSelectionCount =
-      toolState?.selectedVertices.filter((sv) => sv.polygon === polygon)
-        .length ?? 0;
+    if (!toolState || polygon.vertices.length < 2) return false;
+
+    const start = polygon.vertices[edgeIndex];
+    const end = polygon.vertices[(edgeIndex + 1) % polygon.vertices.length];
+    if (selectedVertices) {
+      return selectedVertices.has(start) && selectedVertices.has(end);
+    }
     return (
-      polygonSelectionCount === polygon.vertices.length &&
-      polygonSelectionCount > 0
+      isVertexSelected(
+        { polygon, vertex: start },
+        toolState.selectedVertices,
+      ) &&
+      isVertexSelected({ polygon, vertex: end }, toolState.selectedVertices)
     );
   }
 
@@ -2998,6 +3028,22 @@ function isPolygon(value: unknown): value is Polygon {
 
 function isPolygonArray(value: unknown): value is Polygon[] {
   return Array.isArray(value) && value.every(isPolygon);
+}
+
+function findLongestPolygonEdgeIndex(polygon: Polygon): number {
+  let longestEdgeIndex = -1;
+  let longestEdgeLength = -1;
+  for (let edgeIndex = 0; edgeIndex < polygon.vertices.length; edgeIndex++) {
+    const from = polygon.vertices[edgeIndex];
+    const to = polygon.vertices[(edgeIndex + 1) % polygon.vertices.length];
+    const length = Math.hypot(to.x - from.x, to.y - from.y);
+    if (length > longestEdgeLength) {
+      longestEdgeLength = length;
+      longestEdgeIndex = edgeIndex;
+    }
+  }
+
+  return longestEdgeIndex;
 }
 
 function isApple(value: unknown): value is Apple {
