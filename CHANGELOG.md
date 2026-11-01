@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## 2026-10-30
+## 2026-10-01
 
 - Add a configurable canvas grid and snap to grid under Level options → Grid. Hold Alt for free placement and movement.
+- Select by edge enclosed by selected vertices instead of selection the whole polygon @Infe.
+- Add smooth tool.
+- Add boolean polygon tools: union, difference, intersection, and exclusive.
+- Add precise measurements to Resize & Rotate
+- Improve topology checks, issue navigation and repair previews
+- Add level properties dialog with statistics and saved times
 
 ## 2026-10-28
 
