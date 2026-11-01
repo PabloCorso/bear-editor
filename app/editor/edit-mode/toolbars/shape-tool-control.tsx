@@ -88,7 +88,7 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
   const toolState =
     useEditorToolState<ShapeToolState>("shape") ?? defaultShapeState;
   const shapes = useEditor((state) => state.customShapes);
-  const { getTool, setCustomShapes } = useEditorActions();
+  const { getTool, setCustomShapes, setToolMenuOpen } = useEditorActions();
   const items: {
     id: string;
     name: string;
@@ -134,7 +134,10 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
                 aria-pressed={
                   !toolState.capturing && item.id === toolState.shapeId
                 }
-                onClick={() => tool()?.selectShape(item.id)}
+                onClick={() => {
+                  tool()?.selectShape(item.id);
+                  setToolMenuOpen(false);
+                }}
                 className={cn(
                   "flex w-full cursor-pointer flex-col items-center gap-1 rounded p-2 text-secondary hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring",
                   !toolState.capturing &&
@@ -205,7 +208,10 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
                 "flex h-20 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded border border-dashed border-separator text-secondary hover:bg-primary-hover/50 focus-visible:focus-ring",
                 toolState.capturing && "bg-primary-hover/50",
               )}
-              onClick={() => tool()?.startCapture()}
+              onClick={() => {
+                tool()?.startCapture();
+                setToolMenuOpen(false);
+              }}
             >
               <PlusIcon className="size-7" />
               <span className="text-[10px]">Add shape</span>
