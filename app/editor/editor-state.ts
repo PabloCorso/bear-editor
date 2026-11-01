@@ -8,7 +8,6 @@ import type {
   Polygon,
   Position,
 } from "./elma-types";
-import type { Widget } from "./edit-mode/widgets/widget-interface";
 import { FileSession } from "./helpers/file-session";
 import { LevelFolder } from "./helpers/level-folder";
 import type { LevelVisibilitySettings } from "./level-visibility";
@@ -124,9 +123,6 @@ export type EditorState = EditorLevel & {
   toolsMap: Map<string, Tool>;
   toolState: ToolState;
 
-  // Widgets
-  widgetsMap: Map<string, Widget>;
-
   // File system access
   fileSession: FileSession;
   levelFolder: LevelFolder;
@@ -184,11 +180,6 @@ export type EditorState = EditorLevel & {
       toolId: string,
       state: Partial<T>,
     ) => void;
-
-    // Widgets
-    registerWidget: (widget: Widget) => void;
-    activateWidget: (widgetId: string) => void;
-    deactivateWidget: (widgetId: string) => void;
 
     // File system access
     setFileSession: (session?: FileSession) => void;

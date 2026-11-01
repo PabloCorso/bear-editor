@@ -29,8 +29,7 @@ cache miss and durable-cache bypass. The difference is consistent with a cold
 SSR function, but confirming that cause requires function logs or repeated
 measurements after idle periods. It does not establish a free-plan limitation.
 
-The app enables SSR, and the home route's server loader only returns whether an
-OpenAI API key is configured. Netlify's React Router integration uses serverless
+The app enables SSR. Netlify's React Router integration uses serverless
 functions by default; static assets use its CDN, while dynamic responses are
 [not cached by default](https://docs.netlify.com/build/caching/caching-overview/).
 Investigate serving a static/prerendered editor shell or caching eligible HTML

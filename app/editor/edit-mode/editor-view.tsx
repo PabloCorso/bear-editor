@@ -14,7 +14,6 @@ import { SelectTool } from "~/editor/edit-mode/tools/select-tool";
 import { AppleTool } from "~/editor/edit-mode/tools/apple-tools";
 import { KillerTool } from "~/editor/edit-mode/tools/killer-tool";
 import { FlowerTool } from "~/editor/edit-mode/tools/flower-tool";
-import { AIWidget } from "~/editor/edit-mode/widgets/ai-widget";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import {
   editorLevelFromFile,
@@ -49,13 +48,11 @@ export function EditorView({ className, ...props }: EditorViewProps) {
 
 type UseEditorViewOptions = {
   initialDocument?: InitialDocument;
-  isOpenAIEnabled?: boolean;
   rendererBackend?: WorldSceneRendererBackend;
 };
 
 export function useEditorView({
   initialDocument,
-  isOpenAIEnabled,
   rendererBackend = "webgl",
 }: UseEditorViewOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -132,15 +129,9 @@ export function useEditorView({
         TextureTool,
       ];
 
-      const widgets = [];
-      if (isOpenAIEnabled) {
-        widgets.push(AIWidget);
-      }
-
       engineRef.current = new EditorEngine(canvas, {
         store,
         tools,
-        widgets,
         lgrAssets: editorLgrAssets ?? undefined,
         initialDocument: initialDocument?.document,
         rendererBackend,
@@ -157,7 +148,6 @@ export function useEditorView({
       store,
       initialDocument?.document,
       initialDocument?.status,
-      isOpenAIEnabled,
       editorLgrAssets,
       rendererBackend,
     ],

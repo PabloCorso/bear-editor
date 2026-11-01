@@ -33,7 +33,6 @@ import type {
   Tool,
   PlacementPropertiesMenuState,
 } from "~/editor/edit-mode/tools/tool-interface";
-import type { Widget } from "~/editor/edit-mode/widgets/widget-interface";
 import { createEditorStore, type EditorStore } from "~/editor/editor-store";
 import type { DefaultLevelPreset } from "~/editor/helpers/level-parser";
 import { LgrAssets } from "~/components/lgr-assets";
@@ -88,7 +87,6 @@ type EditorEngineOptions = {
   defaultLevelPreset?: DefaultLevelPreset;
   readOnly?: boolean;
   tools?: Array<new (store: EditorStore) => Tool>;
-  widgets?: Array<new (store: EditorStore) => Widget>;
   minZoom?: number;
   maxZoom?: number;
   panSpeed?: number;
@@ -194,7 +192,6 @@ export class EditorEngine {
       defaultLevelPreset = "default",
       readOnly = false,
       tools = [],
-      widgets = [],
       minZoom = 0.2,
       maxZoom = 10000,
       panSpeed = 1.0,
@@ -253,10 +250,6 @@ export class EditorEngine {
     if (tools.length > 0) {
       state.actions.activateTool(initialToolId);
     }
-
-    widgets.forEach((widget) =>
-      state.actions.registerWidget(new widget(this.store)),
-    );
 
     if (!readOnly) {
       this.setupEventListeners();

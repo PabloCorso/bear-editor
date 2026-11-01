@@ -17,7 +17,6 @@ import type {
   EditorDocumentSaveState,
   EditorState,
 } from "./editor-state";
-import type { Widget } from "./edit-mode/widgets/widget-interface";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import { FileSession } from "~/editor/helpers/file-session";
 import { LevelFolder } from "~/editor/helpers/level-folder";
@@ -464,9 +463,6 @@ export function createEditorStore({
         toolsMap: new Map<string, Tool>(),
         toolState: {},
 
-        // Widgets
-        widgetsMap: new Map<string, Widget>(),
-
         // File system access
         fileSession: new FileSession(store as EditorStore),
         levelFolder: new LevelFolder(store as EditorStore),
@@ -716,36 +712,6 @@ export function createEditorStore({
                 [toolId]: { ...(prev.toolState[toolId] as T), ...state },
               },
             })),
-
-          // Widgets
-          registerWidget: (widget: Widget) =>
-            set((prev) => {
-              const widgetsMap = new Map(prev.widgetsMap);
-              widgetsMap.set(widget.id, widget);
-              return { widgetsMap };
-            }),
-          activateWidget: (widgetId: string) => {
-            const state = get();
-            const widget = state.widgetsMap.get(widgetId);
-            if (!widget) {
-              console.warn(
-                `Widget '${widgetId}' is not registered. Available widgets: ${Array.from(state.widgetsMap.keys()).join(", ")}`,
-              );
-              return;
-            }
-            widget.onActivate?.();
-          },
-          deactivateWidget: (widgetId: string) => {
-            const state = get();
-            const widget = state.widgetsMap.get(widgetId);
-            if (!widget) {
-              console.warn(
-                `Widget '${widgetId}' is not registered. Available widgets: ${Array.from(state.widgetsMap.keys()).join(", ")}`,
-              );
-              return;
-            }
-            widget.onDeactivate?.();
-          },
 
           // File system access
           setFileSession: (session) => set({ fileSession: session }),
