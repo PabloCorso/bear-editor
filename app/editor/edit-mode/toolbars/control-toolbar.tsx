@@ -1,5 +1,6 @@
 import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
 import { HandIcon } from "@phosphor-icons/react/dist/ssr";
+import { ShapeToolControl } from "./shape-tool-control";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
 import {
@@ -103,6 +104,7 @@ function RegisteredToolControl({
   if (meta.id === defaultTools.vertex.id) {
     return <VertexToolControl {...props} />;
   }
+  if (meta.id === defaultTools.shape.id) return <ShapeToolControl {...props} />;
   if (meta.id === defaultTools.apple.id) {
     return <AppleToolControl {...props} />;
   }

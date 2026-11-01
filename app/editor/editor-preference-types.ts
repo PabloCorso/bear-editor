@@ -6,6 +6,7 @@ export type EditorPreferences = Pick<
   EditorState,
   | "defaultLevelTitle"
   | "checkTopologyOnSave"
+  | "customShapes"
   | "animateSprites"
   | "isUIVisible"
   | "levelVisibility"
