@@ -34,8 +34,10 @@ grid snapping.
 | Frame and AutoGrass targeting                          | Raw coordinates; operate on existing geometry                    |
 | Resize, rotate, skew                                   | Keep their existing transform behavior                           |
 
-Shapes snap their construction endpoints; capture hit testing and marquee
-selection use raw coordinates. Generated shape vertices retain their geometry.
+Shapes snap their construction endpoints when dragging, or their placement
+center when stamping at the default or saved size. Capture hit testing and
+marquee selection use raw coordinates. Generated shape vertices retain their
+geometry.
 
 Generated pipe edges, grass, frame outlines, and freehand vertices are not rounded
 individually. Their width and shape must remain intact.

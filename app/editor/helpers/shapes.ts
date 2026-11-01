@@ -7,6 +7,7 @@ export const builtinShapes: { id: BuiltinShape; name: string }[] = [
   { id: "rectangle", name: "Rectangle" },
   { id: "star", name: "Star" },
 ];
+export const DEFAULT_SHAPE_SIZE = 4;
 export const DEFAULT_ELLIPSE_VERTICES = 10;
 export const DEFAULT_STAR_POINTS = 5;
 export const DEFAULT_STAR_INNER_RADIUS = 50;
