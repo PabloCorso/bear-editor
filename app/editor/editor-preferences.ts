@@ -3,6 +3,7 @@ import {
   DEFAULT_LEVEL_TITLE,
   normalizeLevelTitle,
 } from "./helpers/level-title";
+import { loadCustomShapes } from "./helpers/shapes";
 import fastDeepEqual from "fast-deep-equal";
 import { useEffect, useRef } from "react";
 import type { EditorState } from "./editor-state";
@@ -63,6 +64,7 @@ function parseStoredItem<T>(key: string): T | null {
 const defaultEditorPreferences: EditorPreferences = {
   defaultLevelTitle: DEFAULT_LEVEL_TITLE,
   checkTopologyOnSave: true,
+  customShapes: [],
   animateSprites: true,
   isUIVisible: true,
   levelVisibility: defaultLevelVisibility,
@@ -91,6 +93,7 @@ export function loadEditorPreferences(): EditorPreferences {
       typeof preferences?.checkTopologyOnSave === "boolean"
         ? preferences.checkTopologyOnSave
         : defaultEditorPreferences.checkTopologyOnSave,
+    customShapes: loadCustomShapes(preferences?.customShapes),
     defaultLevelTitle:
       typeof preferences?.defaultLevelTitle === "string"
         ? normalizeLevelTitle(preferences.defaultLevelTitle)
@@ -161,6 +164,7 @@ function getComparableEditorPreferences(state: EditorState): EditorPreferences {
   return {
     defaultLevelTitle: state.defaultLevelTitle,
     checkTopologyOnSave: state.checkTopologyOnSave,
+    customShapes: state.customShapes,
     animateSprites: state.animateSprites,
     isUIVisible: state.isUIVisible,
     levelVisibility: state.levelVisibility,

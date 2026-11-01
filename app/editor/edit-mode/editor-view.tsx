@@ -4,6 +4,7 @@ import {
   IntersectTool,
   ExcludeTool,
 } from "./tools/polygon-boolean-tool";
+import { ShapeTool } from "./tools/shape-tool";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -121,6 +122,7 @@ export function useEditorView({
         SubtractTool,
         IntersectTool,
         ExcludeTool,
+        ShapeTool,
         AppleTool,
         KillerTool,
         FlowerTool,

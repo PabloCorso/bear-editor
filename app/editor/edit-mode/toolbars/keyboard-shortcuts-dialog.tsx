@@ -323,6 +323,26 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: "Toolbar",
+          label: "Shapes",
+          subItems: [
+            { shortcut: "Drag / Click twice", label: "Create a shape" },
+            {
+              shortcut: "Shift",
+              label:
+                "Constrain proportions (custom shapes keep original ratio)",
+            },
+            { shortcut: ["-", "+"], label: "Ellipse vertices / star points" },
+            { shortcut: ["[", "]"], label: "Star inner radius (%)" },
+            { shortcut: "Esc / Right click", label: "Cancel shape or capture" },
+            {
+              shortcut: "+ tile",
+              label:
+                "Click a polygon edge or marquee whole polygons to save a shape",
+            },
+          ],
+        },
+        {
           shortcut: defaultTools.hand.shortcut,
           label: defaultTools.hand.name,
           icon: <HandIcon weight="light" />,
