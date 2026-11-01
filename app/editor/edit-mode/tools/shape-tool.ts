@@ -4,6 +4,7 @@ import { defaultTools } from "./default-tools";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { Polygon, Position } from "~/editor/elma-types";
 import {
+  builtinShapes,
   createShapePolygons,
   normalizeShape,
   shapeBounds,
@@ -208,9 +209,7 @@ export class ShapeTool extends Tool<ShapeToolState> {
     if (!toolState.start && !state.mouseOnCanvas) return {};
     const shape =
       state.customShapes.find((s) => s.id === toolState.shapeId) ??
-      (["ellipse", "rectangle", "star"].includes(toolState.shapeId)
-        ? (toolState.shapeId as BuiltinShape)
-        : null);
+      builtinShapes.find((shape) => shape.id === toolState.shapeId)?.id;
     if (!shape) return {};
     if (toolState.start && toolState.end && this.dragged) {
       return {

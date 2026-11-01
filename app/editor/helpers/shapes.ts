@@ -1,11 +1,12 @@
 import type { Polygon, Position } from "~/editor/elma-types";
 
-export type BuiltinShape = "ellipse" | "rectangle" | "star";
+export type BuiltinShape = "ellipse" | "rectangle" | "star" | "arrow";
 export type CustomShape = { id: string; name: string; polygons: Polygon[] };
 export const builtinShapes: { id: BuiltinShape; name: string }[] = [
   { id: "ellipse", name: "Ellipse" },
   { id: "rectangle", name: "Rectangle" },
   { id: "star", name: "Star" },
+  { id: "arrow", name: "Arrow" },
 ];
 export const DEFAULT_SHAPE_SIZE = 4;
 export const DEFAULT_ELLIPSE_VERTICES = 10;
@@ -158,6 +159,21 @@ export function createShapePolygons({
           { x: left + width, y: top + height },
           { x: left, y: top + height },
         ],
+      },
+    ];
+  if (shape === "arrow")
+    return [
+      {
+        grass: false,
+        vertices: [
+          { x: 0, y: 1 / 3 },
+          { x: 0.6, y: 1 / 3 },
+          { x: 0.6, y: 0 },
+          { x: 1, y: 0.5 },
+          { x: 0.6, y: 1 },
+          { x: 0.6, y: 2 / 3 },
+          { x: 0, y: 2 / 3 },
+        ].map(({ x, y }) => ({ x: left + x * width, y: top + y * height })),
       },
     ];
   const points = Math.max(
