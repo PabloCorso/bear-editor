@@ -42,6 +42,16 @@ import {
 } from "./canvas-tip";
 import { cn } from "~/utils/misc";
 
+// Toolbar icons always use the default geometry, independently of the draft.
+const builtinShapeItems = builtinShapes.map((shape) => ({
+  ...shape,
+  polygons: createShapePolygons({
+    shape: shape.id,
+    start: { x: 0, y: 0 },
+    end: { x: 1, y: 1 },
+  }),
+}));
+
 export function ShapePreview({
   polygons,
   className,
@@ -85,15 +95,7 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
     polygons: Polygon[];
     custom?: CustomShape;
   }[] = [
-    ...builtinShapes.map((shape) => ({
-      ...shape,
-      polygons: createShapePolygons({
-        shape: shape.id,
-        start: { x: 0, y: 0 },
-        end: { x: 1, y: 1 },
-        ...toolState,
-      }),
-    })),
+    ...builtinShapeItems,
     ...shapes.map((shape) => ({ ...shape, custom: shape })),
   ];
   const selected = items.find((s) => s.id === toolState.shapeId) ?? items[0];
