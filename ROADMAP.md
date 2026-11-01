@@ -4,6 +4,8 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
+- @Tarogato i concern that being able to move polys by edge without selection could interfere with grabbing pictures and masks
+
 - AI Assistant
 
 - More vertex tool options or new polygon tools
