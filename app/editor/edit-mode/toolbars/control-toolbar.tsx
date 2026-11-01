@@ -1,5 +1,5 @@
 import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
-import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
+import { HandIcon } from "@phosphor-icons/react/dist/ssr";
 import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
 import {
@@ -31,15 +31,9 @@ const SPRITE_TOOL_IDS = new Set<string>([
   defaultTools.texture.id,
 ]);
 
-type ControlToolbarProps = ToolbarProps & {
-  isOpenAIEnabled?: boolean;
-};
+type ControlToolbarProps = ToolbarProps;
 
-export function ControlToolbar({
-  className,
-  isOpenAIEnabled,
-  ...props
-}: ControlToolbarProps) {
+export function ControlToolbar({ className, ...props }: ControlToolbarProps) {
   const toolMetas = useEditorRegisteredTools();
   const { isLoaded: areSpritesReady } = useLgrAssets();
   const orderedTools = sortToolMetas(
@@ -91,7 +85,6 @@ export function ControlToolbar({
             disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
           />
         ))}
-        {isOpenAIEnabled && <AIChatToolControl tooltipSide="right" />}
       </Toolbar>
     </div>
   );
@@ -171,14 +164,6 @@ function FlowerToolControl(props: ToolControlButtonProps) {
       {...props}
     >
       <SpriteIcon src={flowerSprite.src} />
-    </ToolControlButton>
-  );
-}
-
-function AIChatToolControl(props: ToolControlButtonProps) {
-  return (
-    <ToolControlButton id="ai-chat" name="AI Assistant" shortcut="I" {...props}>
-      <SparkleIcon weight="fill" />
     </ToolControlButton>
   );
 }

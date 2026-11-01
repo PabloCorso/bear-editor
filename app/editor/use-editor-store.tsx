@@ -140,10 +140,6 @@ export function useEditorRegisteredTools(): ToolMeta[] {
   });
 }
 
-export function useEditorWidget<T>(widgetId: string): T | undefined {
-  return useEditor((state) => state.widgetsMap.get(widgetId) as T | undefined);
-}
-
 export function useEditorLevelFolderName() {
   return useEditor((state) =>
     state.levelFolder?.hasFolder() ? state.levelFolder.name : null,

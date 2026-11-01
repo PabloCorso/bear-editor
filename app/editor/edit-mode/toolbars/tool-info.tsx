@@ -99,9 +99,7 @@ export function ToolInfo() {
   const activeTool = (
     registeredTools.length ? registeredTools : Object.values(defaultTools)
   ).find((tool) => tool.id === activeToolId);
-  const toolName =
-    activeTool?.name ??
-    (activeToolId === "ai-chat" ? "AI Assistant" : activeToolId);
+  const toolName = activeTool?.name ?? activeToolId;
 
   if (activeToolId === "select" && select?.transformMode && select.skewMode) {
     return (

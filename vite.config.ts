@@ -38,8 +38,5 @@ export default defineConfig(async ({ mode }) => {
 
   return {
     plugins,
-    ssr: {
-      noExternal: ["streamdown", "katex"],
-    },
   };
 });

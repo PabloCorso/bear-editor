@@ -29,19 +29,16 @@ const LazyPlayModeOverlay = lazy(async () => {
 
 type EditorShellProps = {
   initialLevelName?: string;
-  isOpenAIEnabled?: boolean;
   rendererBackend?: WorldSceneRendererBackend;
 };
 
 export function EditorShell({
   initialLevelName,
-  isOpenAIEnabled,
   rendererBackend = "webgl",
 }: EditorShellProps) {
   const initialDocument = useInitialLevel(initialLevelName);
   const { canvasRef, engineRef } = useEditorView({
     initialDocument,
-    isOpenAIEnabled,
     rendererBackend,
   });
   const isPlayMode = useEditorIsPlayMode();
