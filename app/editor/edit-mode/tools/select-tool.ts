@@ -3,6 +3,11 @@ import {
   findSessionArtifact,
   getSessionArtifactKey,
 } from "~/editor/session-artifacts";
+import {
+  isPointInLasso,
+  circleIntersectsLasso,
+  rectIntersectsLasso,
+} from "~/editor/helpers/lasso-selection";
 import rotateCursorSvg from "~/assets/rotate-cursor.svg?raw";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
@@ -91,6 +96,7 @@ export type SelectToolState = {
   selectedObjects: Position[];
   selectedPictures: Position[];
   isDragging: boolean;
+  variant?: "marquee" | "lasso";
   transformMode?: boolean;
   skewMode?: boolean;
   isMarqueeSelecting?: boolean;
@@ -180,6 +186,20 @@ export class SelectTool extends Tool<SelectToolState> {
   private dragOriginPositions: Position[] = [];
   private dragConstraintDirections: Position[] = [];
   private isMarqueeSelecting = false;
+  private lassoPath: Position[] = [];
+  private areaSelectionBefore: Pick<
+    SelectToolState,
+    "selectedVertices" | "selectedObjects" | "selectedPictures"
+  > | null = null;
+  private areaSelectionVariant: "marquee" | "lasso" = "marquee";
+
+  onActivate(variant?: string): void {
+    if (variant === "marquee" || variant === "lasso") {
+      if (this.isMarqueeSelecting) this.cancelAreaSelection();
+      this.getState().setToolState({ variant });
+    }
+  }
+
   private marqueeStartPos = { x: 0, y: 0 };
   private marqueeEndPos = { x: 0, y: 0 };
   private dragHistoryStart: EditorHistoryState | null = null;
@@ -209,12 +229,19 @@ export class SelectTool extends Tool<SelectToolState> {
     });
     this.isDragging = false;
     this.isMarqueeSelecting = false;
+    this.lassoPath = [];
+    this.areaSelectionBefore = null;
     this.dragOriginPositions = [];
     this.dragConstraintDirections = [];
     this.endDragHistoryBatch(false);
   }
 
   onRightClick(event: MouseEvent, context: EventContext) {
+    if (this.isMarqueeSelecting) {
+      this.finalizeMarqueeSelection();
+      this.finishAreaSelection();
+      return true;
+    }
     this.pruneHiddenSelection();
     const { state, toolState, setToolState } = this.getState();
     const hoveredPicture = this.resolveHoveredPictureFromState(
@@ -483,8 +510,6 @@ export class SelectTool extends Tool<SelectToolState> {
         this.startDragging(context.worldPos);
         return true;
       }
-
-      clearIfNewSingleSelect(false);
     }
 
     if (hoveredObject) {
@@ -599,6 +624,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
     if (this.isMarqueeSelecting) {
       this.marqueeEndPos = context.worldPos;
+      this.appendLassoPoint(context.worldPos);
       return true;
     }
 
@@ -620,9 +646,13 @@ export class SelectTool extends Tool<SelectToolState> {
     }
 
     if (this.isMarqueeSelecting) {
-      this.finalizeMarqueeSelection();
-      this.isMarqueeSelecting = false;
-      this.getState().setToolState({ isMarqueeSelecting: false });
+      if (_event.type === "pointercancel") this.cancelAreaSelection();
+      else {
+        this.marqueeEndPos = _context.worldPos;
+        this.appendLassoPoint(_context.worldPos, true);
+        this.finalizeMarqueeSelection();
+        this.finishAreaSelection();
+      }
       return true;
     }
 
@@ -632,6 +662,11 @@ export class SelectTool extends Tool<SelectToolState> {
   onKeyDown(event: KeyboardEvent, context: EventContext): boolean {
     this.pruneHiddenSelection();
     const modifier = checkModifierKey(event);
+    if (event.key === "Escape" && this.isMarqueeSelecting) {
+      this.cancelAreaSelection();
+      event.preventDefault();
+      return true;
+    }
 
     if (this.transformDrag) {
       if (event.key === "Escape") this.finishTransformDrag(false);
@@ -1646,7 +1681,16 @@ export class SelectTool extends Tool<SelectToolState> {
 
     overlays.push(...this.getTransformOverlays());
 
-    if (this.isMarqueeSelecting) {
+    if (this.isMarqueeSelecting && this.areaSelectionVariant === "lasso") {
+      overlays.push({
+        type: "polyline",
+        points: [...this.lassoPath, this.marqueeEndPos],
+        closed: true,
+        color: uiColors.marqueeStroke,
+        width: uiSelectionHandle.strokeWidthPx / state.zoom,
+        layer: "top",
+      });
+    } else if (this.isMarqueeSelecting) {
       const bounds = getSelectionBounds(
         this.marqueeStartPos,
         this.marqueeEndPos,
@@ -1864,9 +1908,16 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   private startMarqueeSelection(worldPos: Position, modifier: boolean): void {
-    if (!modifier) {
-      this.clear();
-    }
+    const { toolState } = this.getState();
+    const before = {
+      selectedVertices: [...(toolState?.selectedVertices ?? [])],
+      selectedObjects: [...(toolState?.selectedObjects ?? [])],
+      selectedPictures: [...(toolState?.selectedPictures ?? [])],
+    };
+    if (!modifier) this.clear();
+    this.areaSelectionBefore = before;
+    this.areaSelectionVariant = toolState?.variant ?? "marquee";
+    this.lassoPath = [worldPos];
     this.getState().setToolState({
       isMarqueeSelecting: true,
       hoveredObject: undefined,
@@ -1875,6 +1926,35 @@ export class SelectTool extends Tool<SelectToolState> {
     this.isMarqueeSelecting = true;
     this.marqueeStartPos = worldPos;
     this.marqueeEndPos = worldPos;
+  }
+
+  private appendLassoPoint(position: Position, force = false): void {
+    if (this.areaSelectionVariant !== "lasso") return;
+    const last = this.lassoPath.at(-1);
+    if (
+      !force &&
+      last &&
+      Math.hypot(position.x - last.x, position.y - last.y) *
+        this.getState().state.zoom <
+        2
+    )
+      return;
+    if (this.lassoPath.length >= 4096)
+      this.lassoPath = this.lassoPath.filter((_, i) => i % 2 === 0);
+    this.lassoPath.push(position);
+  }
+
+  private finishAreaSelection(): void {
+    this.isMarqueeSelecting = false;
+    this.lassoPath = [];
+    this.areaSelectionBefore = null;
+    this.getState().setToolState({ isMarqueeSelecting: false });
+  }
+
+  private cancelAreaSelection(): void {
+    if (this.areaSelectionBefore)
+      this.getState().setToolState(this.areaSelectionBefore);
+    this.finishAreaSelection();
   }
 
   private handleDragging(
@@ -1956,12 +2036,18 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!toolState) return;
 
     const bounds = getSelectionBounds(this.marqueeStartPos, this.marqueeEndPos);
+    const lasso = this.areaSelectionVariant === "lasso";
+    if (lasso && this.lassoPath.length < 3) return;
 
     // Select vertices within the marquee
     if (this.isPolygonSelectable()) {
       state.polygons.forEach((polygon: Polygon) => {
         polygon.vertices.forEach((vertex: Position) => {
-          if (isPointInRect(vertex, bounds)) {
+          if (
+            lasso
+              ? isPointInLasso(vertex, this.lassoPath)
+              : isPointInRect(vertex, bounds)
+          ) {
             const isSelected = toolState.selectedVertices.some(
               (sv: VertexSelection) =>
                 sv.polygon === polygon && sv.vertex === vertex,
@@ -1989,7 +2075,18 @@ export class SelectTool extends Tool<SelectToolState> {
         })),
       );
       allObjects.forEach(({ obj }: { obj: Position }) => {
-        if (this.objectIntersectsMarquee(obj, bounds)) {
+        const intersects = lasso
+          ? obj === state.start || findSessionArtifact(state, obj)
+            ? this.getObjectSelectionCircles(obj).some((circle) =>
+                circleIntersectsLasso(circle, circle.radius, this.lassoPath),
+              )
+            : circleIntersectsLasso(
+                obj,
+                getObjectBoundsRadius(),
+                this.lassoPath,
+              )
+          : this.objectIntersectsMarquee(obj, bounds);
+        if (intersects) {
           this.selectObject(obj);
         }
       });
@@ -1999,7 +2096,23 @@ export class SelectTool extends Tool<SelectToolState> {
     state.pictures
       .filter((picture) => this.isPictureSelectable(picture))
       .forEach((picture) => {
-        if (this.pictureIntersectsMarquee(picture, bounds)) {
+        const dimensions = lasso
+          ? this.pictureDimensionsResolver(picture)
+          : null;
+        const intersects = lasso
+          ? dimensions
+            ? rectIntersectsLasso(
+                {
+                  minX: picture.position.x,
+                  minY: picture.position.y,
+                  maxX: picture.position.x + dimensions.width,
+                  maxY: picture.position.y + dimensions.height,
+                },
+                this.lassoPath,
+              )
+            : isPointInLasso(picture.position, this.lassoPath)
+          : this.pictureIntersectsMarquee(picture, bounds);
+        if (intersects) {
           const isSelected = toolState.selectedPictures.includes(
             picture.position,
           );

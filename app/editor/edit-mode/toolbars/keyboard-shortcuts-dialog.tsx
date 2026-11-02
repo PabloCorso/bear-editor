@@ -256,6 +256,14 @@ function getShortcutGroups(
           icon: <CursorIcon weight="light" />,
           subItems: [
             {
+              shortcut: defaultTools.select.shortcut,
+              label: "Open selection modes",
+            },
+            {
+              shortcut: "Right click",
+              label: "Complete area selection",
+            },
+            {
               shortcut: `${modifier} + A`,
               label: "Select all visible",
             },
