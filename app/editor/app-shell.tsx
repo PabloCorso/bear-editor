@@ -21,6 +21,7 @@ import {
   useInitialLevel,
 } from "~/editor/edit-mode/editor-view";
 import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
+import { TextEditorOverlay } from "~/editor/edit-mode/text-editor-overlay";
 
 const LazyPlayModeOverlay = lazy(async () => {
   const module = await import("~/editor/play-mode/play-mode-overlay");
@@ -47,6 +48,7 @@ export function EditorShell({
     <>
       <div className="relative flex-1">
         <EditorView ref={canvasRef} />
+        <TextEditorOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
             <LazyPlayModeOverlay rendererBackend={rendererBackend} />

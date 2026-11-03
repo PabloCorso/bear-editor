@@ -15,6 +15,8 @@ import {
 import { defaultTools } from "./default-tools";
 import { SelectTool, type SelectToolState } from "./select-tool";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
+import { TextTool, type TextToolState } from "./text-tool";
+import { defaultTextOptions } from "~/editor/helpers/text-polygons";
 
 function position(x: number, y: number): Position {
   return { x, y } as Position;
@@ -75,6 +77,42 @@ function getSelection(store: ReturnType<typeof createEditorStore>) {
     .getState()
     .actions.getToolState<SelectToolState>(defaultTools.select.id);
 }
+
+describe("TextTool completion", () => {
+  it("selects created polygons with the regular Select tool", () => {
+    const store = createEditorStore({ initialToolId: defaultTools.text.id });
+    const selectTool = new SelectTool(store);
+    const textTool = new TextTool(store);
+    const polygon = {
+      grass: false,
+      vertices: [position(0, 0), position(10, 0), position(0, 10)],
+    };
+    store.getState().actions.registerTool(selectTool);
+    store.getState().actions.registerTool(textTool);
+    store.getState().actions.setToolState<TextToolState>(defaultTools.text.id, {
+      options: { ...defaultTextOptions, text: "A" },
+      status: "ready",
+      vertexCount: polygon.vertices.length,
+      draft: { position: position(20, 30) },
+    });
+    Object.assign(textTool, { polygons: [polygon] });
+
+    textTool.commit();
+
+    const placed = store.getState().polygons[0];
+    const selection = getSelection(store);
+    expect(store.getState().activeToolId).toBe(defaultTools.select.id);
+    expect(placed.vertices).toEqual([
+      position(20, 30),
+      position(30, 30),
+      position(20, 40),
+    ]);
+    expect(selection?.selectedVertices).toEqual(
+      placed.vertices.map((vertex) => ({ polygon: placed, vertex })),
+    );
+    expect(selection?.transformMode).toBe(false);
+  });
+});
 
 describe("SelectTool mirroring", () => {
   it.each(["horizontal", "vertical"] as const)(

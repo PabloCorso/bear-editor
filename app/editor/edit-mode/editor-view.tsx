@@ -33,6 +33,7 @@ import {
   useCustomDefaultLevelTemplate,
   useDefaultLevelPreset,
 } from "~/editor/edit-mode/default-level-preset";
+import { TextTool } from "~/editor/edit-mode/tools/text-tool.js";
 
 type EditorViewProps = React.ComponentPropsWithRef<"canvas"> & {};
 
@@ -122,6 +123,7 @@ export function useEditorView({
         SubtractTool,
         IntersectTool,
         ExcludeTool,
+        TextTool,
         ShapeTool,
         AppleTool,
         KillerTool,

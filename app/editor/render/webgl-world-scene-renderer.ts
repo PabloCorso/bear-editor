@@ -72,6 +72,12 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
         this.lgrAssets,
         colors.sky,
       );
+      this.polygonDrawer.drawDraftGroundPolygons(
+        scene,
+        scene.ground,
+        this.lgrAssets,
+        colors.ground,
+      );
       this.polygonDrawer.drawGrassPolygons(scene);
     }
 

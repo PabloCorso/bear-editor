@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@keyframes text-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 @font-face {
   font-family: "Inter";
   font-style: normal;

@@ -105,6 +105,23 @@ const WHEEL_PAN_MULTIPLIER = 0.5;
 const TOUCH_CONTEXT_MENU_DELAY_MS = 500;
 const TOUCH_CONTEXT_MENU_MOVE_TOLERANCE_PX = 8;
 
+function matchesToolShortcut(event: KeyboardEvent, shortcut: string) {
+  const normalized = shortcut.toUpperCase();
+  const shiftPrefix = "SHIFT + ";
+  const requiresShift = normalized.startsWith(shiftPrefix);
+  const key = requiresShift ? normalized.slice(shiftPrefix.length) : normalized;
+
+  return (
+    key !== "" &&
+    event.key.toUpperCase() === key &&
+    event.shiftKey === requiresShift &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.isComposing
+  );
+}
+
 type CachedLongestGrassEdge = {
   vertices: Polygon["vertices"];
   edgeIndex: number;
@@ -977,10 +994,7 @@ export class EditorEngine {
     const currentTool = state.actions.getActiveTool();
     if (
       currentTool?.meta.menuBehavior === "options" &&
-      currentTool.meta.shortcut.toUpperCase() === key &&
-      !modifier &&
-      !event.altKey &&
-      !event.shiftKey
+      matchesToolShortcut(event, currentTool.meta.shortcut)
     ) {
       if (!event.repeat) {
         state.actions.setToolMenuOpen(
@@ -1013,12 +1027,7 @@ export class EditorEngine {
     }
 
     for (const tool of state.toolsMap.values()) {
-      if (
-        tool.meta.shortcut.toUpperCase() === key &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey
-      ) {
+      if (matchesToolShortcut(event, tool.meta.shortcut)) {
         if (!event.repeat) {
           state.actions.activateTool(
             tool.meta.id,

@@ -360,7 +360,7 @@ function getScenePolygons(
   const draftPolygons: ScenePolygon[] =
     drafts?.polygons?.map((polygon) => ({
       ...polygon,
-      opacity: DRAFT_PREVIEW_OPACITY,
+      opacity: drafts.polygonOpacity ?? DRAFT_PREVIEW_OPACITY,
     })) || [];
   const vertexToolState = state.actions.getToolState<VertexToolState>("vertex");
   const scenePolygons: ScenePolygon[] = vertexToolState?.editingPolygon

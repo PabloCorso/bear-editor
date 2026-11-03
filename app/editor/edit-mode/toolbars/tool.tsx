@@ -7,6 +7,7 @@ import { cn } from "~/utils/misc";
 import { FloatingViewportToolbar } from "./floating-toolbar";
 import { ToolButton, type ToolButtonProps } from "~/components/tool-button";
 import { createContext, useContext } from "react";
+import type { ToolMeta } from "../tools/default-tools";
 
 const ToolSelectionContext = createContext<(() => void) | undefined>(undefined);
 
@@ -14,11 +15,12 @@ export function useToolSelection() {
   return useContext(ToolSelectionContext);
 }
 
-export type ToolControlButtonProps = ToolButtonProps & {
-  id?: string;
-  isActive?: boolean;
-  isLoading?: boolean;
-};
+export type ToolControlButtonProps = ToolButtonProps &
+  Pick<ToolMeta, "menuBehavior"> & {
+    id?: string;
+    isActive?: boolean;
+    isLoading?: boolean;
+  };
 
 export function ToolControlButton({
   id,
@@ -27,6 +29,7 @@ export function ToolControlButton({
   children,
   onClick,
   isLoading,
+  menuBehavior: _menuBehavior,
   ...props
 }: ToolControlButtonProps) {
   const activeTool = useEditorActiveTool();
