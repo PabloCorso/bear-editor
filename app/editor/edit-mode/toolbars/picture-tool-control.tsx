@@ -33,7 +33,7 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   const lgrAssets = useLgrAssets();
 
   const selectedPictureName = pictureTool?.name ?? defaultPictureState.name;
-  const sprite = useLgrSprite(selectedPictureName);
+  const defaultSprite = useLgrSprite(defaultPictureState.name);
   const pictureSprites = [...usePictureSprites()];
   for (const picture of pictures) {
     if (
@@ -121,7 +121,7 @@ export function PictureToolControl(props: ToolControlButtonProps) {
           {...defaultTools.picture}
           {...props}
         >
-          <PictureIcon src={sprite.src} />
+          <PictureIcon src={defaultSprite.src} />
         </ToolControlButton>
       }
     >
