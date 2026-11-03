@@ -1,3 +1,4 @@
+import { ShapeToolInfo } from "./shape-tool-control";
 import {
   isPolygonBooleanTool,
   type PolygonBooleanTool,
@@ -109,6 +110,8 @@ export function ToolInfo() {
       />
     );
   }
+
+  if (activeToolId === "shape") return <ShapeToolInfo />;
 
   if (activeToolId === "select" && select?.transformMode) {
     return (

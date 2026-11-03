@@ -31,6 +31,8 @@ All notable changes to this project will be documented in this file.
 
 ## 2026-10-25
 
+- Add Shapes with ellipse, rectangle, star, and reusable custom polygon shapes.
+
 - Expand topology checks with EOL limits, exact issue markers and navigation, object and LGR diagnostics, size guides, and undoable repair previews.
 
 ## 2026-10-24

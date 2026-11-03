@@ -1,3 +1,5 @@
+import { ShapeTool } from "./tools/shape-tool";
+import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
 import {
   getSessionArtifacts,
   type SessionArtifact,
@@ -99,7 +101,7 @@ type PointAnchor = {
 };
 
 export function EditorContextMenu() {
-  const { setApples, setPictures, setPolygons } = useEditorActions();
+  const { setApples, setPictures, setPolygons, getTool } = useEditorActions();
   const selectToolState = useEditorToolState<SelectToolState>(
     defaultTools.select.id,
   );
@@ -148,6 +150,26 @@ export function EditorContextMenu() {
   );
   const canToggleGrass = selectedPolygons.length > 0;
   const selectedPictures = getSelectedPictures(selectToolState, pictures);
+  const completeSelectedPolygons = getCompleteSelectedPolygons(
+    selectToolState,
+    polygons,
+  );
+  const selectedKillers = killers.filter((killer) =>
+    selectToolState.selectedObjects.includes(killer),
+  );
+  const selectedFlowers = flowers.filter((flower) =>
+    selectToolState.selectedObjects.includes(flower),
+  );
+  const selectionCanBeSaved =
+    (!selectToolState.selectedVertices.length ||
+      completeSelectedPolygons.length > 0) &&
+    Boolean(
+      completeSelectedPolygons.length ||
+      selectedApples.length ||
+      selectedKillers.length ||
+      selectedFlowers.length ||
+      selectedPictures.length,
+    );
   const hasSelection =
     selectToolState.selectedVertices.length > 0 ||
     selectToolState.selectedObjects.length > 0 ||
@@ -322,6 +344,16 @@ export function EditorContextMenu() {
       direct={directMenu}
       anchor={anchor}
       onClose={() => selectTool?.closeContextMenu()}
+      canSaveToLibrary={selectionCanBeSaved}
+      onSaveToLibrary={() =>
+        getTool<ShapeTool>("shape")?.saveLibraryItem({
+          polygons: completeSelectedPolygons,
+          apples: selectedApples,
+          killers: selectedKillers,
+          flowers: selectedFlowers,
+          pictures: selectedPictures,
+        })
+      }
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(
         selectToolState.transformMode && !selectToolState.skewMode,
@@ -611,6 +643,8 @@ function SelectionActionsMenu({
   direct,
   anchor,
   onClose,
+  canSaveToLibrary,
+  onSaveToLibrary,
   canTransform,
   transforming,
   skewing,
@@ -628,6 +662,8 @@ function SelectionActionsMenu({
   direct: boolean;
   anchor: PointAnchor;
   onClose: () => void;
+  canSaveToLibrary: boolean;
+  onSaveToLibrary: () => void;
   canTransform: boolean;
   transforming: boolean;
   skewing: boolean;
@@ -772,6 +808,16 @@ function SelectionActionsMenu({
                   </DropdownMenuGroup>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+            </DropdownMenuGroup>
+          </>
+        )}
+        {canSaveToLibrary && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={onSaveToLibrary}>
+                Save to library
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </>
         )}

@@ -1,3 +1,4 @@
+import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
   useEditorActions,
@@ -48,14 +49,18 @@ export function CanvasToolbar({
   const { triggerFitToView } = useEditorActions();
   const activeToolId = useEditor((state) => state.activeToolId);
   const vertex = useEditorToolState<VertexToolState>("vertex");
+  const shape = useEditorToolState<ShapeToolState>("shape");
   const usesSizeShortcuts =
-    activeToolId === "vertex" &&
-    (vertex?.variant === "autoGrass" ||
-      vertex?.variant === "pipe" ||
-      vertex?.variant === "cutConnect" ||
-      vertex?.variant === "draw" ||
-      vertex?.variant === "brush" ||
-      vertex?.previewAutoGrassAll);
+    (activeToolId === "shape" &&
+      !shape?.capturing &&
+      ["ellipse", "star"].includes(shape?.shapeId ?? "ellipse")) ||
+    (activeToolId === "vertex" &&
+      (vertex?.variant === "autoGrass" ||
+        vertex?.variant === "pipe" ||
+        vertex?.variant === "cutConnect" ||
+        vertex?.variant === "draw" ||
+        vertex?.variant === "brush" ||
+        vertex?.previewAutoGrassAll));
   const modifier = useModifier();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 

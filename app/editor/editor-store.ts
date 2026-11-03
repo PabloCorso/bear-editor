@@ -440,6 +440,7 @@ export function createEditorStore({
           initialPreferences?.grid ?? defaultGridSettings,
         ),
         gridSnapBypassed: false,
+        customShapes: initialPreferences?.customShapes ?? [],
 
         // View settings
         animateSprites: initialPreferences?.animateSprites ?? true,
@@ -470,6 +471,7 @@ export function createEditorStore({
         actions: {
           setCheckTopologyOnSave: (checkTopologyOnSave) =>
             set({ checkTopologyOnSave }),
+          setCustomShapes: (customShapes) => set({ customShapes }),
           // Level data operations
           setDefaultLevelTitle: (title) =>
             set({ defaultLevelTitle: normalizeLevelTitle(title) }),

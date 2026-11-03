@@ -92,7 +92,9 @@ export function PictureTexturePicker({
             <button
               className={cn(
                 "group flex cursor-pointer flex-col items-center rounded hover:bg-primary-hover/50 hover:text-primary",
-                compact ? "w-full gap-1" : `${pickerColumnClassName} pt-1`,
+                compact
+                  ? `${pickerColumnClassName} gap-1`
+                  : `${pickerColumnClassName} pt-1`,
                 item.isSelected && "bg-primary-hover/50 text-primary",
               )}
               type="button"
@@ -132,10 +134,7 @@ export function PictureTexturePicker({
               <span
                 className={cn(
                   "inline-flex items-center justify-center rounded",
-                  compact &&
-                    (maxColumns === 6
-                      ? "aspect-square w-full max-w-12"
-                      : "aspect-square w-full max-w-16"),
+                  compact && `${pickerColumnClassName} h-16`,
                   !compact && "h-[86px] w-[96px]",
                 )}
               >

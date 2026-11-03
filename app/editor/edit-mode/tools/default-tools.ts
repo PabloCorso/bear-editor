@@ -39,6 +39,12 @@ export const defaultTools = {
     name: "Apple",
     shortcut: "A",
   },
+  shape: {
+    id: "shape",
+    name: "Library",
+    shortcut: "L",
+    menuBehavior: "options",
+  },
   killer: { id: "killer", name: "Killer", shortcut: "K" },
   flower: { id: "flower", name: "Flower", shortcut: "F" },
   picture: {
@@ -74,4 +80,5 @@ export const defaultToolOrder: string[] = [
   defaultTools.picture.id,
   defaultTools.texture.id,
   defaultTools.color.id,
+  defaultTools.shape.id,
 ];

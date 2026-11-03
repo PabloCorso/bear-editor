@@ -1,5 +1,6 @@
 import type { TopologyInspection } from "./helpers/level-topology";
 import type { GridSettings } from "./grid";
+import type { CustomShape } from "./helpers/shapes";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -104,6 +105,7 @@ export type EditorState = EditorLevel & {
 
   grid: GridSettings;
   gridSnapBypassed: boolean;
+  customShapes: CustomShape[];
 
   // View settings
   animateSprites: boolean;
@@ -156,6 +158,7 @@ export type EditorState = EditorLevel & {
     setPictures: (pictures: Picture[]) => void;
 
     setCheckTopologyOnSave: (enabled: boolean) => void;
+    setCustomShapes: (shapes: CustomShape[]) => void;
     setDefaultLevelTitle: (title: string) => void;
     setLevelName: (name: string) => void;
     setLgr: (lgr: string) => void;

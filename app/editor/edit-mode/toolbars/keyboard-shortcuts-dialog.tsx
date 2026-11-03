@@ -323,6 +323,29 @@ function getShortcutGroups(
           ],
         },
         {
+          shortcut: defaultTools.shape.shortcut,
+          label: defaultTools.shape.name,
+          subItems: [
+            {
+              shortcut: "Shift",
+              label:
+                "Constrain proportions (saved polygons keep their original ratio)",
+            },
+            { shortcut: ["-", "+"], label: "Ellipse vertices / star points" },
+            { shortcut: ["[", "]"], label: "Star inner radius (%)" },
+            { shortcut: "Esc / Right click", label: "Cancel item or capture" },
+            {
+              shortcut: "+ tile",
+              label:
+                "Click a polygon edge or marquee whole polygons to save to the library",
+            },
+            {
+              shortcut: "Selection menu",
+              label: "Save selected level content to the library",
+            },
+          ],
+        },
+        {
           shortcut: defaultTools.hand.shortcut,
           label: defaultTools.hand.name,
           icon: <HandIcon weight="light" />,
