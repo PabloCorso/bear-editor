@@ -11,15 +11,13 @@ Planned features and feedback for Bear Editor.
 - AI Assistant
 
 - More vertex tool options or new polygon tools
-  - Roller coaster tool
-  - Shapes
-  - Smoothen
-  - Text
   - Image to polygon
     - ofta: Any plans to add image to .lev?
+  - Experimental
+    - Text number sequence tool.
+    - Roller coaster tool
 
 - Further topology repair options
-  - Current checks, exact issue navigation, size guides and conservative repair previews are described in [Topology checks](docs/topology-checks.md).
   - Explore previewed simplification, polygon-operation repairs and object relocation where the intended result is clear.
 
 - Faster loads
@@ -37,7 +35,6 @@ Planned features and feedback for Bear Editor.
   - Follow a designer's view while editing; explore following them in play mode too.
   - Chain level working areas: let different designers build separate parts, with optional locks to prevent edits by others and optional hiding to keep parts secret until revealed.
 - Version history info
-- Export to SVG
 - Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
 - Import level
 - Replace selection

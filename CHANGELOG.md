@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 - Add precise measurements to Resize & Rotate
 - Improve topology checks, issue navigation and repair previews
 - Add level properties dialog with statistics and saved times
+- Add picture/texture preferences for selection and bounds visibility.
+- Add Text tool.
+- Add library with default shapes.
+- Import image.
 
 ## 2026-10-28
 
