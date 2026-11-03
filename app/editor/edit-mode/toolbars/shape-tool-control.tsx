@@ -172,11 +172,6 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
                   : undefined
               }
             >
-              {item.custom && item.id === shapes[0]?.id && (
-                <div className="px-1.5 py-1 text-[10px] font-bold text-secondary">
-                  Saved
-                </div>
-              )}
               {item.custom && (
                 <Popover modal={false}>
                   <PopoverTrigger>

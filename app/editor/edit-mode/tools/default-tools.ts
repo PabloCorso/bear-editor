@@ -15,7 +15,6 @@ export const defaultTools = {
     id: "select",
     name: "Select tool",
     shortcut: "S",
-    menuBehavior: "options",
   },
   hand: { id: "hand", name: "Hand tool", shortcut: "H" },
   vertex: {

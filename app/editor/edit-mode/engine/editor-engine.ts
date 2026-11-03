@@ -1031,7 +1031,11 @@ export class EditorEngine {
 
     for (const tool of state.toolsMap.values()) {
       if (matchesToolShortcut(event, tool.meta.shortcut)) {
-        if (!event.repeat) {
+        if (
+          !event.repeat &&
+          (tool.meta.id !== defaultTools.select.id ||
+            state.activeToolId !== tool.meta.id)
+        ) {
           state.actions.activateTool(
             tool.meta.id,
             tool.meta.menuBehavior === "toolGroup" ? "normal" : undefined,

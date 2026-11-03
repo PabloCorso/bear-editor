@@ -1,37 +1,19 @@
-import {
-  getSessionArtifacts,
-  findSessionArtifact,
-  getSessionArtifactKey,
-} from "~/editor/session-artifacts";
-import {
-  isPointInLasso,
-  circleIntersectsLasso,
-  rectIntersectsLasso,
-} from "~/editor/helpers/lasso-selection";
+import { findSessionArtifact } from "~/editor/session-artifacts";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import {
   findVertexNearPosition,
-  findObjectNearPosition,
   findPolygonEdgeNearPosition,
   isVertexSelected,
   isObjectSelected,
-  getAllObjects,
-  isPointInRect,
-  getSelectionBounds,
-  isStartObjectHit,
-  type StartSelectionMode,
 } from "~/editor/helpers/selection-helpers";
 import {
-  colors,
   OBJECT_DIAMETER,
-  selectionRenderLimits,
   selectionThresholds,
   uiColors,
-  uiSelectionHandle,
   uiStrokeWidths,
 } from "~/editor/constants";
-import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
+import type { Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
 import {
   getEditorHistorySnapshot,
@@ -39,17 +21,50 @@ import {
   type EditorHistoryState,
 } from "~/editor/editor-store";
 import { defaultTools } from "./default-tools";
-import { rectsIntersect, type WorldRect } from "~/editor/render/world-geometry";
-import {
-  isPointVisible,
-  isPolygonVisible,
-} from "~/editor/render/world-derived-data-cache";
+import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
 import { checkModifierKey } from "~/utils/misc";
 import fastDeepEqual from "fast-deep-equal";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
-import { getObjectBoundsRadius } from "~/editor/render/object-assets";
+import {
+  SelectionClipboardController,
+  type PastedSelection,
+} from "./selection-clipboard";
+import { SelectionMutations } from "./selection-mutations";
+import { SelectionHitTester } from "./selection-hit-testing";
+import {
+  findAreaSelection,
+  type PictureDimensionsResolver,
+} from "./area-selection";
+import {
+  TransformSession,
+  type ArtifactTransform,
+  type TransformFrame,
+} from "./transform-session";
+import {
+  SelectionVisibility,
+  type SelectSelectionKind,
+} from "./selection-visibility";
+export type { SelectSelectionKind } from "./selection-visibility";
+import {
+  createSelectionHandleOverlay,
+  createSelectionOverlays,
+} from "./selection-overlays";
+import {
+  isPolygonEdgeSelectable,
+  isPolygonEdgeSelected,
+} from "./polygon-selection";
+import {
+  arrangeSelectedPictures,
+  type ArrangeSelectionDirection,
+} from "./picture-arrangement";
+export type { ArrangeSelectionDirection } from "./picture-arrangement";
+import {
+  calculateSelectionDrag,
+  getSelectionDragOrigins,
+  getVertexDragConstraintDirections,
+} from "./selection-drag";
 
 import {
   getResizeCursor,
@@ -58,31 +73,13 @@ import {
   getTransformBounds,
   getTransformCenter,
   getTransformHandles,
-  getResizeTransform,
   getSkewHandles,
-  getSkewTransform,
   rotateTransformPoint,
   type TransformFrameCorners,
   type TransformHandle,
 } from "~/editor/helpers/selection-transform";
 
-const DUPLICATE_OFFSET_STEP = 1;
-const MIN_PICTURE_DISTANCE = 0;
-const MAX_PICTURE_DISTANCE = 999;
-
-export type ArrangeSelectionDirection =
-  | "forward"
-  | "front"
-  | "backward"
-  | "back";
-
 export type MirrorSelectionDirection = "horizontal" | "vertical";
-
-type TransformFrame = {
-  bounds: WorldRect;
-  angle: number;
-  corners?: TransformFrameCorners;
-};
 
 export type SelectToolState = {
   selectedVertices: Array<{ polygon: Polygon; vertex: Position }>;
@@ -104,62 +101,36 @@ export type SelectToolState = {
   contextMenuPosition?: Position;
 };
 
-export type SelectSelectionKind =
-  | "groundVertices"
-  | "grassVertices"
-  | "apples"
-  | "killers"
-  | "flowers"
-  | "start"
-  | "sessionArtifacts"
-  | "referenceImages"
-  | "pictures"
-  | "textures";
-
 type VertexSelection = { polygon: Polygon; vertex: Position };
-type ObjectSelection = Position;
-type PictureDimensionsResolver = (picture: {
-  name?: string;
-  texture?: string;
-  mask?: string;
-}) => { width: number; height: number } | null;
-type ArtifactTransform = {
-  start: number;
-  length: number;
-  apply: (points: Position[]) => void;
-  restore?: () => void;
-};
 type ContextMenuSelectionTarget =
   | { type: "object"; object: Position }
   | { type: "vertex"; polygon: Polygon; vertex: Position }
   | { type: "polygon"; polygon: Polygon }
   | { type: "picture"; picture: Position };
-type SelectionClipboard = {
-  polygons: Polygon[];
-  apples: Apple[];
-  killers: Position[];
-  flowers: Position[];
-  pictures: Picture[];
-};
-
-type SerializedSelectionClipboard = {
-  type: "elma-selection";
-  version: 1;
-  sourceClipboardSessionId: string;
-  payload: SelectionClipboard;
-};
-
-const SELECTION_CLIPBOARD_TYPE = "elma-selection";
-const SELECTION_CLIPBOARD_VERSION = 1;
-
 export class SelectTool extends Tool<SelectToolState> {
   readonly meta = defaultTools.select;
-  private clipboard: SelectionClipboard | null = null;
-  private clipboardPasteCount = 0;
+  private readonly selectionMutations: SelectionMutations;
+  private readonly selectionHitTester: SelectionHitTester;
+  private readonly clipboard = new SelectionClipboardController();
   private pictureDimensionsResolver: PictureDimensionsResolver = () => null;
 
   constructor(store: EditorStore) {
     super(store);
+    this.selectionMutations = new SelectionMutations(() => {
+      const { state, toolState, setToolState } = this.getState();
+      return toolState
+        ? { state, selection: toolState, updateSelection: setToolState }
+        : null;
+    });
+    this.selectionHitTester = new SelectionHitTester(
+      () => {
+        const { state, toolState } = this.getState();
+        return { state, selection: toolState };
+      },
+      () => this.isPolygonSelectable(),
+      this.isSelectablePolygonEdge,
+      (polygon, edgeIndex) => this.isPolygonEdgeSelected(polygon, edgeIndex),
+    );
   }
 
   public setPictureDimensionsResolver(
@@ -170,15 +141,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
   private transformFrame: { frame: TransformFrame; points: Position[] } | null =
     null;
-  private transformDrag: {
-    frame: TransformFrame;
-    previewFrame: TransformFrame;
-    handle: TransformHandle | "rotate" | "move";
-    points: Position[];
-    artifacts: ArtifactTransform[];
-    selection: SelectToolState;
-    map: (point: Position) => Position;
-  } | null = null;
+  private transformDrag: TransformSession | null = null;
 
   private transformOrigin: { width: number; height: number } | null = null;
 
@@ -251,7 +214,9 @@ export class SelectTool extends Tool<SelectToolState> {
     );
 
     if (this.hasSelection()) {
-      if (this.isExistingSelectionHit(context.worldPos, hoveredPicture)) {
+      if (
+        this.selectionHitTester.isSelectionHit(context.worldPos, hoveredPicture)
+      ) {
         this.openContextMenu(context);
         return true;
       }
@@ -347,7 +312,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
     const object =
       this.isObjectSelectable() && !hoveredPicture
-        ? this.findObjectNearPosition(context.worldPos)
+        ? this.selectionHitTester.findObject(context.worldPos)
         : null;
     if (object) {
       return { type: "object", object };
@@ -392,16 +357,16 @@ export class SelectTool extends Tool<SelectToolState> {
   ): void {
     switch (target.type) {
       case "object":
-        this.selectObject(target.object);
+        this.selectionMutations.addObject(target.object);
         return;
       case "vertex":
-        this.selectVertex(target.polygon, target.vertex);
+        this.selectionMutations.addVertex(target.polygon, target.vertex);
         return;
       case "polygon":
-        this.selectPolygon(target.polygon);
+        this.selectionMutations.replacePolygon(target.polygon);
         return;
       case "picture":
-        this.selectPicture(target.picture);
+        this.selectionMutations.addPicture(target.picture);
         return;
     }
   }
@@ -463,7 +428,7 @@ export class SelectTool extends Tool<SelectToolState> {
       );
       if (
         !checkModifierKey(event) &&
-        this.isExistingSelectionHit(context.worldPos, picture)
+        this.selectionHitTester.isSelectionHit(context.worldPos, picture)
       ) {
         this.startTransformDrag("move", context.worldPos);
         return true;
@@ -484,7 +449,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
     if (
       isSingleSelect &&
-      this.isExistingSelectionHit(context.worldPos, hoveredPicture)
+      this.selectionHitTester.isSelectionHit(context.worldPos, hoveredPicture)
     ) {
       this.startDragging(context.worldPos);
       return true;
@@ -497,18 +462,13 @@ export class SelectTool extends Tool<SelectToolState> {
     };
 
     if (toolState?.selectedObjects.length) {
-      const selectedObject = this.findSelectedObjectNearPosition(
+      const selectedObject = this.selectionHitTester.findSelectedObject(
         context.worldPos,
         toolState.selectedObjects,
         Math.max(selectionThresholds.object / state.zoom, OBJECT_DIAMETER / 2),
-        {
-          // For already-selected objects, prefer the visual bounds hit-test over
-          // full sprite image so overlapping pictures/textures can still win.
-          useStartImageSelection: false,
-        },
       );
       if (selectedObject) {
-        this.selectObject(selectedObject);
+        this.selectionMutations.addObject(selectedObject);
         this.startDragging(context.worldPos);
         return true;
       }
@@ -520,20 +480,20 @@ export class SelectTool extends Tool<SelectToolState> {
         toolState?.selectedObjects ?? [],
       );
       clearIfNewSingleSelect(isSelected);
-      this.selectObject(hoveredObject);
+      this.selectionMutations.addObject(hoveredObject);
       this.startDragging(context.worldPos);
       return true;
     }
 
     if (forceObjectSelection && this.isObjectSelectable()) {
-      const object = this.findObjectNearPosition(context.worldPos);
+      const object = this.selectionHitTester.findObject(context.worldPos);
       if (object) {
         const isSelected = isObjectSelected(
           object,
           toolState?.selectedObjects ?? [],
         );
         clearIfNewSingleSelect(isSelected);
-        this.selectObject(object);
+        this.selectionMutations.addObject(object);
         this.startDragging(context.worldPos);
         return true;
       }
@@ -541,7 +501,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
     const object =
       this.isObjectSelectable() && !hoveredPicture
-        ? this.findObjectNearPosition(context.worldPos)
+        ? this.selectionHitTester.findObject(context.worldPos)
         : null;
     if (object) {
       const isSelected = isObjectSelected(
@@ -549,7 +509,7 @@ export class SelectTool extends Tool<SelectToolState> {
         toolState?.selectedObjects ?? [],
       );
       clearIfNewSingleSelect(isSelected);
-      this.selectObject(object);
+      this.selectionMutations.addObject(object);
       this.startDragging(context.worldPos);
       return true;
     }
@@ -568,7 +528,7 @@ export class SelectTool extends Tool<SelectToolState> {
       );
 
       clearIfNewSingleSelect(isSelected);
-      this.selectVertex(vertex.polygon, vertex.vertex);
+      this.selectionMutations.addVertex(vertex.polygon, vertex.vertex);
       this.startDragging(context.worldPos);
       return true;
     }
@@ -591,7 +551,7 @@ export class SelectTool extends Tool<SelectToolState> {
         polygonSelectionCount === polygonEdge.vertices.length &&
         polygonSelectionCount > 0;
       clearIfNewSingleSelect(isSelected);
-      this.selectPolygon(polygonEdge);
+      this.selectionMutations.replacePolygon(polygonEdge);
       this.startDragging(context.worldPos);
       return true;
     }
@@ -601,7 +561,7 @@ export class SelectTool extends Tool<SelectToolState> {
         hoveredPicture.position,
       );
       clearIfNewSingleSelect(isSelected);
-      this.selectPicture(hoveredPicture.position);
+      this.selectionMutations.addPicture(hoveredPicture.position);
       this.startDragging(context.worldPos);
       return true;
     }
@@ -831,9 +791,10 @@ export class SelectTool extends Tool<SelectToolState> {
       y: direction === "vertical" ? 2 * center.y - point.y : point.y,
     }));
     this.runHistoryBatch(() => {
-      if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
+      if (vertices)
+        this.selectionMutations.moveVertices(positions.slice(0, vertices));
       if (objects) {
-        this.updateSelectedObjects(
+        this.selectionMutations.moveObjects(
           positions.slice(vertices, vertices + objects).map((point, index) => ({
             x: point.x - objectOffsets[index].x,
             y: point.y - objectOffsets[index].y,
@@ -842,7 +803,7 @@ export class SelectTool extends Tool<SelectToolState> {
       }
       if (toolState.selectedPictures.length) {
         const pictures = toolState.selectedPictures.length;
-        this.updateSelectedPictures(
+        this.selectionMutations.movePictures(
           positions
             .slice(vertices + objects, vertices + objects + pictures)
             .map((point, index) => {
@@ -1054,15 +1015,13 @@ export class SelectTool extends Tool<SelectToolState> {
     const frame = this.getTransformFrame();
     if (!frame || !toolState) return;
     this.startDragging(worldPos);
-    this.transformDrag = {
+    this.transformDrag = new TransformSession({
       frame,
-      previewFrame: frame,
       handle,
       points,
       artifacts: geometry.artifacts,
       selection: toolState,
-      map: (point) => point,
-    };
+    });
   }
 
   private handleTransformDrag(
@@ -1072,99 +1031,26 @@ export class SelectTool extends Tool<SelectToolState> {
   ): void {
     const drag = this.transformDrag;
     if (!drag) return;
-    const center = getTransformCenter(drag.frame.bounds);
-    let angle = drag.frame.angle;
     if (drag.handle === "move") {
       const delta = {
         x: worldPos.x - this.dragStartPos.x,
         y: worldPos.y - this.dragStartPos.y,
       };
       if (delta.x === 0 && delta.y === 0 && !this.dragHasChanges) return;
-      const anchor = drag.points[0];
-      const translation = anchor
-        ? this.snapTranslation(anchor, delta, bypassGrid)
-        : delta;
-      drag.map = (point) => ({
-        x: point.x + translation.x,
-        y: point.y + translation.y,
-      });
-    } else if (drag.selection.skewMode && typeof drag.handle === "object") {
-      drag.map = getSkewTransform(
-        this.getFrameCorners(drag.frame),
-        drag.handle,
-        {
-          x: worldPos.x - this.dragStartPos.x,
-          y: worldPos.y - this.dragStartPos.y,
-        },
-      );
-    } else if (drag.handle === "rotate") {
-      let delta =
-        Math.atan2(worldPos.y - center.y, worldPos.x - center.x) -
-        Math.atan2(
-          this.dragStartPos.y - center.y,
-          this.dragStartPos.x - center.x,
-        );
-      if (constrainTransform)
-        delta =
-          Math.round(delta / transformControls.rotationSnap) *
-          transformControls.rotationSnap;
-      angle += delta;
-      drag.map = (point) => rotateTransformPoint(point, center, delta);
-    } else {
-      const local = rotateTransformPoint(worldPos, center, -angle);
-      const start = rotateTransformPoint(this.dragStartPos, center, -angle);
-      const resize = getResizeTransform(
-        drag.frame.bounds,
-        drag.handle,
-        {
-          x: local.x - start.x,
-          y: local.y - start.y,
-        },
-        !constrainTransform,
-      );
-      drag.map = (point) =>
-        rotateTransformPoint(
-          resize(rotateTransformPoint(point, center, -angle)),
-          center,
-          angle,
-        );
     }
-    if (drag.selection.skewMode) {
-      drag.previewFrame = {
-        ...drag.frame,
-        corners: this.getFrameCorners(drag.frame).map(
-          drag.map,
-        ) as TransformFrameCorners,
-      };
-    } else {
-      // Keep the same oriented frame, including for subsequent gestures.
-      const bounds = drag.frame.bounds;
-      const toWorld = (point: Position) =>
-        rotateTransformPoint(point, center, drag.frame.angle);
-      const left = drag.map(toWorld({ x: bounds.minX, y: center.y }));
-      const right = drag.map(toWorld({ x: bounds.maxX, y: center.y }));
-      const top = drag.map(toWorld({ x: center.x, y: bounds.minY }));
-      const bottom = drag.map(toWorld({ x: center.x, y: bounds.maxY }));
-      const nextCenter = drag.map(center);
-      const halfWidth = Math.hypot(right.x - left.x, right.y - left.y) / 2;
-      const halfHeight = Math.hypot(bottom.x - top.x, bottom.y - top.y) / 2;
-      drag.previewFrame = {
-        angle,
-        bounds: {
-          minX: nextCenter.x - halfWidth,
-          maxX: nextCenter.x + halfWidth,
-          minY: nextCenter.y - halfHeight,
-          maxY: nextCenter.y + halfHeight,
-        },
-      };
-    }
+    drag.update(worldPos, {
+      startPosition: this.dragStartPos,
+      constrain: constrainTransform,
+      snapTranslation: (anchor, delta) =>
+        this.snapTranslation(anchor, delta, bypassGrid),
+    });
     this.applyTransformDrag();
   }
 
   private applyTransformDrag(): void {
     const drag = this.transformDrag;
     if (!drag) return;
-    const positions = drag.points.map(drag.map);
+    const positions = drag.getPositions();
     this.dragHasChanges = positions.some(
       (point, index) =>
         Math.hypot(
@@ -1174,12 +1060,15 @@ export class SelectTool extends Tool<SelectToolState> {
     );
     const vertices = drag.selection.selectedVertices.length;
     const objects = drag.selection.selectedObjects.length;
-    if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
+    if (vertices)
+      this.selectionMutations.moveVertices(positions.slice(0, vertices));
     if (objects)
-      this.updateSelectedObjects(positions.slice(vertices, vertices + objects));
+      this.selectionMutations.moveObjects(
+        positions.slice(vertices, vertices + objects),
+      );
     const pictures = drag.selection.selectedPictures.length;
     if (pictures) {
-      this.updateSelectedPictures(
+      this.selectionMutations.movePictures(
         positions
           .slice(vertices + objects, vertices + objects + pictures)
           .map((point, index) => {
@@ -1299,7 +1188,8 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   public canDuplicateSelection(): boolean {
-    return Boolean(this.buildClipboardFromSelection());
+    const { state, toolState } = this.getState();
+    return Boolean(toolState && this.clipboard.canCopy(state, toolState));
   }
 
   public copyCurrentSelection(): boolean {
@@ -1319,39 +1209,13 @@ export class SelectTool extends Tool<SelectToolState> {
     const { state, toolState } = this.getState();
     if (!toolState || toolState.selectedPictures.length === 0) return false;
 
-    const selectedPictureIndexes = getSelectedPictureIndexes(
+    const nextPictures = arrangeSelectedPictures(
       state.pictures,
       toolState.selectedPictures,
+      direction,
+      this.hasObjects() ? [DEFAULT_OBJECT_RENDER_DISTANCE] : [],
     );
-    if (selectedPictureIndexes.length === 0) return false;
-
-    const selectedDistances = selectedPictureIndexes.map(
-      (index) => state.pictures[index]!.distance,
-    );
-    const minSelectedDistance = Math.min(...selectedDistances);
-    const maxSelectedDistance = Math.max(...selectedDistances);
-    const unselectedDistances = state.pictures
-      .filter((_picture, index) => !selectedPictureIndexes.includes(index))
-      .map((picture) => picture.distance);
-    if (this.hasObjects()) {
-      unselectedDistances.push(DEFAULT_OBJECT_RENDER_DISTANCE);
-    }
-
-    const distanceDelta = getArrangeDistanceDelta(direction, {
-      minSelectedDistance,
-      maxSelectedDistance,
-      unselectedDistances,
-    });
-    if (distanceDelta === 0) return false;
-
-    const nextPictures = state.pictures.map((picture, index) =>
-      selectedPictureIndexes.includes(index)
-        ? {
-            ...picture,
-            distance: clampPictureDistance(picture.distance + distanceDelta),
-          }
-        : picture,
-    );
+    if (!nextPictures) return false;
 
     this.runHistoryBatch(() => {
       state.actions.setPictures(nextPictures);
@@ -1361,12 +1225,14 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   public canPasteSelection(): boolean {
-    return this.clipboard !== null || this.canAccessSystemClipboard();
+    return this.clipboard.canPaste();
   }
 
   public duplicateSelectionWithOffset(): boolean {
-    if (!this.copySelection()) return false;
-    return this.pasteClipboardWithMargin();
+    const { state, toolState } = this.getState();
+    if (!toolState) return false;
+    const pasted = this.clipboard.duplicate(state, toolState);
+    return pasted ? this.commitPaste(pasted) : false;
   }
 
   public selectOnlySelectionKind(kind: SelectSelectionKind): boolean {
@@ -1383,63 +1249,14 @@ export class SelectTool extends Tool<SelectToolState> {
   ): boolean {
     const { state, toolState, setToolState } = this.getState();
     if (!toolState) return false;
-
-    const selectionSource = sourceSelection ?? toolState;
-    const selectedVertices = selectionSource.selectedVertices.filter(
-      ({ polygon }) =>
-        kinds.has(polygon.grass ? "grassVertices" : "groundVertices"),
+    const selection = new SelectionVisibility(state).filterKinds(
+      kinds,
+      sourceSelection ?? toolState,
     );
-    const selectedObjects = selectionSource.selectedObjects.filter((object) => {
-      const artifact = findSessionArtifact(state, object);
-      if (artifact?.kind === "referenceImage" && kinds.has("referenceImages"))
-        return true;
-      if (
-        artifact &&
-        artifact.kind !== "referenceImage" &&
-        kinds.has("sessionArtifacts")
-      )
-        return true;
-      if (kinds.has("start") && object === state.start) return true;
-      if (
-        kinds.has("apples") &&
-        state.apples.some((apple) => apple.position === object)
-      ) {
-        return true;
-      }
-      if (kinds.has("killers") && state.killers.includes(object)) return true;
-      if (kinds.has("flowers") && state.flowers.includes(object)) return true;
-      return false;
-    });
-    const selectedPictures = selectionSource.selectedPictures.filter(
-      (position) => {
-        if (!kinds.has("pictures") && !kinds.has("textures")) return false;
-
-        const picture =
-          state.pictures.find((entry) => entry.position === position) ??
-          state.pictures.find(
-            (entry) =>
-              entry.position.x === position.x &&
-              entry.position.y === position.y,
-          );
-        if (!picture) return false;
-
-        return (
-          (kinds.has("pictures") && Boolean(picture.name)) ||
-          (kinds.has("textures") && Boolean(picture.texture))
-        );
-      },
-    );
-
-    const hasSelection =
-      selectedVertices.length > 0 ||
-      selectedObjects.length > 0 ||
-      selectedPictures.length > 0;
-    if (!hasSelection) return false;
+    if (!selection) return false;
 
     setToolState({
-      selectedVertices,
-      selectedObjects,
-      selectedPictures,
+      ...selection,
       contextMenuType:
         options.closeContextMenu === false
           ? toolState.contextMenuType
@@ -1457,29 +1274,7 @@ export class SelectTool extends Tool<SelectToolState> {
     pictureFilter: (picture: Picture) => boolean = () => true,
   ): boolean {
     const { state, setToolState } = this.getState();
-
-    const selectedVertices = this.isPolygonSelectable()
-      ? state.polygons.flatMap((polygon) =>
-          polygon.vertices.map((vertex) => ({ polygon, vertex })),
-        )
-      : [];
-    const selectedObjects = [
-      ...(this.isObjectSelectable()
-        ? getAllObjects(
-            state.apples.map((apple) => apple.position),
-            state.killers,
-            state.flowers,
-            state.start,
-          ).map(({ obj }) => obj)
-        : []),
-      ...getSessionArtifacts(state).map((item) => item.position),
-    ];
-    const selectedPictures = state.pictures
-      .filter(
-        (picture) =>
-          this.isPictureSelectable(picture) && pictureFilter(picture),
-      )
-      .map((picture) => picture.position);
+    const selection = new SelectionVisibility(state).selectAll(pictureFilter);
 
     this.isDragging = false;
     this.isMarqueeSelecting = false;
@@ -1487,18 +1282,16 @@ export class SelectTool extends Tool<SelectToolState> {
     this.endDragHistoryBatch(false);
 
     setToolState({
-      selectedVertices,
-      selectedObjects,
-      selectedPictures,
+      ...selection,
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
       contextMenuType: undefined,
     });
 
     return (
-      selectedVertices.length > 0 ||
-      selectedObjects.length > 0 ||
-      selectedPictures.length > 0
+      selection.selectedVertices.length > 0 ||
+      selection.selectedObjects.length > 0 ||
+      selection.selectedPictures.length > 0
     );
   }
 
@@ -1510,451 +1303,32 @@ export class SelectTool extends Tool<SelectToolState> {
     this.pruneHiddenSelection();
     const { state, toolState } = this.getState();
     if (!toolState) return [];
-
-    const overlays: WorldRenderOverlayItem[] = [];
-    const handleSize = uiSelectionHandle.halfWidthPx / state.zoom;
-    const hoverLineWidth = uiStrokeWidths.boundsHoverScreen / state.zoom;
-    const selectedLineWidth = uiStrokeWidths.boundsSelectedScreen / state.zoom;
-    const handleStrokeWidth = uiSelectionHandle.strokeWidthPx / state.zoom;
-
-    if (
-      !toolState.transformMode &&
-      !this.isDragging &&
-      !this.isMarqueeSelecting &&
-      state.mouseOnCanvas
-    ) {
-      const { hoveredObject } = toolState;
-      if (
-        hoveredObject &&
-        !toolState?.selectedObjects.includes(hoveredObject)
-      ) {
-        if (
-          hoveredObject === state.start ||
-          findSessionArtifact(state, hoveredObject)
-        ) {
-          const circles = this.getObjectSelectionCircles(hoveredObject);
-          overlays.push(
-            ...circles.map((circle) => ({
-              type: "circle" as const,
-              center: { x: circle.x, y: circle.y },
-              radius: circle.radius,
-              strokeColor: uiColors.boundsHover,
-              lineWidth: hoverLineWidth,
-              layer: "top" as const,
-            })),
-          );
-        } else if (isPointVisible(hoveredObject, viewportRect)) {
-          overlays.push({
-            type: "circle",
-            center: hoveredObject,
-            radius: OBJECT_DIAMETER / 2,
-            strokeColor: uiColors.boundsHover,
-            lineWidth: hoverLineWidth,
-            layer: "top",
-          });
-        }
-      }
-
-      if (!this.isDragging && this.isPolygonSelectable()) {
-        const hoveredObject = toolState.hoveredObject;
-
-        if (!hoveredObject) {
-          const hoveredVertex = findVertexNearPosition(
-            state.mousePosition,
-            state.polygons,
-            selectionThresholds.vertex / state.zoom,
-          );
-          if (hoveredVertex) {
-            if (isPointVisible(hoveredVertex.vertex, viewportRect)) {
-              overlays.push(
-                createSelectionHandleOverlay(
-                  hoveredVertex.vertex,
-                  handleSize,
-                  handleStrokeWidth,
-                ),
-              );
-            }
+    const overlays = createSelectionOverlays({
+      state,
+      selection: toolState,
+      viewportRect,
+      isDragging: this.isDragging,
+      areaSelection: this.isMarqueeSelecting
+        ? {
+            variant: this.areaSelectionVariant,
+            start: this.marqueeStartPos,
+            end: this.marqueeEndPos,
+            lassoPath: this.lassoPath,
           }
-
-          const hoveredPolygon = findPolygonEdgeNearPosition(
-            state.mousePosition,
-            state.polygons,
-            selectionThresholds.polygonEdge / state.zoom,
-            this.isSelectablePolygonEdge,
-          );
-          if (!hoveredVertex && hoveredPolygon) {
-            const hoveredSelectedEdge =
-              this.findSelectedPolygonEdgeNearPosition(state.mousePosition);
-            const hoveredPolygonBoundsColor = uiColors.boundsHover;
-            const polygonSelectionCount = toolState.selectedVertices.filter(
-              (sv) => sv.polygon === hoveredPolygon,
-            ).length;
-            const isHoveredPolygonSelected =
-              polygonSelectionCount === hoveredPolygon.vertices.length &&
-              polygonSelectionCount > 0;
-            if (
-              !isHoveredPolygonSelected &&
-              !hoveredSelectedEdge &&
-              isPolygonVisible(hoveredPolygon, viewportRect)
-            ) {
-              overlays.push({
-                type: "polyline",
-                points: hoveredPolygon.vertices,
-                closed: true,
-                color: hoveredPolygonBoundsColor,
-                width: hoverLineWidth,
-                layer: "top" as const,
-              });
-            }
-          }
-        }
-      }
-    }
-
-    const selectedVerticesByPolygon = new Map<Polygon, Set<Position>>();
-    toolState.selectedVertices.forEach(({ polygon, vertex }) => {
-      const selectedVertices = selectedVerticesByPolygon.get(polygon);
-      if (selectedVertices) {
-        selectedVertices.add(vertex);
-      } else {
-        selectedVerticesByPolygon.set(polygon, new Set([vertex]));
-      }
+        : null,
     });
-    const selectedPolygons = Array.from(selectedVerticesByPolygon.keys());
-    overlays.push(
-      ...selectedPolygons
-        .filter(
-          (polygon) =>
-            polygon.vertices.length >= 2 &&
-            isPolygonVisible(polygon, viewportRect),
-        )
-        .flatMap((polygon) => {
-          const selectedPolygonBoundsColor = polygon.grass
-            ? colors.grass
-            : uiColors.boundsSelected;
-          const selectedVertices = selectedVerticesByPolygon.get(polygon)!;
-          const unselectableGrassEdgeIndex =
-            polygon.grass && selectedVertices.size < polygon.vertices.length
-              ? findLongestPolygonEdgeIndex(polygon)
-              : -1;
-          return polygon.vertices.flatMap((vertex, edgeIndex) => {
-            if (
-              edgeIndex === unselectableGrassEdgeIndex ||
-              !this.isPolygonEdgeSelected(polygon, edgeIndex, selectedVertices)
-            )
-              return [];
-
-            return {
-              type: "polyline" as const,
-              points: [
-                vertex,
-                polygon.vertices[(edgeIndex + 1) % polygon.vertices.length],
-              ],
-              closed: false,
-              color: selectedPolygonBoundsColor,
-              width: selectedLineWidth,
-              layer: "top" as const,
-            };
-          });
-        }),
-    );
-
-    overlays.push(
-      ...toolState.selectedObjects.flatMap(
-        (position): WorldRenderOverlayItem[] => {
-          const artifact = findSessionArtifact(state, position);
-          if (artifact?.selectionShape) {
-            return [
-              {
-                type: "polyline" as const,
-                points: artifact.selectionShape,
-                closed: true,
-                color: uiColors.boundsSelected,
-                width: selectedLineWidth,
-                layer: "top" as const,
-              },
-            ];
-          }
-          if (position === state.start || artifact) {
-            return this.getObjectSelectionCircles(position)
-              .filter((circle) =>
-                rectIntersectsViewport(
-                  {
-                    minX: circle.x - circle.radius,
-                    minY: circle.y - circle.radius,
-                    maxX: circle.x + circle.radius,
-                    maxY: circle.y + circle.radius,
-                  },
-                  viewportRect,
-                ),
-              )
-              .map((circle) => ({
-                type: "circle" as const,
-                center: { x: circle.x, y: circle.y },
-                radius: circle.radius,
-                strokeColor: uiColors.boundsSelected,
-                lineWidth: selectedLineWidth,
-                layer: "top" as const,
-              }));
-          }
-
-          if (!isPointVisible(position, viewportRect)) return [];
-          return [
-            {
-              type: "circle" as const,
-              center: position,
-              radius: getObjectBoundsRadius(),
-              strokeColor: uiColors.boundsSelected,
-              lineWidth: selectedLineWidth,
-              layer: "top" as const,
-            },
-          ];
-        },
-      ),
-    );
-
-    const selectedHandlePositions = toolState.selectedVertices
-      .map(({ vertex }) => vertex)
-      .filter((position) => isPointVisible(position, viewportRect));
-    const selectedObjectHandlePositions = toolState.selectedObjects.filter(
-      (position) => isPointVisible(position, viewportRect),
-    );
-    const allSelected = toolState.transformMode
-      ? []
-      : [...selectedHandlePositions, ...selectedObjectHandlePositions];
-    if (
-      allSelected.length <= selectionRenderLimits.maxIndividualHandles &&
-      allSelected.length > 0
-    ) {
-      overlays.push(
-        ...allSelected.map((position) =>
-          createSelectionHandleOverlay(position, handleSize, handleStrokeWidth),
-        ),
-      );
-    } else {
-      if (allSelected.length > 0) {
-        const selectedHandleStride = Math.max(
-          1,
-          Math.ceil(
-            allSelected.length / selectionRenderLimits.maxIndividualHandles,
-          ),
-        );
-        overlays.push(
-          ...allSelected
-            .filter((_, index) => index % selectedHandleStride === 0)
-            .map((position) =>
-              createSelectionHandleOverlay(
-                position,
-                handleSize,
-                handleStrokeWidth,
-              ),
-            ),
-        );
-      }
-    }
-
-    overlays.push(...this.getTransformOverlays());
-
-    if (this.isMarqueeSelecting && this.areaSelectionVariant === "lasso") {
-      overlays.push({
-        type: "polyline",
-        points: [...this.lassoPath, this.marqueeEndPos],
-        closed: true,
-        color: uiColors.marqueeStroke,
-        width: uiSelectionHandle.strokeWidthPx / state.zoom,
-        layer: "top",
-      });
-    } else if (this.isMarqueeSelecting) {
-      const bounds = getSelectionBounds(
-        this.marqueeStartPos,
-        this.marqueeEndPos,
-      );
-      overlays.push(
-        {
-          type: "rect",
-          position: { x: bounds.minX, y: bounds.minY },
-          width: bounds.maxX - bounds.minX,
-          height: bounds.maxY - bounds.minY,
-          fillColor: uiColors.marqueeStroke,
-          opacity: 0.16,
-        },
-        {
-          type: "rect",
-          position: { x: bounds.minX, y: bounds.minY },
-          width: bounds.maxX - bounds.minX,
-          height: bounds.maxY - bounds.minY,
-          strokeColor: uiColors.marqueeStroke,
-          lineWidth: uiSelectionHandle.strokeWidthPx / state.zoom,
-        },
-      );
-    }
-
-    return overlays;
+    return [
+      ...overlays.selection,
+      ...this.getTransformOverlays(),
+      ...overlays.area,
+    ];
   }
-
-  private findObjectNearPosition(position: Position): Position | null {
-    const { state } = this.getState();
-    const objectSelectionThreshold = Math.max(
-      selectionThresholds.object / state.zoom,
-      OBJECT_DIAMETER / 2,
-    );
-    const useImageStartSelection = state.levelVisibility.showObjects;
-
-    const artifact = [...getSessionArtifacts(state)]
-      .reverse()
-      .find((item) => item.hitTest(position, useImageStartSelection));
-    if (artifact) return artifact.position;
-
-    const apple = findObjectNearPosition(
-      position,
-      state.apples.map((a) => a.position),
-      objectSelectionThreshold,
-    );
-    if (apple) return apple;
-
-    const killer = findObjectNearPosition(
-      position,
-      state.killers,
-      objectSelectionThreshold,
-    );
-    if (killer) return killer;
-
-    const flower = findObjectNearPosition(
-      position,
-      state.flowers,
-      objectSelectionThreshold,
-    );
-    if (flower) return flower;
-
-    const start = isStartObjectHit(
-      position,
-      state.start,
-      useImageStartSelection ? "boundsWithImage" : "boundsOnly",
-      useImageStartSelection,
-    );
-    if (start) return state.start;
-
-    return null;
-  }
-
-  private findSelectedObjectNearPosition(
-    position: Position,
-    objects: Position[],
-    threshold: number,
-    options?: {
-      useStartImageSelection?: boolean;
-    },
-  ): Position | null {
-    const { state } = this.getState();
-    const startSelectionMode: StartSelectionMode =
-      options?.useStartImageSelection ? "boundsWithImage" : "boundsOnly";
-
-    for (const object of objects) {
-      const artifact = findSessionArtifact(state, object);
-      if (artifact) {
-        if (
-          artifact.hitTest(
-            position,
-            Boolean(
-              state.levelVisibility.showObjects &&
-              options?.useStartImageSelection,
-            ),
-          )
-        )
-          return object;
-        continue;
-      }
-      if (object === state.start) {
-        const isHovered = isStartObjectHit(
-          position,
-          state.start,
-          startSelectionMode,
-          !!(
-            state.levelVisibility.showObjects && options?.useStartImageSelection
-          ),
-        );
-        if (isHovered) return object;
-        continue;
-      }
-
-      if (findObjectNearPosition(position, [object], threshold)) {
-        return object;
-      }
-    }
-
-    return null;
-  }
-
-  private isExistingSelectionHit(
-    position: Position,
-    hoveredPicture: Picture | null,
-  ): boolean {
-    const { state, toolState } = this.getState();
-    if (!toolState) return false;
-
-    if (
-      this.findSelectedObjectNearPosition(
-        position,
-        toolState.selectedObjects,
-        Math.max(selectionThresholds.object / state.zoom, OBJECT_DIAMETER / 2),
-        {
-          useStartImageSelection: false,
-        },
-      )
-    ) {
-      return true;
-    }
-
-    if (
-      this.isPolygonSelectable() &&
-      toolState.selectedVertices.some(({ polygon, vertex }) => {
-        if (!state.polygons.includes(polygon)) return false;
-        if (!polygon.vertices.includes(vertex)) return false;
-        return isWithinVertexSelectionThreshold(position, vertex, state.zoom);
-      })
-    ) {
-      return true;
-    }
-
-    if (
-      this.isPolygonSelectable() &&
-      this.findSelectedPolygonEdgeNearPosition(position)
-    ) {
-      return true;
-    }
-
-    return hoveredPicture
-      ? toolState.selectedPictures.includes(hoveredPicture.position)
-      : false;
-  }
-
-  private findSelectedPolygonEdgeNearPosition(position: Position) {
-    const { state } = this.getState();
-    return findPolygonEdgeNearPosition(
-      position,
-      state.polygons,
-      selectionThresholds.polygonEdge / state.zoom,
-      (polygon, edgeIndex) =>
-        this.isSelectablePolygonEdge(polygon, edgeIndex) &&
-        this.isPolygonEdgeSelected(polygon, edgeIndex),
-    );
-  }
-
   private isSelectablePolygonEdge = (polygon: Polygon, edgeIndex: number) => {
     const { toolState } = this.getState();
-    const polygonSelectionCount =
-      toolState?.selectedVertices.filter((sv) => sv.polygon === polygon)
-        .length ?? 0;
-    const isPolygonFullySelected =
-      polygonSelectionCount === polygon.vertices.length &&
-      polygonSelectionCount > 0;
-    if (isPolygonFullySelected) return true;
-
-    if (!polygon.grass) return true;
-    const n = polygon.vertices.length;
-    if (n < 2) return false;
-
-    return edgeIndex !== findLongestPolygonEdgeIndex(polygon);
+    return Boolean(
+      toolState &&
+      isPolygonEdgeSelectable(polygon, edgeIndex, toolState.selectedVertices),
+    );
   };
 
   private startDragging(worldPos: Position): void {
@@ -1968,13 +1342,7 @@ export class SelectTool extends Tool<SelectToolState> {
     this.beginDragHistoryBatch();
 
     // Store original positions of selected items for delta calculations
-    this.dragOriginPositions = [
-      ...toolState.selectedVertices.map((sv: VertexSelection) => ({
-        ...sv.vertex,
-      })),
-      ...toolState.selectedObjects.map((obj: ObjectSelection) => ({ ...obj })),
-      ...toolState.selectedPictures.map((pic: Position) => ({ ...pic })),
-    ];
+    this.dragOriginPositions = getSelectionDragOrigins(toolState);
     this.dragConstraintDirections = getVertexDragConstraintDirections(
       toolState.selectedVertices,
     );
@@ -2037,274 +1405,84 @@ export class SelectTool extends Tool<SelectToolState> {
   ): void {
     const { toolState } = this.getState();
     if (!toolState) return;
-
     const rawDelta = {
       x: worldPos.x - this.dragStartPos.x,
       y: worldPos.y - this.dragStartPos.y,
     };
     if (rawDelta.x === 0 && rawDelta.y === 0 && !this.dragHasChanges) return;
-    const anchor = this.dragOriginPositions[0];
-    const snappedDelta =
-      anchor && !(shouldConstrain && toolState.selectedVertices.length > 0)
-        ? this.snapTranslation(anchor, rawDelta, bypassGrid)
-        : rawDelta;
-    const totalDelta =
-      shouldConstrain && toolState.selectedVertices.length > 0
-        ? constrainDeltaToClosestDirection(
-            rawDelta,
-            this.dragConstraintDirections,
-          )
-        : snappedDelta;
-    const totalDeltaX = totalDelta.x;
-    const totalDeltaY = totalDelta.y;
-    if (totalDeltaX === 0 && totalDeltaY === 0 && !this.dragHasChanges) return;
+    const positions = calculateSelectionDrag({
+      selection: toolState,
+      origins: this.dragOriginPositions,
+      start: this.dragStartPos,
+      current: worldPos,
+      constraintDirections: this.dragConstraintDirections,
+      constrain: shouldConstrain,
+      snap: (anchor, delta) => this.snapTranslation(anchor, delta, bypassGrid),
+    });
+    const changed = [
+      ...positions.vertices,
+      ...positions.objects,
+      ...positions.pictures,
+    ].some(
+      (position, index) =>
+        position.x !== this.dragOriginPositions[index].x ||
+        position.y !== this.dragOriginPositions[index].y,
+    );
+    if (!changed && !this.dragHasChanges) return;
     this.dragHasChanges = true;
-
-    if (toolState.selectedVertices.length > 0) {
-      const newVertexPositions = toolState.selectedVertices.map(
-        (_vertexSelection: VertexSelection, index: number) => {
-          const originalPos = this.dragOriginPositions[index];
-          return {
-            x: originalPos.x + totalDeltaX,
-            y: originalPos.y + totalDeltaY,
-          };
-        },
-      );
-      this.updateSelectedVertices(newVertexPositions);
-    }
-
-    if (toolState.selectedObjects.length > 0) {
-      const vertexCount = toolState.selectedVertices.length;
-      const newObjectPositions = toolState.selectedObjects.map(
-        (_object: ObjectSelection, index: number) => {
-          const originPos = this.dragOriginPositions[vertexCount + index];
-          return {
-            x: originPos.x + totalDeltaX,
-            y: originPos.y + totalDeltaY,
-          };
-        },
-      );
-      this.updateSelectedObjects(newObjectPositions);
-    }
-
-    if (toolState.selectedPictures.length > 0) {
-      const vertexCount = toolState.selectedVertices.length;
-      const objectCount = toolState.selectedObjects.length;
-      const newPicturePositions = toolState.selectedPictures.map(
-        (_picture: Position, index: number) => {
-          const originPos =
-            this.dragOriginPositions[vertexCount + objectCount + index];
-          return {
-            x: originPos.x + totalDeltaX,
-            y: originPos.y + totalDeltaY,
-          };
-        },
-      );
-      this.updateSelectedPictures(newPicturePositions);
-    }
+    if (positions.vertices.length)
+      this.selectionMutations.moveVertices(positions.vertices);
+    if (positions.objects.length)
+      this.selectionMutations.moveObjects(positions.objects);
+    if (positions.pictures.length)
+      this.selectionMutations.movePictures(positions.pictures);
   }
 
   private finalizeMarqueeSelection(): void {
-    const { state, toolState } = this.getState();
-    if (!toolState) return;
-
-    const bounds = getSelectionBounds(this.marqueeStartPos, this.marqueeEndPos);
     const lasso = this.areaSelectionVariant === "lasso";
     if (lasso && this.lassoPath.length < 3) return;
-
-    // Select vertices within the marquee
-    if (this.isPolygonSelectable()) {
-      state.polygons.forEach((polygon: Polygon) => {
-        polygon.vertices.forEach((vertex: Position) => {
-          if (
-            lasso
-              ? isPointInLasso(vertex, this.lassoPath)
-              : isPointInRect(vertex, bounds)
-          ) {
-            const isSelected = toolState.selectedVertices.some(
-              (sv: VertexSelection) =>
-                sv.polygon === polygon && sv.vertex === vertex,
-            );
-            if (!isSelected) {
-              this.selectVertex(polygon, vertex);
-            }
-          }
-        });
-      });
-    }
-
-    // Select level objects touched by the marquee
-    if (this.isObjectSelectable()) {
-      const allObjects = getAllObjects(
-        state.apples.map((a) => a.position),
-        state.killers,
-        state.flowers,
-        state.start,
-      );
-      allObjects.forEach(({ obj }: { obj: Position }) => {
-        const intersects = lasso
-          ? obj === state.start || findSessionArtifact(state, obj)
-            ? this.getObjectSelectionCircles(obj).some((circle) =>
-                circleIntersectsLasso(circle, circle.radius, this.lassoPath),
-              )
-            : circleIntersectsLasso(
-                obj,
-                getObjectBoundsRadius(),
-                this.lassoPath,
-              )
-          : this.objectIntersectsMarquee(obj, bounds);
-        if (intersects) {
-          this.selectObject(obj);
-        }
-      });
-    }
-
-    // Session-only items use the same selection but remain independent of
-    // level object visibility and serialization.
-    getSessionArtifacts(state).forEach((artifact) => {
-      if (
-        artifact.intersectsRect?.(bounds) ??
-        this.objectIntersectsMarquee(artifact.position, bounds)
-      ) {
-        this.selectObject(artifact.position);
-      }
-    });
-
-    // Select pictures touched by the marquee
-    state.pictures
-      .filter((picture) => this.isPictureSelectable(picture))
-      .forEach((picture) => {
-        const dimensions = lasso
-          ? this.pictureDimensionsResolver(picture)
-          : null;
-        const intersects = lasso
-          ? dimensions
-            ? rectIntersectsLasso(
-                {
-                  minX: picture.position.x,
-                  minY: picture.position.y,
-                  maxX: picture.position.x + dimensions.width,
-                  maxY: picture.position.y + dimensions.height,
-                },
-                this.lassoPath,
-              )
-            : isPointInLasso(picture.position, this.lassoPath)
-          : this.pictureIntersectsMarquee(picture, bounds);
-        if (intersects) {
-          const isSelected = toolState.selectedPictures.includes(
-            picture.position,
-          );
-          if (!isSelected) {
-            this.selectPicture(picture.position);
-          }
-        }
-      });
-  }
-
-  private getObjectSelectionCircles(position: Position) {
     const { state } = this.getState();
-    return (
-      findSessionArtifact(state, position)?.selectionCircles ??
-      getKuskiSelectionCircles({ start: position })
-    );
-  }
-
-  private objectIntersectsMarquee(
-    object: Position,
-    bounds: WorldRect,
-  ): boolean {
-    const { state } = this.getState();
-
-    const artifact = findSessionArtifact(state, object);
-    if (artifact?.intersectsRect) return artifact.intersectsRect(bounds);
-    if (object === state.start || artifact) {
-      return this.getObjectSelectionCircles(object).some((circle) =>
-        circleIntersectsRect(
-          { x: circle.x, y: circle.y },
-          circle.radius,
-          bounds,
-        ),
-      );
-    }
-
-    return circleIntersectsRect(object, getObjectBoundsRadius(), bounds);
-  }
-
-  private pictureIntersectsMarquee(
-    picture: Picture,
-    bounds: WorldRect,
-  ): boolean {
-    if (this.getState().state.pictureSelection.area === "anchor")
-      return isPointInRect(picture.position, bounds);
-    const dimensions = this.pictureDimensionsResolver({
-      name: picture.name || undefined,
-      texture: picture.texture || undefined,
-      mask: picture.mask || undefined,
+    const selection = findAreaSelection({
+      state,
+      start: this.marqueeStartPos,
+      end: this.marqueeEndPos,
+      lassoPath: lasso ? this.lassoPath : null,
+      pictureDimensions: this.pictureDimensionsResolver,
+      polygonsSelectable: this.isPolygonSelectable(),
+      objectsSelectable: this.isObjectSelectable(),
+      pictureSelectable: (picture) => this.isPictureSelectable(picture),
     });
-    if (!dimensions) return isPointInRect(picture.position, bounds);
-
-    return rectsIntersect(
-      {
-        minX: picture.position.x,
-        minY: picture.position.y,
-        maxX: picture.position.x + dimensions.width,
-        maxY: picture.position.y + dimensions.height,
-      },
-      bounds,
-    );
+    for (const { polygon, vertex } of selection.selectedVertices)
+      this.selectionMutations.addVertex(polygon, vertex);
+    for (const object of selection.selectedObjects)
+      this.selectionMutations.addObject(object);
+    for (const picture of selection.selectedPictures)
+      this.selectionMutations.addPicture(picture);
   }
 
   private isPolygonSelectable(): boolean {
-    const { state } = this.getState();
-    const {
-      showPolygons,
-      showGroundBounds,
-      showGrassBounds,
-      showPolygonHandles,
-    } = state.levelVisibility;
-    return (
-      showPolygons || showGroundBounds || showGrassBounds || showPolygonHandles
-    );
+    return new SelectionVisibility(this.getState().state).polygonsSelectable();
   }
 
   private isObjectSelectable(): boolean {
-    const { state } = this.getState();
-    const { showObjects, showObjectBounds } = state.levelVisibility;
-    return showObjects || showObjectBounds;
+    return new SelectionVisibility(this.getState().state).objectsSelectable();
   }
 
   private isPictureSelectable(picture: {
     texture?: string;
     mask?: string;
   }): boolean {
-    const { state } = this.getState();
-    const { showPictureBounds, showTextureBounds, showPictures, showTextures } =
-      state.levelVisibility;
-    const hasTexture = Boolean(picture.texture && picture.mask);
-    return hasTexture
-      ? showTextures || showTextureBounds
-      : showPictures || showPictureBounds;
+    return new SelectionVisibility(this.getState().state).pictureSelectable(
+      picture,
+    );
   }
 
   private isObjectPresent(object: Position): boolean {
-    const { state } = this.getState();
-    return (
-      Boolean(findSessionArtifact(state, object)) ||
-      state.start === object ||
-      state.killers.includes(object) ||
-      state.flowers.includes(object) ||
-      state.apples.some((apple) => apple.position === object)
-    );
+    return new SelectionVisibility(this.getState().state).objectPresent(object);
   }
 
   private hasObjects(): boolean {
-    const { state } = this.getState();
-    return (
-      state.apples.length > 0 ||
-      state.killers.length > 0 ||
-      state.flowers.length > 0 ||
-      Boolean(state.start)
-    );
+    return new SelectionVisibility(this.getState().state).hasLevelObjects();
   }
 
   private isPolygonEdgeSelected(
@@ -2313,331 +1491,21 @@ export class SelectTool extends Tool<SelectToolState> {
     selectedVertices?: ReadonlySet<Position>,
   ): boolean {
     const { toolState } = this.getState();
-    if (!toolState || polygon.vertices.length < 2) return false;
-
-    const start = polygon.vertices[edgeIndex];
-    const end = polygon.vertices[(edgeIndex + 1) % polygon.vertices.length];
-    if (selectedVertices) {
-      return selectedVertices.has(start) && selectedVertices.has(end);
-    }
-    return (
-      isVertexSelected(
-        { polygon, vertex: start },
-        toolState.selectedVertices,
-      ) &&
-      isVertexSelected({ polygon, vertex: end }, toolState.selectedVertices)
+    return Boolean(
+      toolState &&
+      isPolygonEdgeSelected(
+        polygon,
+        edgeIndex,
+        selectedVertices ?? toolState.selectedVertices,
+      ),
     );
   }
 
   private pruneHiddenSelection(): void {
     const { state, toolState, setToolState } = this.getState();
     if (!toolState) return;
-
-    const verticesByPosition = new Map<string, VertexSelection[]>();
-    state.polygons.forEach((polygon) => {
-      polygon.vertices.forEach((vertex) => {
-        const key = `${vertex.x}:${vertex.y}`;
-        const matches = verticesByPosition.get(key) ?? [];
-        matches.push({ polygon, vertex });
-        verticesByPosition.set(key, matches);
-      });
-    });
-    const consumedVertices = new Set<Position>();
-
-    const selectedVertices = this.isPolygonSelectable()
-      ? toolState.selectedVertices
-          .map((selection) => {
-            if (
-              state.polygons.includes(selection.polygon) &&
-              selection.polygon.vertices.includes(selection.vertex) &&
-              !consumedVertices.has(selection.vertex)
-            ) {
-              consumedVertices.add(selection.vertex);
-              return selection;
-            }
-
-            const key = `${selection.vertex.x}:${selection.vertex.y}`;
-            const matches = verticesByPosition.get(key) ?? [];
-            const match = matches.find(
-              ({ vertex }) => !consumedVertices.has(vertex),
-            );
-            if (!match) return null;
-            consumedVertices.add(match.vertex);
-            return match;
-          })
-          .filter((selection): selection is VertexSelection =>
-            Boolean(selection),
-          )
-      : [];
-
-    const selectedObjects = toolState.selectedObjects
-      .map((selectedObject) => {
-        const artifact = findSessionArtifact(state, selectedObject);
-        if (artifact) return artifact.position;
-        if (!this.isObjectSelectable()) return null;
-        const identityMatch = this.findObjectByIdentity(selectedObject);
-        if (identityMatch) return identityMatch;
-        if (getSessionArtifactKey(selectedObject)) return null;
-        return this.findObjectByCoordinates(selectedObject);
-      })
-      .filter((object): object is Position => Boolean(object));
-
-    const selectedPictures = toolState.selectedPictures
-      .map((position) => {
-        const picture = state.pictures.find(
-          (entry) =>
-            entry.position.x === position.x && entry.position.y === position.y,
-        );
-        return picture && this.isPictureSelectable(picture)
-          ? picture.position
-          : null;
-      })
-      .filter((position): position is Position => Boolean(position));
-
-    if (
-      selectedVertices.length !== toolState.selectedVertices.length ||
-      selectedObjects.length !== toolState.selectedObjects.length ||
-      selectedPictures.length !== toolState.selectedPictures.length ||
-      selectedVertices.some((selection, index) => {
-        const previous = toolState.selectedVertices[index];
-        return (
-          previous?.polygon !== selection.polygon ||
-          previous?.vertex !== selection.vertex
-        );
-      }) ||
-      selectedObjects.some(
-        (object, index) => object !== toolState.selectedObjects[index],
-      ) ||
-      selectedPictures.some(
-        (position, index) => position !== toolState.selectedPictures[index],
-      )
-    ) {
-      setToolState({ selectedVertices, selectedObjects, selectedPictures });
-    }
-  }
-
-  private selectVertex(polygon: Polygon, vertex: Position): void {
-    const { toolState, setToolState } = this.getState();
-    if (!toolState) return;
-
-    const isSelected = isVertexSelected(
-      { polygon, vertex },
-      toolState.selectedVertices,
-    );
-    if (isSelected) return;
-
-    setToolState({
-      selectedVertices: [...toolState.selectedVertices, { polygon, vertex }],
-    });
-  }
-
-  private selectObject(object: ObjectSelection): void {
-    const { toolState, setToolState } = this.getState();
-    if (!toolState) return;
-
-    const isSelected = isObjectSelected(object, toolState.selectedObjects);
-    if (isSelected) return;
-
-    setToolState({ selectedObjects: [...toolState.selectedObjects, object] });
-  }
-
-  private selectPicture(picture: Position): void {
-    const { toolState, setToolState } = this.getState();
-    if (!toolState) return;
-
-    if (isObjectSelected(picture, toolState.selectedPictures)) return;
-
-    setToolState({
-      selectedPictures: [...toolState.selectedPictures, picture],
-    });
-  }
-
-  private findObjectByIdentity(selectedObject: Position): Position | null {
-    const { state } = this.getState();
-    const artifact = findSessionArtifact(state, selectedObject);
-    if (artifact) return artifact.position;
-    if (state.start === selectedObject) return state.start;
-    if (state.apples.some((apple) => apple.position === selectedObject)) {
-      return selectedObject;
-    }
-    if (state.killers.includes(selectedObject)) return selectedObject;
-    if (state.flowers.includes(selectedObject)) return selectedObject;
-    return null;
-  }
-
-  private findObjectByCoordinates(selectedObject: Position): Position | null {
-    const { state } = this.getState();
-    const matchByCoords = (object: Position) =>
-      object.x === selectedObject.x && object.y === selectedObject.y;
-
-    const apple = state.apples.find((entry) => matchByCoords(entry.position));
-    if (apple) return apple.position;
-
-    const killer = state.killers.find(matchByCoords);
-    if (killer) return killer;
-
-    const flower = state.flowers.find(matchByCoords);
-    if (flower) return flower;
-
-    if (matchByCoords(state.start)) return state.start;
-    return null;
-  }
-
-  private selectPolygon(polygon: Polygon): void {
-    const { toolState, setToolState } = this.getState();
-    if (!toolState) return;
-
-    // Filter out vertices that are already selected
-    const existingSelectedVertices = toolState.selectedVertices.filter(
-      (sv: VertexSelection) => sv.polygon !== polygon,
-    );
-
-    const polygonVertices = polygon.vertices.map((vertex) => ({
-      polygon,
-      vertex,
-    }));
-    setToolState({
-      selectedVertices: [...existingSelectedVertices, ...polygonVertices],
-    });
-  }
-
-  private updateSelectedVertices(newPositions: Position[]): void {
-    const { state, toolState, setToolState } = this.getState();
-    if (!toolState) return;
-
-    const updatedPolygons = state.polygons.map((polygon) => {
-      let hasChanges = false;
-      const newVertices = polygon.vertices.map((vertex) => {
-        const selectionIndex = toolState.selectedVertices.findIndex(
-          (selection: VertexSelection) =>
-            selection.polygon === polygon && selection.vertex === vertex,
-        );
-        if (selectionIndex !== -1) {
-          hasChanges = true;
-          return newPositions[selectionIndex];
-        }
-        return vertex;
-      });
-
-      // Only create a new polygon object if vertices changed
-      return hasChanges ? { ...polygon, vertices: newVertices } : polygon;
-    });
-
-    const updatedSelectedVertices = toolState.selectedVertices.map(
-      (selection: VertexSelection, index) => ({
-        polygon: updatedPolygons[state.polygons.indexOf(selection.polygon)],
-        vertex: newPositions[index],
-      }),
-    );
-
-    setToolState({ selectedVertices: updatedSelectedVertices });
-
-    // Update polygons in store
-    state.actions.setPolygons(updatedPolygons);
-  }
-
-  private updateSelectedObjects(newPositions: Position[]): void {
-    const { state, toolState, setToolState } = this.getState();
-    if (!toolState) return;
-
-    let nextApples: Apple[] | undefined;
-    let nextKillers: Position[] | undefined;
-    let nextFlowers: Position[] | undefined;
-    let nextStart: Position | undefined;
-    let nextHoveredObject: Position | undefined = toolState.hoveredObject;
-    const updatedSelectedObjects = [...toolState.selectedObjects];
-
-    // Update each selected object with its new position
-    toolState.selectedObjects.forEach((object: ObjectSelection, index) => {
-      const newPos = newPositions[index];
-
-      const artifact = findSessionArtifact(state, object);
-      if (artifact) {
-        if (artifact.move) {
-          artifact.move(newPos);
-          updatedSelectedObjects[index] = newPos;
-          if (toolState.hoveredObject === object) nextHoveredObject = newPos;
-        }
-        return;
-      }
-
-      // Find and update the object in the appropriate array
-      const appleIndex = state.apples.findIndex((a) => a.position === object);
-      if (appleIndex !== -1) {
-        if (!nextApples) nextApples = [...state.apples];
-        const apple = state.apples[appleIndex];
-        nextApples[appleIndex] = {
-          position: newPos,
-          animation: apple.animation,
-          gravity: apple.gravity,
-        };
-        updatedSelectedObjects[index] = newPos;
-      }
-
-      const killerIndex = state.killers.findIndex((k) => k === object);
-      if (killerIndex !== -1) {
-        if (!nextKillers) nextKillers = [...state.killers];
-        nextKillers[killerIndex] = newPos;
-        updatedSelectedObjects[index] = newPos;
-      }
-
-      const flowerIndex = state.flowers.findIndex((f) => f === object);
-      if (flowerIndex !== -1) {
-        if (!nextFlowers) nextFlowers = [...state.flowers];
-        nextFlowers[flowerIndex] = newPos;
-        updatedSelectedObjects[index] = newPos;
-      }
-
-      // Check if it's the start position
-      if (object === state.start) {
-        nextStart = newPos;
-        updatedSelectedObjects[index] = newPos;
-        if (toolState.hoveredObject === object) {
-          nextHoveredObject = newPos;
-        }
-      }
-    });
-
-    if (nextApples) state.actions.setApples(nextApples);
-    if (nextKillers) state.actions.setKillers(nextKillers);
-    if (nextFlowers) state.actions.setFlowers(nextFlowers);
-    if (nextStart) state.actions.setStart(nextStart);
-
-    setToolState({
-      selectedObjects: updatedSelectedObjects,
-      hoveredObject: nextHoveredObject,
-    });
-  }
-
-  private updateSelectedPictures(newPositions: Position[]): void {
-    const { state, toolState, setToolState } = this.getState();
-    if (!toolState) return;
-
-    const updatedPictures = [...state.pictures];
-    const updatedSelectedPictures: Position[] = [];
-    const handledPictureIndexes = new Set<number>();
-
-    // Update each selected picture with its new position
-    toolState.selectedPictures.forEach((picture: Position, index) => {
-      const pictureIndex = updatedPictures.findIndex(
-        (p) => p.position === picture,
-      );
-      if (pictureIndex === -1 || handledPictureIndexes.has(pictureIndex))
-        return;
-
-      const newPos = newPositions[index];
-      updatedPictures[pictureIndex] = {
-        ...updatedPictures[pictureIndex],
-        position: newPos,
-      };
-      handledPictureIndexes.add(pictureIndex);
-      updatedSelectedPictures.push(newPos);
-    });
-
-    // Update pictures in store
-    state.actions.setPictures(updatedPictures);
-
-    setToolState({ selectedPictures: updatedSelectedPictures });
+    const selection = new SelectionVisibility(state).reconcile(toolState);
+    if (selection) setToolState(selection);
   }
 
   private getHistorySnapshot(): EditorHistoryState {
@@ -2680,18 +1548,6 @@ export class SelectTool extends Tool<SelectToolState> {
     this.dragHasChanges = false;
   }
 
-  private updatePolygon(index: number, polygon: Polygon): void {
-    const { state } = this.getState();
-    state.actions.setPolygons(
-      state.polygons.map((p, i) => (i === index ? polygon : p)),
-    );
-  }
-
-  private removePolygon(index: number): void {
-    const { state } = this.getState();
-    state.actions.setPolygons(state.polygons.filter((_, i) => i !== index));
-  }
-
   private runHistoryBatch(mutate: () => void) {
     const historyStart = this.getHistorySnapshot();
     this.store.temporal.getState().pause();
@@ -2718,147 +1574,50 @@ export class SelectTool extends Tool<SelectToolState> {
   }
 
   private copySelection(): boolean {
-    const clipboard = this.buildClipboardFromSelection();
-    if (!clipboard) return false;
-    this.clipboard = clipboard;
-    this.clipboardPasteCount = 0;
-    return true;
-  }
-
-  private pasteClipboardWithMargin(): boolean {
-    const step = this.clipboardPasteCount + 1;
-    const pasted = this.pasteClipboard({
-      x: DUPLICATE_OFFSET_STEP * step,
-      y: DUPLICATE_OFFSET_STEP * step,
-    });
-
-    if (pasted) {
-      this.clipboardPasteCount = step;
-    }
-
-    return pasted;
+    const { state, toolState } = this.getState();
+    return Boolean(toolState && this.clipboard.copy(state, toolState));
   }
 
   private async copySelectionToSystemClipboard(): Promise<void> {
     const { state } = this.getState();
-    if (!this.clipboard || !this.canAccessSystemClipboard()) return;
-
-    try {
-      await navigator.clipboard.writeText(
-        JSON.stringify(
-          this.serializeClipboard(
-            this.clipboard,
-            state.documentSession.clipboardSessionId,
-          ),
-        ),
-      );
-    } catch {
-      // Browser clipboard access can fail if permissions or context are missing.
-    }
+    await this.clipboard.copyToSystemClipboard(
+      state.documentSession.clipboardSessionId,
+    );
   }
 
   private async pasteFromSystemClipboard(anchor: Position): Promise<void> {
     const { state } = this.getState();
-    if (this.canAccessSystemClipboard()) {
-      try {
-        const text = await navigator.clipboard.readText();
-        const serializedClipboard = this.deserializeClipboard(text);
-        if (serializedClipboard) {
-          this.clipboard = serializedClipboard.payload;
-          this.clipboardPasteCount = 0;
-          if (
-            serializedClipboard.sourceClipboardSessionId ===
-            state.documentSession.clipboardSessionId
-          ) {
-            this.pasteClipboardWithMargin();
-          } else {
-            this.pasteClipboardAtAnchor(anchor);
-          }
-          return;
-        }
-      } catch {
-        // Fall back to the in-memory clipboard when system clipboard reads fail.
-      }
-    }
-
-    this.pasteClipboardAtAnchor(anchor);
+    const pasted = await this.clipboard.readForPaste(
+      anchor,
+      state.documentSession.clipboardSessionId,
+    );
+    if (pasted) this.commitPaste(pasted);
   }
 
-  private pasteClipboardAtAnchor(anchor: Position): boolean {
-    if (!this.clipboard) return false;
-
-    const clipboardCenter = getClipboardCenter(this.clipboard);
-    if (!clipboardCenter) return false;
-
-    return this.pasteClipboard({
-      x: anchor.x - clipboardCenter.x,
-      y: anchor.y - clipboardCenter.y,
-    });
-  }
-
-  private pasteClipboard(offset: Position): boolean {
-    if (!this.clipboard) return false;
-
+  private commitPaste(pasted: PastedSelection): boolean {
     const { state, setToolState } = this.getState();
-    const translatedPolygons = this.clipboard.polygons.map((polygon) => ({
-      ...polygon,
-      vertices: polygon.vertices.map((vertex) =>
-        translatePosition(vertex, offset),
-      ),
-    }));
-    const translatedApples = this.clipboard.apples.map((apple) => ({
-      ...apple,
-      position: translatePosition(apple.position, offset),
-    }));
-    const translatedKillers = this.clipboard.killers.map((killer) =>
-      translatePosition(killer, offset),
-    );
-    const translatedFlowers = this.clipboard.flowers.map((flower) =>
-      translatePosition(flower, offset),
-    );
-    const translatedPictures = this.clipboard.pictures.map((picture) => ({
-      ...picture,
-      position: translatePosition(picture.position, offset),
-    }));
-
-    if (
-      translatedPolygons.length === 0 &&
-      translatedApples.length === 0 &&
-      translatedKillers.length === 0 &&
-      translatedFlowers.length === 0 &&
-      translatedPictures.length === 0
-    ) {
-      return false;
-    }
-
     this.runHistoryBatch(() => {
-      if (translatedPolygons.length > 0) {
-        state.actions.setPolygons([...state.polygons, ...translatedPolygons]);
+      if (pasted.polygons.length > 0) {
+        state.actions.setPolygons([...state.polygons, ...pasted.polygons]);
       }
-      if (translatedApples.length > 0) {
-        state.actions.setApples([...state.apples, ...translatedApples]);
+      if (pasted.apples.length > 0) {
+        state.actions.setApples([...state.apples, ...pasted.apples]);
       }
-      if (translatedKillers.length > 0) {
-        state.actions.setKillers([...state.killers, ...translatedKillers]);
+      if (pasted.killers.length > 0) {
+        state.actions.setKillers([...state.killers, ...pasted.killers]);
       }
-      if (translatedFlowers.length > 0) {
-        state.actions.setFlowers([...state.flowers, ...translatedFlowers]);
+      if (pasted.flowers.length > 0) {
+        state.actions.setFlowers([...state.flowers, ...pasted.flowers]);
       }
-      if (translatedPictures.length > 0) {
-        state.actions.setPictures([...state.pictures, ...translatedPictures]);
+      if (pasted.pictures.length > 0) {
+        state.actions.setPictures([...state.pictures, ...pasted.pictures]);
       }
     });
 
     setToolState({
-      selectedVertices: translatedPolygons.flatMap((polygon) =>
-        polygon.vertices.map((vertex) => ({ polygon, vertex })),
-      ),
-      selectedObjects: [
-        ...translatedApples.map((apple) => apple.position),
-        ...translatedKillers,
-        ...translatedFlowers,
-      ],
-      selectedPictures: translatedPictures.map((picture) => picture.position),
+      selectedVertices: pasted.selectedVertices,
+      selectedObjects: pasted.selectedObjects,
+      selectedPictures: pasted.selectedPictures,
       hoveredObject: undefined,
       hoveredPictureBounds: undefined,
       contextMenuType: undefined,
@@ -2867,200 +1626,9 @@ export class SelectTool extends Tool<SelectToolState> {
     return true;
   }
 
-  private buildClipboardFromSelection(): SelectionClipboard | null {
-    const { state, toolState } = this.getState();
-    if (!toolState) return null;
-
-    const polygonSelections = new Map<Polygon, Set<Position>>();
-    toolState.selectedVertices.forEach(({ polygon, vertex }) => {
-      const existing = polygonSelections.get(polygon) ?? new Set<Position>();
-      existing.add(vertex);
-      polygonSelections.set(polygon, existing);
-    });
-
-    const polygons = Array.from(polygonSelections.entries())
-      .map(([polygon, selectedVertices]) => {
-        const vertices = polygon.vertices
-          .filter((vertex) => selectedVertices.has(vertex))
-          .map(clonePosition);
-
-        if (vertices.length < (polygon.grass ? 2 : 3)) return null;
-
-        return {
-          ...polygon,
-          vertices,
-        };
-      })
-      .filter((polygon): polygon is Polygon => Boolean(polygon));
-
-    const apples = toolState.selectedObjects
-      .map((object) => {
-        const apple = state.apples.find((entry) => entry.position === object);
-        return apple
-          ? {
-              ...apple,
-              position: clonePosition(apple.position),
-            }
-          : null;
-      })
-      .filter((apple): apple is Apple => Boolean(apple));
-
-    const killers = toolState.selectedObjects
-      .filter((object) => state.killers.includes(object))
-      .map(clonePosition);
-
-    const flowers = toolState.selectedObjects
-      .filter((object) => state.flowers.includes(object))
-      .map(clonePosition);
-
-    const pictures = toolState.selectedPictures
-      .map((position) => {
-        const picture = state.pictures.find(
-          (entry) => entry.position === position,
-        );
-        return picture
-          ? {
-              ...picture,
-              position: clonePosition(picture.position),
-            }
-          : null;
-      })
-      .filter((picture): picture is Picture => Boolean(picture));
-
-    const hasContent =
-      polygons.length > 0 ||
-      apples.length > 0 ||
-      killers.length > 0 ||
-      flowers.length > 0 ||
-      pictures.length > 0;
-
-    return hasContent
-      ? {
-          polygons,
-          apples,
-          killers,
-          flowers,
-          pictures,
-        }
-      : null;
-  }
-
-  private canAccessSystemClipboard(): boolean {
-    return (
-      typeof navigator !== "undefined" &&
-      typeof navigator.clipboard?.readText === "function" &&
-      typeof navigator.clipboard?.writeText === "function"
-    );
-  }
-
-  private serializeClipboard(
-    clipboard: SelectionClipboard,
-    sourceClipboardSessionId: string,
-  ): SerializedSelectionClipboard {
-    return {
-      type: SELECTION_CLIPBOARD_TYPE,
-      version: SELECTION_CLIPBOARD_VERSION,
-      sourceClipboardSessionId,
-      payload: clipboard,
-    };
-  }
-
-  private deserializeClipboard(
-    text: string,
-  ): SerializedSelectionClipboard | null {
-    try {
-      const parsed = JSON.parse(text) as Partial<SerializedSelectionClipboard>;
-      if (
-        parsed.type !== SELECTION_CLIPBOARD_TYPE ||
-        parsed.version !== SELECTION_CLIPBOARD_VERSION ||
-        typeof parsed.sourceClipboardSessionId !== "string"
-      ) {
-        return null;
-      }
-
-      const payload = parsed.payload;
-      if (!isSelectionClipboard(payload)) {
-        return null;
-      }
-
-      return {
-        type: SELECTION_CLIPBOARD_TYPE,
-        version: SELECTION_CLIPBOARD_VERSION,
-        sourceClipboardSessionId: parsed.sourceClipboardSessionId,
-        payload,
-      };
-    } catch {
-      return null;
-    }
-  }
-
   private deleteSelection(): void {
-    const { state, toolState } = this.getState();
-    if (!toolState) return;
-
-    // Group selected vertices by polygon index
-    const verticesByPolygonIndex = new Map<number, Position[]>();
-    toolState.selectedVertices.forEach(
-      ({ polygon, vertex }: VertexSelection) => {
-        const polygonIndex = state.polygons.indexOf(polygon);
-        if (polygonIndex !== -1) {
-          if (!verticesByPolygonIndex.has(polygonIndex)) {
-            verticesByPolygonIndex.set(polygonIndex, []);
-          }
-          verticesByPolygonIndex.get(polygonIndex)!.push(vertex);
-        }
-      },
-    );
-
     this.runHistoryBatch(() => {
-      // Delete vertices from each polygon
-      const sortedPolygonIndices = Array.from(
-        verticesByPolygonIndex.keys(),
-      ).sort((a, b) => b - a);
-      sortedPolygonIndices.forEach((polygonIndex) => {
-        const polygon = state.polygons[polygonIndex];
-        const verticesToDelete = verticesByPolygonIndex.get(polygonIndex)!;
-
-        if (polygon) {
-          const updatedVertices = polygon.vertices.filter(
-            (vertex: Position) => !verticesToDelete.includes(vertex),
-          );
-
-          if (updatedVertices.length < (polygon.grass ? 2 : 3)) {
-            this.removePolygon(polygonIndex);
-          } else {
-            this.updatePolygon(polygonIndex, {
-              ...polygon,
-              vertices: updatedVertices,
-            });
-          }
-        }
-      });
-
-      // Delete selected objects
-      toolState.selectedObjects.forEach((object: ObjectSelection) => {
-        const artifact = findSessionArtifact(state, object);
-        if (artifact) {
-          artifact.remove?.();
-          return;
-        }
-        const apple = state.apples.find((a) => a.position === object);
-        if (apple) {
-          state.actions.removeApple(apple);
-        } else if (state.killers.some((k) => k === object)) {
-          state.actions.removeKiller(object);
-        } else if (state.flowers.some((f) => f === object)) {
-          state.actions.removeFlower(object);
-        }
-      });
-
-      // Delete selected pictures
-      toolState.selectedPictures.forEach((picturePos: Position) => {
-        const picture = state.pictures.find((p) => p.position === picturePos);
-        if (picture) {
-          state.actions.removePicture(picture);
-        }
-      });
+      this.selectionMutations.deleteSelection();
     });
 
     this.clear();
@@ -3069,335 +1637,4 @@ export class SelectTool extends Tool<SelectToolState> {
 
 function clonePosition(position: Position): Position {
   return { x: position.x, y: position.y };
-}
-
-function circleIntersectsRect(
-  center: Position,
-  radius: number,
-  rect: WorldRect,
-): boolean {
-  const closestX = Math.max(rect.minX, Math.min(center.x, rect.maxX));
-  const closestY = Math.max(rect.minY, Math.min(center.y, rect.maxY));
-  const dx = center.x - closestX;
-  const dy = center.y - closestY;
-
-  return dx * dx + dy * dy <= radius * radius;
-}
-
-function getSelectedPictureIndexes(
-  pictures: Picture[],
-  selectedPictures: Position[],
-): number[] {
-  const handledIndexes = new Set<number>();
-
-  return selectedPictures
-    .map((position) => {
-      const index = pictures.findIndex(
-        (picture, candidateIndex) =>
-          !handledIndexes.has(candidateIndex) && picture.position === position,
-      );
-      if (index === -1) return null;
-      handledIndexes.add(index);
-      return index;
-    })
-    .filter((index): index is number => index !== null);
-}
-
-function getArrangeDistanceDelta(
-  direction: ArrangeSelectionDirection,
-  {
-    minSelectedDistance,
-    maxSelectedDistance,
-    unselectedDistances,
-  }: {
-    minSelectedDistance: number;
-    maxSelectedDistance: number;
-    unselectedDistances: number[];
-  },
-) {
-  if (direction === "front") {
-    return MIN_PICTURE_DISTANCE - minSelectedDistance;
-  }
-
-  if (direction === "back") {
-    return MAX_PICTURE_DISTANCE - maxSelectedDistance;
-  }
-
-  if (direction === "forward") {
-    const nearestFrontDistance = Math.max(
-      ...unselectedDistances.filter(
-        (distance) => distance < minSelectedDistance,
-      ),
-    );
-    if (!Number.isFinite(nearestFrontDistance)) {
-      return MIN_PICTURE_DISTANCE - minSelectedDistance;
-    }
-    return nearestFrontDistance - minSelectedDistance - 1;
-  }
-
-  const nearestBackDistance = Math.min(
-    ...unselectedDistances.filter((distance) => distance > maxSelectedDistance),
-  );
-  if (!Number.isFinite(nearestBackDistance)) {
-    return MAX_PICTURE_DISTANCE - maxSelectedDistance;
-  }
-  return nearestBackDistance - maxSelectedDistance + 1;
-}
-
-function clampPictureDistance(distance: number) {
-  return Math.min(
-    MAX_PICTURE_DISTANCE,
-    Math.max(MIN_PICTURE_DISTANCE, Math.round(distance)),
-  );
-}
-
-function getClipboardCenter(clipboard: SelectionClipboard): Position | null {
-  const positions: Position[] = [
-    ...clipboard.polygons.flatMap((polygon) => polygon.vertices),
-    ...clipboard.apples.map((apple) => apple.position),
-    ...clipboard.killers,
-    ...clipboard.flowers,
-    ...clipboard.pictures.map((picture) => picture.position),
-  ];
-
-  if (positions.length === 0) return null;
-
-  const bounds = positions.reduce(
-    (acc, position) => ({
-      minX: Math.min(acc.minX, position.x),
-      maxX: Math.max(acc.maxX, position.x),
-      minY: Math.min(acc.minY, position.y),
-      maxY: Math.max(acc.maxY, position.y),
-    }),
-    {
-      minX: positions[0].x,
-      maxX: positions[0].x,
-      minY: positions[0].y,
-      maxY: positions[0].y,
-    },
-  );
-
-  return {
-    x: (bounds.minX + bounds.maxX) / 2,
-    y: (bounds.minY + bounds.maxY) / 2,
-  };
-}
-
-function isSelectionClipboard(value: unknown): value is SelectionClipboard {
-  if (!isRecord(value)) return false;
-
-  return (
-    isPolygonArray(value.polygons) &&
-    isAppleArray(value.apples) &&
-    isPositionArray(value.killers) &&
-    isPositionArray(value.flowers) &&
-    isPictureArray(value.pictures)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isPosition(value: unknown): value is Position {
-  return (
-    isRecord(value) &&
-    typeof value.x === "number" &&
-    Number.isFinite(value.x) &&
-    typeof value.y === "number" &&
-    Number.isFinite(value.y)
-  );
-}
-
-function isPositionArray(value: unknown): value is Position[] {
-  return Array.isArray(value) && value.every(isPosition);
-}
-
-function isPolygon(value: unknown): value is Polygon {
-  return (
-    isRecord(value) &&
-    typeof value.grass === "boolean" &&
-    isPositionArray(value.vertices) &&
-    value.vertices.length >= (value.grass ? 2 : 3)
-  );
-}
-
-function isPolygonArray(value: unknown): value is Polygon[] {
-  return Array.isArray(value) && value.every(isPolygon);
-}
-
-function findLongestPolygonEdgeIndex(polygon: Polygon): number {
-  let longestEdgeIndex = -1;
-  let longestEdgeLength = -1;
-  for (let edgeIndex = 0; edgeIndex < polygon.vertices.length; edgeIndex++) {
-    const from = polygon.vertices[edgeIndex];
-    const to = polygon.vertices[(edgeIndex + 1) % polygon.vertices.length];
-    const length = Math.hypot(to.x - from.x, to.y - from.y);
-    if (length > longestEdgeLength) {
-      longestEdgeLength = length;
-      longestEdgeIndex = edgeIndex;
-    }
-  }
-
-  return longestEdgeIndex;
-}
-
-function isApple(value: unknown): value is Apple {
-  return (
-    isRecord(value) &&
-    isPosition(value.position) &&
-    typeof value.animation === "number" &&
-    Number.isInteger(value.animation) &&
-    value.animation >= 1 &&
-    value.animation <= 9 &&
-    typeof value.gravity === "number"
-  );
-}
-
-function isAppleArray(value: unknown): value is Apple[] {
-  return Array.isArray(value) && value.every(isApple);
-}
-
-function isPicture(value: unknown): value is Picture {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    typeof value.texture === "string" &&
-    typeof value.mask === "string" &&
-    isPosition(value.position) &&
-    typeof value.distance === "number" &&
-    Number.isFinite(value.distance) &&
-    typeof value.clip === "number"
-  );
-}
-
-function isPictureArray(value: unknown): value is Picture[] {
-  return Array.isArray(value) && value.every(isPicture);
-}
-
-function translatePosition(position: Position, offset: Position): Position {
-  return {
-    x: position.x + offset.x,
-    y: position.y + offset.y,
-  };
-}
-
-function getVertexDragConstraintDirections(
-  selectedVertices: VertexSelection[],
-): Position[] {
-  const directions: Position[] = [];
-
-  for (const selection of selectedVertices) {
-    const vertexIndex = selection.polygon.vertices.indexOf(selection.vertex);
-    if (vertexIndex === -1) continue;
-
-    const vertexCount = selection.polygon.vertices.length;
-    const previous =
-      selection.polygon.vertices[(vertexIndex - 1 + vertexCount) % vertexCount];
-    const current = selection.polygon.vertices[vertexIndex];
-    const next = selection.polygon.vertices[(vertexIndex + 1) % vertexCount];
-
-    addDirection(directions, getNormalizedDirection(previous, current));
-    addDirection(directions, getNormalizedDirection(current, next));
-  }
-
-  return directions;
-}
-
-function addDirection(
-  directions: Position[],
-  direction: Position | null,
-): void {
-  if (!direction) return;
-
-  const alreadyIncluded = directions.some((candidate) => {
-    const dot = candidate.x * direction.x + candidate.y * direction.y;
-    return Math.abs(dot) > 0.999;
-  });
-  if (!alreadyIncluded) {
-    directions.push(direction);
-  }
-}
-
-function getNormalizedDirection(
-  from: Position | undefined,
-  to: Position | undefined,
-): Position | null {
-  if (!from || !to) return null;
-
-  const x = to.x - from.x;
-  const y = to.y - from.y;
-  const length = Math.hypot(x, y);
-  if (length === 0) return null;
-
-  return {
-    x: x / length,
-    y: y / length,
-  };
-}
-
-function constrainDeltaToClosestDirection(
-  delta: Position,
-  directions: Position[],
-): Position {
-  if (directions.length === 0) return delta;
-
-  let bestDirection = directions[0];
-  let bestProjection = delta.x * bestDirection.x + delta.y * bestDirection.y;
-
-  for (const direction of directions.slice(1)) {
-    const projection = delta.x * direction.x + delta.y * direction.y;
-    if (Math.abs(projection) > Math.abs(bestProjection)) {
-      bestDirection = direction;
-      bestProjection = projection;
-    }
-  }
-
-  return {
-    x: bestDirection.x * bestProjection,
-    y: bestDirection.y * bestProjection,
-  };
-}
-
-function isWithinVertexSelectionThreshold(
-  position: Position,
-  vertex: Position,
-  zoom: number,
-): boolean {
-  return (
-    Math.hypot(position.x - vertex.x, position.y - vertex.y) <=
-    selectionThresholds.vertex / zoom
-  );
-}
-
-export function createSelectionHandleOverlay(
-  position: Position,
-  size: number,
-  lineWidth: number,
-): WorldRenderOverlayItem {
-  const side = size * 2;
-  return {
-    type: "rect",
-    position: {
-      x: position.x - size,
-      y: position.y - size,
-    },
-    width: side,
-    height: side,
-    cornerRadius:
-      (uiSelectionHandle.cornerRadiusPx / uiSelectionHandle.halfWidthPx) * size,
-    fillColor: uiColors.selectionHandleFill,
-    strokeColor: uiColors.selectionHandleStroke,
-    lineWidth,
-    layer: "top" as const,
-  };
-}
-
-function rectIntersectsViewport(rect: WorldRect, viewportRect: WorldRect) {
-  return !(
-    rect.maxX < viewportRect.minX ||
-    rect.minX > viewportRect.maxX ||
-    rect.maxY < viewportRect.minY ||
-    rect.minY > viewportRect.maxY
-  );
 }
