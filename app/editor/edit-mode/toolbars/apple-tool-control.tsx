@@ -26,9 +26,6 @@ import {
 } from "~/components/ui/toolbar";
 
 export function AppleToolControl(props: ToolControlButtonProps) {
-  const appleToolState = useEditorToolState<AppleToolState>(
-    defaultTools.apple.id,
-  );
   const { setToolState } = useEditorActions();
 
   const handleAppleAnimationChange = (animation: AppleAnimation) => {
@@ -39,30 +36,14 @@ export function AppleToolControl(props: ToolControlButtonProps) {
     setToolState<AppleToolState>(defaultTools.apple.id, { gravity });
   };
 
-  const apple1 = useLgrSprite("qfood1");
-  const apple2 = useLgrSprite("qfood2");
-  const appleSprites = useAppleSprites();
-  const currentAnimation =
-    appleToolState?.animation || defaultAppleState.animation;
-  const currentGravity = appleToolState?.gravity ?? defaultAppleState.gravity;
-  const fallbackApples: Partial<Record<AppleAnimation, typeof apple1>> = {
-    1: apple1,
-    2: apple2,
-  };
-  const apple =
-    appleSprites.find(
-      ({ animation, src }) => animation === currentAnimation && src,
-    ) ??
-    (fallbackApples[currentAnimation] || apple1);
+  const apple = useLgrSprite("qfood1");
 
   return (
     <ToolControlMenu
       id={defaultTools.apple.id}
       button={
         <ToolControlButton
-          className="relative"
           isLoading={!apple.src}
-          iconAfter={<AppleArrowIcon gravity={currentGravity} />}
           {...defaultTools.apple}
           {...props}
         >

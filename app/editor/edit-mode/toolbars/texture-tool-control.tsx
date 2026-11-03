@@ -40,12 +40,13 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   );
   const selectedTexture = textureTool?.texture ?? defaultTextureState.texture;
   const selectedMask = textureTool?.mask ?? standardSprites.textureMasks[0];
-  const selectedTextureSprite = textureSprites.find(
+  const defaultTextureSprite = textureSprites.find(
     ({ texture, mask }) =>
-      texture.texture === selectedTexture && mask === selectedMask,
+      texture.texture === defaultTextureState.texture &&
+      mask === defaultTextureState.mask,
   );
   const textureSrc =
-    selectedTextureSprite?.maskedSrc ?? selectedTextureSprite?.src;
+    defaultTextureSprite?.maskedSrc ?? defaultTextureSprite?.src;
   const selectedDistance =
     textureTool?.distance ?? defaultTextureState.distance;
   const selectedClip = textureTool?.clip ?? defaultTextureState.clip;

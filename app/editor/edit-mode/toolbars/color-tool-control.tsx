@@ -1,7 +1,7 @@
 import { Clip } from "~/editor/elma-types";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { PaletteIcon } from "@phosphor-icons/react/dist/ssr";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { Switch } from "~/components/ui/switch";
@@ -135,18 +135,7 @@ function ColorListControl({
               });
           }}
         >
-          <PaletteIcon
-            className="[&>path:first-of-type]:fill-[var(--palette-fill)] [&>path:first-of-type]:opacity-100"
-            weight="duotone"
-            color="black"
-            style={
-              {
-                "--palette-fill": selectedColor
-                  ? `rgb(${selectedColor.rgb.join(", ")})`
-                  : "transparent",
-              } as CSSProperties
-            }
-          />
+          <PaletteIcon weight="duotone" />
         </ToolControlButton>
       }
     >
