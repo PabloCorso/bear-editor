@@ -39,7 +39,13 @@ const polygonOperations = [
 
 export function VertexToolControl(props: ToolControlButtonProps) {
   const activeToolId = useEditor((state) => state.activeToolId);
+  const vertexTool = useEditorToolState<VertexToolState>(
+    defaultTools.vertex.id,
+  );
   const { activateTool } = useEditorActions();
+  const isNormalVertexActive =
+    activeToolId === defaultTools.vertex.id &&
+    (!vertexTool?.variant || vertexTool.variant === "normal");
 
   return (
     <ToolControlMenu
@@ -48,6 +54,11 @@ export function VertexToolControl(props: ToolControlButtonProps) {
         <ToolControlButton
           {...props}
           name="Vertex tools"
+          onClick={() => {
+            if (!isNormalVertexActive) {
+              activateTool(defaultTools.vertex.id, "normal");
+            }
+          }}
           isActive={
             activeToolId === defaultTools.vertex.id ||
             isPolygonBooleanTool(activeToolId)
