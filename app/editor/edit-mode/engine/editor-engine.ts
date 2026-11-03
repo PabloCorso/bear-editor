@@ -1615,7 +1615,13 @@ export class EditorEngine {
       frontmostVisiblePicture.picture.distance < DEFAULT_OBJECT_RENDER_DISTANCE;
 
     const toolState = state.actions.getToolState<SelectToolState>("select");
-    if (toolState?.selectedObjects.length && this.isObjectSelectable(state)) {
+    if (
+      toolState?.selectedObjects.length &&
+      (this.isObjectSelectable(state) ||
+        toolState.selectedObjects.some((object) =>
+          Boolean(findSessionArtifact(state, object)),
+        ))
+    ) {
       const selectedObject = this.findObjectNearSelectedPosition(
         worldPos,
         toolState.selectedObjects,
@@ -1634,10 +1640,7 @@ export class EditorEngine {
       }
     }
 
-    if (
-      this.isObjectSelectable(state) &&
-      (forceObjectSelection || !isObjectSelectionBlockedByPicture)
-    ) {
+    if (forceObjectSelection || !isObjectSelectionBlockedByPicture) {
       const useImageStartSelection =
         state.levelVisibility.showObjects &&
         this.isStartObjectImageSelectionReady();
@@ -1649,6 +1652,15 @@ export class EditorEngine {
           hoveredObject: artifact.position,
           hoveredPictureBounds: undefined,
         };
+    }
+
+    if (
+      this.isObjectSelectable(state) &&
+      (forceObjectSelection || !isObjectSelectionBlockedByPicture)
+    ) {
+      const useImageStartSelection =
+        state.levelVisibility.showObjects &&
+        this.isStartObjectImageSelectionReady();
       if (
         isPointVisible(state.start, viewportRect) &&
         isStartObjectHit(

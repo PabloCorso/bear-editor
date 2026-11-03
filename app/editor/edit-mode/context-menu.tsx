@@ -355,6 +355,7 @@ export function EditorContextMenu() {
         })
       }
       canTransform={selectTool?.canTransformSelection() ?? false}
+      canSkewOrMirror={selectTool?.canSkewOrMirrorSelection() ?? false}
       transforming={Boolean(
         selectToolState.transformMode && !selectToolState.skewMode,
       )}
@@ -624,6 +625,9 @@ function useSelectionGroupIcons(): Record<
     killers: <SpriteIcon className="opacity-100" src={killerSprite.src} />,
     flowers: <SpriteIcon className="opacity-100" src={flowerSprite.src} />,
     sessionArtifacts: <KuskiIcon className="opacity-100" />,
+    referenceImages: (
+      <PictureIcon className="opacity-100" src={pictureSprite.src} />
+    ),
     start: <KuskiIcon className="opacity-100" />,
     pictures: <PictureIcon className="opacity-100" src={pictureSprite.src} />,
     textures: (
@@ -646,6 +650,7 @@ function SelectionActionsMenu({
   canSaveToLibrary,
   onSaveToLibrary,
   canTransform,
+  canSkewOrMirror,
   transforming,
   skewing,
   onSkew,
@@ -665,6 +670,7 @@ function SelectionActionsMenu({
   canSaveToLibrary: boolean;
   onSaveToLibrary: () => void;
   canTransform: boolean;
+  canSkewOrMirror: boolean;
   transforming: boolean;
   skewing: boolean;
   onSkew: () => void;
@@ -736,15 +742,19 @@ function SelectionActionsMenu({
                   <DropdownMenuItem shortcut="R" onClick={onTransform}>
                     {transforming ? "Exit resize & rotate" : "Resize & rotate"}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onSkew}>
-                    {skewing ? "Exit skew" : "Skew"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onMirror("horizontal")}>
-                    Mirror horizontally
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onMirror("vertical")}>
-                    Mirror vertically
-                  </DropdownMenuItem>
+                  {canSkewOrMirror && (
+                    <>
+                      <DropdownMenuItem onClick={onSkew}>
+                        {skewing ? "Exit skew" : "Skew"}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onMirror("horizontal")}>
+                        Mirror horizontally
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => onMirror("vertical")}>
+                        Mirror vertically
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuGroup>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -1049,7 +1059,17 @@ function getSelectionGroups(
     singularLabel: "session item",
     count: selectedObjects.filter((object) =>
       editorSelectionSources.sessionArtifacts.some(
-        (item) => item.position === object,
+        (item) => item.kind !== "referenceImage" && item.position === object,
+      ),
+    ).length,
+  });
+  addSelectionGroup(groups, {
+    kind: "referenceImages",
+    label: "Images",
+    singularLabel: "image",
+    count: selectedObjects.filter((object) =>
+      editorSelectionSources.sessionArtifacts.some(
+        (item) => item.kind === "referenceImage" && item.position === object,
       ),
     ).length,
   });

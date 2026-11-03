@@ -1054,3 +1054,142 @@ describe("SelectTool transform measurements", () => {
     });
   });
 });
+
+describe("SelectTool reference image transforms", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const event = {
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+  } as PointerEvent;
+  const context = (worldPos: Position) => ({
+    worldPos,
+    screenX: 0,
+    screenY: 0,
+  });
+
+  function addReferenceImage(
+    store: ReturnType<typeof createEditorStore>,
+    imagePosition: Position,
+  ) {
+    store.setState({
+      referenceImages: [
+        {
+          id: "reference-image",
+          name: "reference.png",
+          bitmap: { close: vi.fn() } as unknown as ImageBitmap,
+          position: imagePosition,
+          width: 10,
+          height: 20,
+          rotation: 0,
+        },
+      ],
+    });
+  }
+
+  it("only offers skew and mirror when the selection includes another item", () => {
+    const { store, tool, firstApple } = createTool();
+    const imagePosition = position(0, 0);
+    addReferenceImage(store, imagePosition);
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [imagePosition],
+      });
+
+    expect(tool.canTransformSelection()).toBe(true);
+    expect(tool.canSkewOrMirrorSelection()).toBe(false);
+
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [imagePosition, firstApple],
+      });
+
+    expect(tool.canSkewOrMirrorSelection()).toBe(true);
+  });
+
+  it("resizes a selected image from its shared transform frame", () => {
+    const { store, tool } = createTool();
+    const imagePosition = position(0, 0);
+    addReferenceImage(store, imagePosition);
+    store.getState().actions.setZoom(100);
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [imagePosition],
+      });
+
+    tool.toggleTransform();
+    expect(getSelection(store)?.transformMode).toBe(true);
+    tool.onPointerDown(event, context(position(5, 0)));
+    tool.onPointerMove(event, context(position(10, 0)));
+    tool.onPointerUp(event, context(position(10, 0)));
+
+    expect(store.getState().referenceImages[0]).toMatchObject({
+      position: position(2.5, 0),
+      width: 15,
+      height: 20,
+      rotation: 0,
+    });
+  });
+
+  it("resizes an image with the rest of a mixed selection", () => {
+    const { store, tool } = createTool();
+    const imagePosition = position(0, 0);
+    const applePosition = position(100, 0);
+    addReferenceImage(store, imagePosition);
+    store
+      .getState()
+      .actions.setApples([
+        { position: applePosition, animation: 1, gravity: Gravity.None },
+      ]);
+    store.getState().actions.setZoom(100);
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [imagePosition, applePosition],
+      });
+
+    tool.toggleTransform();
+    tool.onPointerDown(event, context(position(100, 0)));
+    tool.onPointerMove(event, context(position(110, 0)));
+    tool.onPointerUp(event, context(position(110, 0)));
+
+    expect(store.getState().apples[0].position.x).toBeCloseTo(110);
+    expect(store.getState().referenceImages[0].width).toBeGreaterThan(10);
+  });
+
+  it("rotates an image and restores it when the shared transform is cancelled", () => {
+    const { store, tool } = createTool();
+    const imagePosition = position(0, 0);
+    addReferenceImage(store, imagePosition);
+    store.getState().actions.setZoom(100);
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [imagePosition],
+      });
+
+    tool.toggleTransform();
+    tool.onPointerDown(event, context(position(5.1, -10.1)));
+    tool.onPointerMove(event, context(position(10.1, 5.1)));
+    expect(store.getState().referenceImages[0].rotation).not.toBe(0);
+    tool.onPointerUp(
+      { ...event, type: "pointercancel" } as PointerEvent,
+      context(position(10.1, 5.1)),
+    );
+
+    expect(store.getState().referenceImages[0]).toMatchObject({
+      position: imagePosition,
+      width: 10,
+      height: 20,
+      rotation: 0,
+    });
+  });
+});

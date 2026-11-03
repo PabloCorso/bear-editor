@@ -56,6 +56,7 @@ export function buildEditorWorldScene({
   const scenePolygons = getScenePolygons(state, includeDrafts);
 
   return {
+    referenceImages: includeDrafts ? state.referenceImages : undefined,
     clearColor: "#1a1a2e",
     backgroundOverlays: buildGridOverlays(state.grid, viewportRect, state.zoom),
     ground: state.ground,

@@ -3,6 +3,13 @@ import type { Position } from "./elma-types";
 import { getKuskiSelectionCircles } from "./kuski-geometry";
 import { isStartObjectHit } from "./helpers/selection-helpers";
 import { buildRideMomentBikeSceneItem } from "./play-mode/scene/play-mode-scene-builder";
+import {
+  getReferenceImageCorners,
+  getReferenceImageTransform,
+  isPointInReferenceImage,
+  referenceImageIntersectsRect,
+} from "./reference-images";
+import type { WorldRect } from "./render/world-geometry";
 
 /** A session-only point object participating in the regular canvas selection.
  * Optional action handlers are capabilities: unsupported actions skip the item.
@@ -12,7 +19,13 @@ export type SessionArtifact = {
   key: string;
   position: Position;
   selectionCircles: { x: number; y: number; radius: number }[];
+  selectionShape?: Position[];
   hitTest: (point: Position, useImage: boolean) => boolean;
+  intersectsRect?: (rect: WorldRect) => boolean;
+  transformPoints?: Position[];
+  transform?: (points: Position[]) => void;
+  restoreTransform?: () => void;
+  kind?: "referenceImage";
   move?: (position: Position) => void;
   remove?: () => void;
 };
@@ -45,6 +58,32 @@ const providers: SessionArtifactProvider[] = [
         remove: () => state.actions.deleteTestStart(item.id),
       };
     }),
+  (state) =>
+    state.referenceImages.map((image) => ({
+      key: `reference-image:${image.id}`,
+      kind: "referenceImage" as const,
+      position: image.position,
+      selectionCircles: [],
+      selectionShape: getReferenceImageCorners(image),
+      hitTest: (point) => isPointInReferenceImage(image, point),
+      intersectsRect: (rect) => referenceImageIntersectsRect(image, rect),
+      transformPoints: getReferenceImageCorners(image),
+      transform: (points) =>
+        state.actions.updateReferenceImage(
+          image.id,
+          getReferenceImageTransform(image, points),
+        ),
+      restoreTransform: () =>
+        state.actions.updateReferenceImage(image.id, {
+          position: image.position,
+          width: image.width,
+          height: image.height,
+          rotation: image.rotation,
+        }),
+      move: (position) =>
+        state.actions.updateReferenceImage(image.id, { position }),
+      remove: () => state.actions.removeReferenceImage(image.id),
+    })),
 ];
 
 // A snapshot is immutable. Cache adapters so React selectors and hit testing
