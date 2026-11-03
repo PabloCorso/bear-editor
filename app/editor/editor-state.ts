@@ -1,6 +1,7 @@
 import type { TopologyInspection } from "./helpers/level-topology";
 import type { GridSettings } from "./grid";
 import type { CustomShape } from "./helpers/shapes";
+import type { ReferenceImage } from "./reference-images";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -87,6 +88,7 @@ export type EditorState = EditorLevel & {
     id?: string | null;
   } | null;
   documentSession: EditorDocumentSession;
+  referenceImages: ReferenceImage[];
 
   // Editor state
   topologyInspection: TopologyInspection | null;
@@ -140,6 +142,13 @@ export type EditorState = EditorLevel & {
     activateTestStart: (id: string | null) => void;
     deleteTestStart: (id: string) => void;
     promoteTestStart: (id: string) => void;
+    updateReferenceImage: (
+      id: string,
+      patch: Partial<
+        Pick<ReferenceImage, "position" | "width" | "height" | "rotation">
+      >,
+    ) => void;
+    removeReferenceImage: (id: string) => void;
     // Level data operations
     setTopologyInspection: (inspection: TopologyInspection | null) => void;
     setStart: (position: Position) => void;

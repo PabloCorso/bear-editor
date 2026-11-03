@@ -3,7 +3,6 @@ import {
   findSessionArtifact,
   getSessionArtifactKey,
 } from "~/editor/session-artifacts";
-import rotateCursorSvg from "~/assets/rotate-cursor.svg?raw";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import {
@@ -48,6 +47,9 @@ import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import { getObjectBoundsRadius } from "~/editor/render/object-assets";
 
 import {
+  getResizeCursor,
+  getRotationCursor,
+  transformControls,
   getTransformBounds,
   getTransformCenter,
   getTransformHandles,
@@ -58,15 +60,6 @@ import {
   type TransformFrameCorners,
   type TransformHandle,
 } from "~/editor/helpers/selection-transform";
-
-// Cache 15° cursor variants so pointer movement does not rebuild SVG URLs.
-const rotationCursors = Array.from({ length: 24 }, (_, index) => {
-  const svg = rotateCursorSvg.replace(
-    "rotate(0 16 16)",
-    `rotate(${index * 15} 16 16)`,
-  );
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, crosshair`;
-});
 
 const DUPLICATE_OFFSET_STEP = 1;
 const MIN_PICTURE_DISTANCE = 0;
@@ -113,6 +106,7 @@ export type SelectSelectionKind =
   | "flowers"
   | "start"
   | "sessionArtifacts"
+  | "referenceImages"
   | "pictures"
   | "textures";
 
@@ -123,6 +117,12 @@ type PictureDimensionsResolver = (picture: {
   texture?: string;
   mask?: string;
 }) => { width: number; height: number } | null;
+type ArtifactTransform = {
+  start: number;
+  length: number;
+  apply: (points: Position[]) => void;
+  restore?: () => void;
+};
 type ContextMenuSelectionTarget =
   | { type: "object"; object: Position }
   | { type: "vertex"; polygon: Polygon; vertex: Position }
@@ -169,6 +169,7 @@ export class SelectTool extends Tool<SelectToolState> {
     previewFrame: TransformFrame;
     handle: TransformHandle | "rotate" | "move";
     points: Position[];
+    artifacts: ArtifactTransform[];
     selection: SelectToolState;
     map: (point: Position) => Position;
   } | null = null;
@@ -310,7 +311,8 @@ export class SelectTool extends Tool<SelectToolState> {
 
     if (
       hoveredObject &&
-      this.isObjectSelectable() &&
+      (this.isObjectSelectable() ||
+        Boolean(findSessionArtifact(state, hoveredObject))) &&
       this.isObjectPresent(hoveredObject)
     ) {
       return { type: "object", object: hoveredObject };
@@ -467,7 +469,7 @@ export class SelectTool extends Tool<SelectToolState> {
       }
     };
 
-    if (toolState?.selectedObjects.length && this.isObjectSelectable()) {
+    if (toolState?.selectedObjects.length) {
       const selectedObject = this.findSelectedObjectNearPosition(
         context.worldPos,
         toolState.selectedObjects,
@@ -717,6 +719,19 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   }
 
+  public canSkewOrMirrorSelection(): boolean {
+    const { state, toolState } = this.getState();
+    return Boolean(
+      toolState &&
+      (toolState.selectedVertices.length ||
+        toolState.selectedPictures.length ||
+        toolState.selectedObjects.some(
+          (object) =>
+            findSessionArtifact(state, object)?.kind !== "referenceImage",
+        )),
+    );
+  }
+
   public toggleTransform(skew = false): void {
     if (this.isDragging || this.isMarqueeSelecting || this.transformDrag)
       return;
@@ -766,7 +781,8 @@ export class SelectTool extends Tool<SelectToolState> {
     const objectOffsets = toolState.selectedObjects.map((object) =>
       this.getKuskiWheelMidpointOffset(object),
     );
-    const points = this.getTransformPoints().map((point, index) => {
+    const geometry = this.getTransformGeometry();
+    const points = geometry.points.map((point, index) => {
       const objectIndex = index - vertices;
       const offset = objectOffsets[objectIndex];
       return offset ? { x: point.x + offset.x, y: point.y + offset.y } : point;
@@ -790,16 +806,24 @@ export class SelectTool extends Tool<SelectToolState> {
         );
       }
       if (toolState.selectedPictures.length) {
+        const pictures = toolState.selectedPictures.length;
         this.updateSelectedPictures(
-          positions.slice(vertices + objects).map((point, index) => {
-            // Reflect visual centres while retaining each picture's anchor offset.
-            const origin = toolState.selectedPictures[index];
-            const pictureCenter = points[vertices + objects + index];
-            return {
-              x: point.x + origin.x - pictureCenter.x,
-              y: point.y + origin.y - pictureCenter.y,
-            };
-          }),
+          positions
+            .slice(vertices + objects, vertices + objects + pictures)
+            .map((point, index) => {
+              // Reflect visual centres while retaining each picture's anchor offset.
+              const origin = toolState.selectedPictures[index];
+              const pictureCenter = points[vertices + objects + index];
+              return {
+                x: point.x + origin.x - pictureCenter.x,
+                y: point.y + origin.y - pictureCenter.y,
+              };
+            }),
+        );
+      }
+      for (const artifact of geometry.artifacts) {
+        artifact.apply(
+          positions.slice(artifact.start, artifact.start + artifact.length),
         );
       }
     });
@@ -853,26 +877,26 @@ export class SelectTool extends Tool<SelectToolState> {
         distance(candidate) < distance(nearest) ? candidate : nearest,
       );
       // Face along the corner's outward bisector, independent of pointer position.
-      const radialAngle = Math.atan2(corner.y, corner.x) + frame.angle;
-      const step = Math.round((radialAngle + Math.PI / 2) / (Math.PI / 12));
-      return rotationCursors[
-        ((step % rotationCursors.length) + rotationCursors.length) %
-          rotationCursors.length
-      ];
+      return getRotationCursor(corner.x, corner.y, frame.angle);
     }
     if (target === "move") return "move";
     if (!target) return undefined;
     if (this.getState().toolState?.skewMode) return target.cursor;
     const angle = this.getTransformFrame()?.angle ?? 0;
-    const direction = Math.atan2(target.y, target.x) + angle;
-    const cursors = ["ew-resize", "nwse-resize", "ns-resize", "nesw-resize"];
-    return cursors[((Math.round(direction / (Math.PI / 4)) % 4) + 4) % 4];
+    return getResizeCursor(target.x, target.y, angle);
   }
 
   private getTransformPoints(): Position[] {
+    return this.getTransformGeometry().points;
+  }
+
+  private getTransformGeometry(): {
+    points: Position[];
+    artifacts: ArtifactTransform[];
+  } {
     const { state, toolState } = this.getState();
-    if (!toolState) return [];
-    return [
+    if (!toolState) return { points: [], artifacts: [] };
+    const points = [
       ...toolState.selectedVertices.map(({ vertex }) => vertex),
       ...toolState.selectedObjects,
       ...toolState.selectedPictures.map((position) => {
@@ -885,6 +909,20 @@ export class SelectTool extends Tool<SelectToolState> {
           : position;
       }),
     ];
+    const artifacts: ArtifactTransform[] = [];
+    for (const object of toolState.selectedObjects) {
+      const artifact = findSessionArtifact(state, object);
+      if (!artifact?.transformPoints?.length || !artifact.transform) continue;
+      const start = points.length;
+      points.push(...artifact.transformPoints);
+      artifacts.push({
+        start,
+        length: artifact.transformPoints.length,
+        apply: artifact.transform,
+        restore: artifact.restoreTransform,
+      });
+    }
+    return { points, artifacts };
   }
 
   private getTransformFrame(): TransformFrame | null {
@@ -921,7 +959,7 @@ export class SelectTool extends Tool<SelectToolState> {
           getTransformCenter(frame.bounds),
           -frame.angle,
         );
-    const resizeRadius = 8 / state.zoom;
+    const resizeRadius = transformControls.resizeHitRadius / state.zoom;
     const resizeHandle = this.getFrameHandles(frame)
       .map((handle) => ({
         handle,
@@ -940,7 +978,7 @@ export class SelectTool extends Tool<SelectToolState> {
     const outside =
       local.x < minX || local.x > maxX || local.y < minY || local.y > maxY;
     if (!outside) return null;
-    const rotationRadius = 24 / state.zoom;
+    const rotationRadius = transformControls.rotationHitRadius / state.zoom;
     for (const x of [minX, maxX]) {
       for (const y of [minY, maxY]) {
         const distance = Math.hypot(local.x - x, local.y - y);
@@ -976,7 +1014,8 @@ export class SelectTool extends Tool<SelectToolState> {
     worldPos: Position,
   ): void {
     const { toolState } = this.getState();
-    const points = this.getTransformPoints().map(clonePosition);
+    const geometry = this.getTransformGeometry();
+    const points = geometry.points.map(clonePosition);
     const frame = this.getTransformFrame();
     if (!frame || !toolState) return;
     this.startDragging(worldPos);
@@ -985,6 +1024,7 @@ export class SelectTool extends Tool<SelectToolState> {
       previewFrame: frame,
       handle,
       points,
+      artifacts: geometry.artifacts,
       selection: toolState,
       map: (point) => point,
     };
@@ -1030,7 +1070,9 @@ export class SelectTool extends Tool<SelectToolState> {
           this.dragStartPos.x - center.x,
         );
       if (constrainTransform)
-        delta = Math.round(delta / (Math.PI / 4)) * (Math.PI / 4);
+        delta =
+          Math.round(delta / transformControls.rotationSnap) *
+          transformControls.rotationSnap;
       angle += delta;
       drag.map = (point) => rotateTransformPoint(point, center, delta);
     } else {
@@ -1100,17 +1142,25 @@ export class SelectTool extends Tool<SelectToolState> {
     if (vertices) this.updateSelectedVertices(positions.slice(0, vertices));
     if (objects)
       this.updateSelectedObjects(positions.slice(vertices, vertices + objects));
-    if (drag.selection.selectedPictures.length) {
+    const pictures = drag.selection.selectedPictures.length;
+    if (pictures) {
       this.updateSelectedPictures(
-        positions.slice(vertices + objects).map((point, index) => {
-          // Picture anchors stay offset from their transformed visual centres.
-          const origin = this.dragOriginPositions[vertices + objects + index];
-          const center = drag.points[vertices + objects + index];
-          return {
-            x: point.x + origin.x - center.x,
-            y: point.y + origin.y - center.y,
-          };
-        }),
+        positions
+          .slice(vertices + objects, vertices + objects + pictures)
+          .map((point, index) => {
+            // Picture anchors stay offset from their transformed visual centres.
+            const origin = this.dragOriginPositions[vertices + objects + index];
+            const center = drag.points[vertices + objects + index];
+            return {
+              x: point.x + origin.x - center.x,
+              y: point.y + origin.y - center.y,
+            };
+          }),
+      );
+    }
+    for (const artifact of drag.artifacts) {
+      artifact.apply(
+        positions.slice(artifact.start, artifact.start + artifact.length),
       );
     }
   }
@@ -1120,6 +1170,7 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!drag) return;
     if (!commit && this.dragHistoryStart) {
       this.store.setState(this.dragHistoryStart);
+      for (const artifact of drag.artifacts) artifact.restore?.();
       this.getState().setToolState(drag.selection);
     }
     if (commit) {
@@ -1174,8 +1225,8 @@ export class SelectTool extends Tool<SelectToolState> {
           (typeof hovered === "object" &&
           hovered?.x === handle.x &&
           hovered?.y === handle.y
-            ? 5
-            : 4) / state.zoom,
+            ? transformControls.hoveredHandleRadius
+            : transformControls.handleRadius) / state.zoom,
           width,
         ),
       ),
@@ -1304,7 +1355,14 @@ export class SelectTool extends Tool<SelectToolState> {
         kinds.has(polygon.grass ? "grassVertices" : "groundVertices"),
     );
     const selectedObjects = selectionSource.selectedObjects.filter((object) => {
-      if (kinds.has("sessionArtifacts") && findSessionArtifact(state, object))
+      const artifact = findSessionArtifact(state, object);
+      if (artifact?.kind === "referenceImage" && kinds.has("referenceImages"))
+        return true;
+      if (
+        artifact &&
+        artifact.kind !== "referenceImage" &&
+        kinds.has("sessionArtifacts")
+      )
         return true;
       if (kinds.has("start") && object === state.start) return true;
       if (
@@ -1370,16 +1428,17 @@ export class SelectTool extends Tool<SelectToolState> {
           polygon.vertices.map((vertex) => ({ polygon, vertex })),
         )
       : [];
-    const selectedObjects = this.isObjectSelectable()
-      ? getAllObjects(
-          state.apples.map((apple) => apple.position),
-          state.killers,
-          state.flowers,
-          state.start,
-        )
-          .map(({ obj }) => obj)
-          .concat(getSessionArtifacts(state).map((item) => item.position))
-      : [];
+    const selectedObjects = [
+      ...(this.isObjectSelectable()
+        ? getAllObjects(
+            state.apples.map((apple) => apple.position),
+            state.killers,
+            state.flowers,
+            state.start,
+          ).map(({ obj }) => obj)
+        : []),
+      ...getSessionArtifacts(state).map((item) => item.position),
+    ];
     const selectedPictures = state.pictures
       .filter(
         (picture) =>
@@ -1566,42 +1625,57 @@ export class SelectTool extends Tool<SelectToolState> {
     );
 
     overlays.push(
-      ...toolState.selectedObjects.flatMap((position) => {
-        if (position === state.start || findSessionArtifact(state, position)) {
-          return this.getObjectSelectionCircles(position)
-            .filter((circle) =>
-              rectIntersectsViewport(
-                {
-                  minX: circle.x - circle.radius,
-                  minY: circle.y - circle.radius,
-                  maxX: circle.x + circle.radius,
-                  maxY: circle.y + circle.radius,
-                },
-                viewportRect,
-              ),
-            )
-            .map((circle) => ({
+      ...toolState.selectedObjects.flatMap(
+        (position): WorldRenderOverlayItem[] => {
+          const artifact = findSessionArtifact(state, position);
+          if (artifact?.selectionShape) {
+            return [
+              {
+                type: "polyline" as const,
+                points: artifact.selectionShape,
+                closed: true,
+                color: uiColors.boundsSelected,
+                width: selectedLineWidth,
+                layer: "top" as const,
+              },
+            ];
+          }
+          if (position === state.start || artifact) {
+            return this.getObjectSelectionCircles(position)
+              .filter((circle) =>
+                rectIntersectsViewport(
+                  {
+                    minX: circle.x - circle.radius,
+                    minY: circle.y - circle.radius,
+                    maxX: circle.x + circle.radius,
+                    maxY: circle.y + circle.radius,
+                  },
+                  viewportRect,
+                ),
+              )
+              .map((circle) => ({
+                type: "circle" as const,
+                center: { x: circle.x, y: circle.y },
+                radius: circle.radius,
+                strokeColor: uiColors.boundsSelected,
+                lineWidth: selectedLineWidth,
+                layer: "top" as const,
+              }));
+          }
+
+          if (!isPointVisible(position, viewportRect)) return [];
+          return [
+            {
               type: "circle" as const,
-              center: { x: circle.x, y: circle.y },
-              radius: circle.radius,
+              center: position,
+              radius: getObjectBoundsRadius(),
               strokeColor: uiColors.boundsSelected,
               lineWidth: selectedLineWidth,
               layer: "top" as const,
-            }));
-        }
-
-        if (!isPointVisible(position, viewportRect)) return [];
-        return [
-          {
-            type: "circle" as const,
-            center: position,
-            radius: getObjectBoundsRadius(),
-            strokeColor: uiColors.boundsSelected,
-            lineWidth: selectedLineWidth,
-            layer: "top" as const,
-          },
-        ];
-      }),
+            },
+          ];
+        },
+      ),
     );
 
     const selectedHandlePositions = toolState.selectedVertices
@@ -1775,7 +1849,6 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!toolState) return false;
 
     if (
-      this.isObjectSelectable() &&
       this.findSelectedObjectNearPosition(
         position,
         toolState.selectedObjects,
@@ -1974,7 +2047,7 @@ export class SelectTool extends Tool<SelectToolState> {
       });
     }
 
-    // Select objects touched by the marquee
+    // Select level objects touched by the marquee
     if (this.isObjectSelectable()) {
       const allObjects = getAllObjects(
         state.apples.map((a) => a.position),
@@ -1982,18 +2055,23 @@ export class SelectTool extends Tool<SelectToolState> {
         state.flowers,
         state.start,
       );
-      allObjects.push(
-        ...getSessionArtifacts(state).map((item) => ({
-          obj: item.position,
-          type: "sessionArtifact",
-        })),
-      );
       allObjects.forEach(({ obj }: { obj: Position }) => {
         if (this.objectIntersectsMarquee(obj, bounds)) {
           this.selectObject(obj);
         }
       });
     }
+
+    // Session-only items use the same selection but remain independent of
+    // level object visibility and serialization.
+    getSessionArtifacts(state).forEach((artifact) => {
+      if (
+        artifact.intersectsRect?.(bounds) ??
+        this.objectIntersectsMarquee(artifact.position, bounds)
+      ) {
+        this.selectObject(artifact.position);
+      }
+    });
 
     // Select pictures touched by the marquee
     state.pictures
@@ -2024,7 +2102,9 @@ export class SelectTool extends Tool<SelectToolState> {
   ): boolean {
     const { state } = this.getState();
 
-    if (object === state.start || findSessionArtifact(state, object)) {
+    const artifact = findSessionArtifact(state, object);
+    if (artifact?.intersectsRect) return artifact.intersectsRect(bounds);
+    if (object === state.start || artifact) {
       return this.getObjectSelectionCircles(object).some((circle) =>
         circleIntersectsRect(
           { x: circle.x, y: circle.y },
@@ -2175,16 +2255,17 @@ export class SelectTool extends Tool<SelectToolState> {
           )
       : [];
 
-    const selectedObjects = this.isObjectSelectable()
-      ? toolState.selectedObjects
-          .map((selectedObject) => {
-            const identityMatch = this.findObjectByIdentity(selectedObject);
-            if (identityMatch) return identityMatch;
-            if (getSessionArtifactKey(selectedObject)) return null;
-            return this.findObjectByCoordinates(selectedObject);
-          })
-          .filter((object): object is Position => Boolean(object))
-      : [];
+    const selectedObjects = toolState.selectedObjects
+      .map((selectedObject) => {
+        const artifact = findSessionArtifact(state, selectedObject);
+        if (artifact) return artifact.position;
+        if (!this.isObjectSelectable()) return null;
+        const identityMatch = this.findObjectByIdentity(selectedObject);
+        if (identityMatch) return identityMatch;
+        if (getSessionArtifactKey(selectedObject)) return null;
+        return this.findObjectByCoordinates(selectedObject);
+      })
+      .filter((object): object is Position => Boolean(object));
 
     const selectedPictures = toolState.selectedPictures
       .map((position) => {

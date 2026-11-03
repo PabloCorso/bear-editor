@@ -420,6 +420,8 @@ export function createEditorStore({
           defaultLevelTitle,
         ),
 
+        referenceImages: [],
+
         // Editor state
         topologyInspection: null,
         activeToolId: initialToolId,
@@ -596,6 +598,52 @@ export function createEditorStore({
               testStartMenu: null,
             });
           },
+          updateReferenceImage: (id, patch) =>
+            set((state) => {
+              const image = state.referenceImages.find(
+                (image) => image.id === id,
+              );
+              if (!image) return state;
+              const nextImage = { ...image, ...patch };
+              const select = state.toolState.select as
+                | SelectToolState
+                | undefined;
+              const selectedObjects = select?.selectedObjects.map((object) =>
+                object === image.position ? nextImage.position : object,
+              );
+              return {
+                referenceImages: state.referenceImages.map((candidate) =>
+                  candidate === image ? nextImage : candidate,
+                ),
+                ...(select && selectedObjects
+                  ? {
+                      toolState: {
+                        ...state.toolState,
+                        select: {
+                          ...select,
+                          selectedObjects,
+                          hoveredObject:
+                            select.hoveredObject === image.position
+                              ? nextImage.position
+                              : select.hoveredObject,
+                        },
+                      },
+                    }
+                  : {}),
+              };
+            }),
+          removeReferenceImage: (id) =>
+            set((state) => {
+              const image = state.referenceImages.find(
+                (image) => image.id === id,
+              );
+              image?.bitmap.close();
+              return {
+                referenceImages: state.referenceImages.filter(
+                  (image) => image.id !== id,
+                ),
+              };
+            }),
           setStart: (position) => set({ start: position }),
           addApple: (apple) => set({ apples: [...get().apples, apple] }),
           updateApple: (values) =>
@@ -688,7 +736,10 @@ export function createEditorStore({
             }
 
             // Update store with new tool
-            set({ activeToolId: toolId, openToolMenuId: null });
+            set({
+              activeToolId: toolId,
+              openToolMenuId: null,
+            });
             const tool = state.toolsMap.get(toolId);
             tool?.onActivate?.(variant);
           },
@@ -792,7 +843,9 @@ export function createEditorStore({
               document.level,
               defaultLevelTitle,
             );
+            for (const image of get().referenceImages) image.bitmap.close();
             set({
+              referenceImages: [],
               ...normalizedLevel,
               testStarts: emptyTestStarts(),
               testStartRename: null,

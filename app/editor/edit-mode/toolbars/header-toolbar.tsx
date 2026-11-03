@@ -2,6 +2,7 @@ import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { getLevelTopology } from "~/editor/helpers/level-topology";
+import { importReferenceImage } from "~/editor/reference-images";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -39,8 +40,8 @@ import {
   FilePlusIcon,
   FloppyDiskIcon,
   FolderOpenIcon,
-  GearIcon,
   ImageIcon,
+  GearIcon,
   InfoIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -363,40 +364,80 @@ function LevelOptionsMenu({
   onOpenToolSettings: () => void;
 }) {
   const { getTool } = useEditorActions();
+  const store = useEditorStore();
+  const imageInput = useRef<HTMLInputElement>(null);
   const modifier = useModifier();
 
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger>
-        <ToolButton name="Level options">
-          <DotsThreeVerticalIcon weight="bold" />
-        </ToolButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="min-w-64"
-        collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
-      >
-        <DropdownMenuItem
-          iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
-          shortcut={getAutoGrassAllShortcut(modifier)}
-          disabled={isLoading}
-          onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
+    <>
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const canvas = document.querySelector("canvas");
+          if (!canvas) return;
+          try {
+            await importReferenceImage(store, file, {
+              width: canvas.clientWidth,
+              height: canvas.clientHeight,
+            });
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Could not import this image.",
+            );
+          }
+        }}
+      />
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger>
+          <ToolButton name="Level options">
+            <DotsThreeVerticalIcon weight="bold" />
+          </ToolButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="min-w-64"
+          collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
         >
-          AutoGrass level
-        </DropdownMenuItem>
-        <GridMenu />
-        <DropdownMenuSeparator />
-        <DropdownMenuItem iconBefore={<InfoIcon />} onClick={onOpenProperties}>
-          Level properties
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          iconBefore={<GearIcon />}
-          onClick={onOpenToolSettings}
-        >
-          Tool settings
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuItem
+            iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
+            shortcut={getAutoGrassAllShortcut(modifier)}
+            disabled={isLoading}
+            onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
+          >
+            AutoGrass level
+          </DropdownMenuItem>
+          <GridMenu />
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            iconBefore={<ImageIcon />}
+            disabled={isLoading}
+            onClick={() => imageInput.current?.click()}
+          >
+            Import image…
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            iconBefore={<InfoIcon />}
+            onClick={onOpenProperties}
+          >
+            Level properties
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<GearIcon />}
+            onClick={onOpenToolSettings}
+          >
+            Tool settings
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 
@@ -654,91 +695,87 @@ function MainDropdownMenu({
   const modifier = useModifier();
 
   return (
-    <>
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger>
-            <DropdownMenuTrigger>
-              <ToolbarButton
-                className="relative w-14 gap-0"
-                aria-label="Main menu"
-              >
-                <Logo className="isolate h-8 w-8" />
-                <Icon size="xs">
-                  <CaretDownIcon />
-                </Icon>
-              </ToolbarButton>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Main menu</TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent
-          collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
-        >
-          <DropdownMenuGroup>
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger>
+          <DropdownMenuTrigger>
+            <ToolbarButton
+              className="relative w-14 gap-0"
+              aria-label="Main menu"
+            >
+              <Logo className="isolate h-8 w-8" />
+              <Icon size="xs">
+                <CaretDownIcon />
+              </Icon>
+            </ToolbarButton>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Main menu</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}>
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<FilePlusIcon />}
+            shortcut={getNewLevelShortcut(modifier === "⌘")}
+            onClick={() => {
+              void handleNew();
+            }}
+          >
+            New level
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<FolderOpenIcon />}
+            shortcut={`${modifier} + O`}
+            onClick={() => {
+              void handleOpenFile();
+            }}
+          >
+            Open
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<FloppyDiskIcon />}
+            shortcut={`${modifier} + S`}
+            onClick={() => {
+              void handleSave();
+            }}
+          >
+            Save
+          </DropdownMenuItem>
+          {supportsFilePickers() && (
             <DropdownMenuItem
               iconBefore={<FilePlusIcon />}
-              shortcut={getNewLevelShortcut(modifier === "⌘")}
               onClick={() => {
-                void handleNew();
+                void handleSaveAs();
               }}
             >
-              New level
+              Save as…
             </DropdownMenuItem>
-            <DropdownMenuItem
-              iconBefore={<FolderOpenIcon />}
-              shortcut={`${modifier} + O`}
-              onClick={() => {
-                void handleOpenFile();
-              }}
-            >
-              Open
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem
-              iconBefore={<FloppyDiskIcon />}
-              shortcut={`${modifier} + S`}
-              onClick={() => {
-                void handleSave();
-              }}
-            >
-              Save
-            </DropdownMenuItem>
-            {supportsFilePickers() && (
-              <DropdownMenuItem
-                iconBefore={<FilePlusIcon />}
-                onClick={() => {
-                  void handleSaveAs();
-                }}
-              >
-                Save as…
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem
-              iconBefore={<ImageIcon />}
-              disabled={isLoading}
-              onClick={() => {
-                void onExportImage();
-              }}
-            >
-              Export image…
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem
-              iconBefore={<GearIcon />}
-              shortcut={`${modifier} + ,`}
-              onClick={onOpenSettings}
-            >
-              Settings
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+          )}
+          <DropdownMenuItem
+            iconBefore={<ImageIcon />}
+            disabled={isLoading}
+            onClick={() => {
+              void onExportImage();
+            }}
+          >
+            Export image…
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<GearIcon />}
+            shortcut={`${modifier} + ,`}
+            onClick={onOpenSettings}
+          >
+            Settings
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

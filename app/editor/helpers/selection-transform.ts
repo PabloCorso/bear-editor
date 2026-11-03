@@ -1,3 +1,4 @@
+import rotateCursorSvg from "~/assets/rotate-cursor.svg?raw";
 import type { Position } from "~/editor/elma-types";
 import type { WorldRect } from "~/editor/render/world-geometry";
 
@@ -121,9 +122,7 @@ export function getSkewHandles(
     y: (a.y + b.y) / 2,
   });
   const handles: TransformHandle[] = [];
-  if (
-    Math.hypot(bottomLeft.x - topLeft.x, bottomLeft.y - topLeft.y) > 1e-9
-  ) {
+  if (Math.hypot(bottomLeft.x - topLeft.x, bottomLeft.y - topLeft.y) > 1e-9) {
     handles.push(
       {
         x: 0,
@@ -200,4 +199,36 @@ export function getSkewTransform(
     const influence = handle.x < 0 ? 1 - x : x;
     return { x: point.x, y: point.y + delta.y * influence };
   };
+}
+
+// Screen-space controls shared by level selections and reference images.
+export const transformControls = {
+  handleRadius: 4,
+  hoveredHandleRadius: 5,
+  resizeHitRadius: 8,
+  rotationHitRadius: 24,
+  rotationSnap: Math.PI / 4,
+} as const;
+
+const rotationCursors = Array.from({ length: 24 }, (_, index) => {
+  const svg = rotateCursorSvg.replace(
+    "rotate(0 16 16)",
+    `rotate(${index * 15} 16 16)`,
+  );
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 16 16, crosshair`;
+});
+
+export function getRotationCursor(x: number, y: number, angle: number): string {
+  const radialAngle = Math.atan2(y, x) + angle;
+  const step = Math.round((radialAngle + Math.PI / 2) / (Math.PI / 12));
+  return rotationCursors[
+    ((step % rotationCursors.length) + rotationCursors.length) %
+      rotationCursors.length
+  ];
+}
+
+export function getResizeCursor(x: number, y: number, angle: number): string {
+  const direction = Math.atan2(y, x) + angle;
+  const cursors = ["ew-resize", "nwse-resize", "ns-resize", "nesw-resize"];
+  return cursors[((Math.round(direction / (Math.PI / 4)) % 4) + 4) % 4];
 }
