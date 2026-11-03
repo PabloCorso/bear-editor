@@ -3,6 +3,7 @@ import {
   CursorIcon,
   HandIcon,
   PaintBucketIcon,
+  TextTIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   Dialog,
@@ -596,13 +597,18 @@ function getShortcutGroups(
             />
           ),
         },
+        {
+          shortcut: defaultTools.text.shortcut,
+          label: defaultTools.text.name,
+          icon: <TextTIcon className="h-5 w-5" />,
+        },
       ],
     },
     {
       title: "Tool menus",
       items: [
         {
-          shortcut: ["A", "P", "T", "C"],
+          shortcut: ["A", "P", "T", "C", "Shift + T"],
           label: "Activate and open options; press again to close",
         },
         {

@@ -39,6 +39,12 @@ export const defaultTools = {
     name: "Apple",
     shortcut: "A",
   },
+  text: {
+    menuBehavior: "options",
+    id: "text",
+    name: "Text",
+    shortcut: "Shift + T",
+  },
   shape: {
     id: "shape",
     name: "Library",
@@ -80,5 +86,6 @@ export const defaultToolOrder: string[] = [
   defaultTools.picture.id,
   defaultTools.texture.id,
   defaultTools.color.id,
+  defaultTools.text.id,
   defaultTools.shape.id,
 ];

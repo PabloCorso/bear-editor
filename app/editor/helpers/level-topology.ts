@@ -301,8 +301,8 @@ export function validateLevelTopology(
       add(
         "invalid-position",
         key,
-        "Invalid vertex coordinates",
-        "This polygon contains a non-finite coordinate. Move or remove the affected vertices.",
+        "Polygon has a vertex coordinate that is not finite",
+        "A vertex coordinate is NaN or infinite. Move or remove the affected vertices.",
         { vertices, locations: vertices.filter(finite) },
       );
       continue;
@@ -343,14 +343,6 @@ export function validateLevelTopology(
       );
     if (polygon.grass) continue;
     const area = polygonArea(vertices);
-    if (area === 0)
-      add(
-        "invalid-polygon",
-        key,
-        "Polygon has no usable area",
-        "The vertices form a line, a collapsed shape, or cancelling loops. Inspect the outline and move or remove vertices.",
-        { vertices, locations: vertices },
-      );
     for (let index = 0; index < vertices.length; index++) {
       const start = vertices[index],
         end = vertices[(index + 1) % vertices.length];
@@ -403,8 +395,8 @@ export function validateLevelTopology(
           add(
             "narrow-angle",
             `${key}:${index}`,
-            "Corner is too narrow",
-            "These edges almost double back on themselves (angle below 0.0000002 radians). Move this corner slightly. The game's own checker nudges such corners.",
+            "Edges double back at a polygon vertex",
+            "The two edges leave this vertex in almost the same direction (angle below 0.0000002 radians). Move the vertex slightly. The game's own checker nudges such vertices.",
             { vertices: [previous, start, end], locations: [start] },
           );
         }
@@ -514,8 +506,8 @@ export function validateLevelTopology(
       add(
         "invalid-position",
         key,
-        `${name} has invalid coordinates`,
-        "Move or remove this object before exporting.",
+        `${name} has a coordinate that is not finite`,
+        "A coordinate is NaN or infinite. Move or remove this object before exporting.",
         target,
       );
       continue;
@@ -586,8 +578,8 @@ export function validateLevelTopology(
       add(
         "invalid-position",
         String(identity(picture)),
-        "Graphic has invalid coordinates",
-        "Move or remove this picture or texture.",
+        "Graphic has a coordinate that is not finite",
+        "A coordinate is NaN or infinite. Move or remove this picture or texture.",
         { pictures: [picture.position] },
       );
     else if (
@@ -686,6 +678,14 @@ export function validateLevelTopology(
       showWhenPassed,
     };
   }
+  function groupedFailureLabel(
+    matchingIssues: TopologyIssue[],
+    pluralLabel: string,
+  ) {
+    return matchingIssues.length === 1
+      ? matchingIssues[0].message
+      : `${matchingIssues.length.toLocaleString()} ${pluralLabel}`;
+  }
   const checks: TopologyCheck[] = [
     check(
       "has-polygon",
@@ -730,9 +730,14 @@ export function validateLevelTopology(
     ),
     check(
       "vertex-coordinates",
-      "Every vertex has valid coordinates",
+      "Every vertex coordinate is finite",
       (issue) => issue.type === "invalid-position" && issue.vertices.length > 0,
       false,
+      (matchingIssues) =>
+        groupedFailureLabel(
+          matchingIssues,
+          "polygons have vertex coordinates that are not finite",
+        ),
     ),
     check(
       "polygon-vertex-minimum",
@@ -742,6 +747,11 @@ export function validateLevelTopology(
         (issue.message === "Grass needs 3 file vertices" ||
           issue.message === "Polygon needs 3 vertices"),
       false,
+      (matchingIssues) =>
+        groupedFailureLabel(
+          matchingIssues,
+          "polygons have fewer than 3 file vertices",
+        ),
     ),
     check(
       "polygon-vertex-maximum",
@@ -754,26 +764,34 @@ export function validateLevelTopology(
           "limit:objects",
           "limit:pictures and textures",
         ].includes(issue.id),
-    ),
-    check(
-      "polygon-area",
-      "Every polygon has usable area",
-      (issue) =>
-        issue.type === "invalid-polygon" &&
-        issue.message === "Polygon has no usable area",
-      false,
+      true,
+      (matchingIssues) =>
+        groupedFailureLabel(
+          matchingIssues,
+          `polygons have more than ${limits.verticesPerPolygon.toLocaleString()} vertices`,
+        ),
     ),
     check(
       "edge-length",
       "Polygon edges are not too short",
       (issue) =>
         issue.type === "duplicate-vertex" || issue.type === "nearby-vertex",
+      true,
+      (matchingIssues) =>
+        matchingIssues.length === 1
+          ? "Polygon edge is too short"
+          : `${matchingIssues.length.toLocaleString()} issues: Polygon edges are too short`,
     ),
     check(
       "corner-angle",
-      "Every polygon corner has a usable angle",
+      "Polygon edges do not double back at vertices",
       (issue) => issue.type === "narrow-angle",
       false,
+      (matchingIssues) =>
+        groupedFailureLabel(
+          matchingIssues,
+          "polygon vertices have edges that double back",
+        ),
     ),
     check(
       "polygon-intersection",
@@ -781,15 +799,26 @@ export function validateLevelTopology(
       (issue) =>
         issue.type === "self-intersection" ||
         issue.type === "polygon-intersection",
+      true,
+      (matchingIssues) =>
+        groupedFailureLabel(
+          matchingIssues,
+          "polygon intersection issues were found",
+        ),
     ),
     ...(options.includePlacementDiagnostics
       ? [
           check(
             "object-coordinates",
-            "Every object has valid coordinates",
+            "Every object coordinate is finite",
             (issue) =>
               issue.type === "invalid-position" && issue.objects.length > 0,
             false,
+            (matchingIssues) =>
+              groupedFailureLabel(
+                matchingIssues,
+                "objects have coordinates that are not finite",
+              ),
           ),
           check(
             "object-bounds",
@@ -797,7 +826,10 @@ export function validateLevelTopology(
             (issue) => issue.type === "object-outside",
             false,
             (matchingIssues) =>
-              `${matchingIssues.length} object${matchingIssues.length === 1 ? " is" : "s are"} outside the level borders`,
+              groupedFailureLabel(
+                matchingIssues,
+                "objects are outside the level borders",
+              ),
           ),
           ...(!invalidGeometry && groundPolygons.length && !truncated
             ? [
@@ -807,6 +839,8 @@ export function validateLevelTopology(
                   (issue) => issue.type === "object-inside-ground",
                   true,
                   (matchingIssues) => {
+                    if (matchingIssues.length === 1)
+                      return matchingIssues[0].message;
                     const apples = matchingIssues.filter((issue) =>
                       issue.message.startsWith("Apple "),
                     ).length;
@@ -844,14 +878,25 @@ export function validateLevelTopology(
       : []),
     check(
       "graphic-coordinates",
-      "Every graphic has valid coordinates",
+      "Every graphic coordinate is finite",
       (issue) => issue.type === "invalid-position" && issue.pictures.length > 0,
       false,
+      (matchingIssues) =>
+        groupedFailureLabel(
+          matchingIssues,
+          "graphics have coordinates that are not finite",
+        ),
     ),
     check(
       "texture-bounds",
       "Textures are not too far outside the level polygons",
       (issue) => issue.type === "texture-outside",
+      true,
+      (matchingIssues) =>
+        groupedFailureLabel(
+          matchingIssues,
+          "textures are too far outside the level polygons",
+        ),
     ),
     check(
       "ground-sky-textures",
@@ -877,6 +922,11 @@ export function validateLevelTopology(
                     issue.id !== "lgr:same-texture" &&
                     issue.id !== "lgr:unloaded",
                   false,
+                  (matchingIssues) =>
+                    groupedFailureLabel(
+                      matchingIssues,
+                      "graphics are missing from the loaded LGR",
+                    ),
                 ),
               ]
             : []),

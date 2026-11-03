@@ -73,6 +73,7 @@ export abstract class Tool<T extends ToolState = ToolState> {
   // Draft elements for previewing while using the tool
   getDrafts?(): {
     polygons?: Polygon[];
+    polygonOpacity?: number;
     // Complete terrain replacement for non-destructive boolean previews.
     replacementPolygons?: Polygon[];
     hiddenPolygons?: Polygon[];
