@@ -2,6 +2,7 @@ import type { TopologyInspection } from "./helpers/level-topology";
 import type { GridSettings } from "./grid";
 import type { CustomShape } from "./helpers/shapes";
 import type { ReferenceImage } from "./reference-images";
+import type { PictureSelectionSettings } from "./helpers/picture-selection";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -115,6 +116,7 @@ export type EditorState = EditorLevel & {
   levelVisibility: LevelVisibilitySettings;
   playSettings: PlaySettings;
   vertexEdgeClickBehavior: VertexEdgeClickBehavior;
+  pictureSelection: PictureSelectionSettings;
   autoGrassOptions: AutoGrassOptions;
   isUIVisible: boolean;
   isPlayMode: boolean;
@@ -205,6 +207,7 @@ export type EditorState = EditorLevel & {
       runEndBehavior?: PlayRunEndBehavior;
       keyBindings?: Partial<PlayKeyBindings>;
     }) => void;
+    setPictureSelection: (settings: Partial<PictureSelectionSettings>) => void;
     setVertexEdgeClickBehavior: (behavior: VertexEdgeClickBehavior) => void;
     setGrid: (settings: Partial<GridSettings>) => void;
     setGridSnapBypassed: (bypassed: boolean) => void;

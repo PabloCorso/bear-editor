@@ -13,6 +13,7 @@ export type EditorPreferences = Pick<
   | "playModeZoom"
   | "playSettings"
   | "vertexEdgeClickBehavior"
+  | "pictureSelection"
   | "autoGrassOptions"
   | "grid"
 >;

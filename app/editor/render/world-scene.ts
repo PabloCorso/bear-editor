@@ -38,6 +38,7 @@ export type WorldRenderPolygonItem = {
 };
 
 export type WorldRenderPictureItem = {
+  boundaryShape?: "outline" | "rectangle";
   type: "picture";
   name?: string;
   texture?: string;
