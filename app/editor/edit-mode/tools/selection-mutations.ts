@@ -33,6 +33,24 @@ export class SelectionMutations {
     });
   }
 
+  toggleVertex(polygon: Polygon, vertex: Position): boolean {
+    const context = this.getContext();
+    if (!context) return false;
+    const isSelected = isVertexSelected(
+      { polygon, vertex },
+      context.selection.selectedVertices,
+    );
+    context.updateSelection({
+      selectedVertices: isSelected
+        ? context.selection.selectedVertices.filter(
+            (selected) =>
+              selected.polygon !== polygon || selected.vertex !== vertex,
+          )
+        : [...context.selection.selectedVertices, { polygon, vertex }],
+    });
+    return isSelected;
+  }
+
   addObject(object: Position): void {
     const context = this.getContext();
     if (
@@ -44,6 +62,23 @@ export class SelectionMutations {
     context.updateSelection({
       selectedObjects: [...context.selection.selectedObjects, object],
     });
+  }
+
+  toggleObject(object: Position): boolean {
+    const context = this.getContext();
+    if (!context) return false;
+    const isSelected = isObjectSelected(
+      object,
+      context.selection.selectedObjects,
+    );
+    context.updateSelection({
+      selectedObjects: isSelected
+        ? context.selection.selectedObjects.filter(
+            (selected) => selected !== object,
+          )
+        : [...context.selection.selectedObjects, object],
+    });
+    return isSelected;
   }
 
   addPicture(picture: Position): void {
@@ -59,6 +94,23 @@ export class SelectionMutations {
     });
   }
 
+  togglePicture(picture: Position): boolean {
+    const context = this.getContext();
+    if (!context) return false;
+    const isSelected = isObjectSelected(
+      picture,
+      context.selection.selectedPictures,
+    );
+    context.updateSelection({
+      selectedPictures: isSelected
+        ? context.selection.selectedPictures.filter(
+            (selected) => selected !== picture,
+          )
+        : [...context.selection.selectedPictures, picture],
+    });
+    return isSelected;
+  }
+
   replacePolygon(polygon: Polygon): void {
     const context = this.getContext();
     if (!context) return;
@@ -70,6 +122,30 @@ export class SelectionMutations {
         ...polygon.vertices.map((vertex) => ({ polygon, vertex })),
       ],
     });
+  }
+
+  togglePolygon(polygon: Polygon): boolean {
+    const context = this.getContext();
+    if (!context) return false;
+    const polygonSelections = context.selection.selectedVertices.filter(
+      (selection) => selection.polygon === polygon,
+    );
+    const isSelected =
+      polygonSelections.length === polygon.vertices.length &&
+      polygonSelections.length > 0;
+    context.updateSelection({
+      selectedVertices: isSelected
+        ? context.selection.selectedVertices.filter(
+            (selection) => selection.polygon !== polygon,
+          )
+        : [
+            ...context.selection.selectedVertices.filter(
+              (selection) => selection.polygon !== polygon,
+            ),
+            ...polygon.vertices.map((vertex) => ({ polygon, vertex })),
+          ],
+    });
+    return isSelected;
   }
 
   moveVertices(newPositions: Position[]): void {

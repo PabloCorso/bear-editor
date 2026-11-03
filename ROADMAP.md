@@ -6,7 +6,6 @@ Planned features and feedback for Bear Editor.
 
 - @Tarogato i concern that being able to move polys by edge without selection could interfere with grabbing pictures and masks
   - hotkeys to toggle select only poly / only pic / only mask / only fans / grass / object
-- @finman cant unselect polys if multiple polygons are selected, would be nice to be able to do it with ctrl click like selecting poly
 
 - AI Assistant
 

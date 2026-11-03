@@ -265,6 +265,10 @@ function getShortcutGroups(
               label: "Select all visible",
             },
             {
+              shortcut: `${modifier} + Click`,
+              label: "Add to or remove from selection",
+            },
+            {
               shortcut: ["Shift", "Alt"],
               label: "Select object behind images",
             },

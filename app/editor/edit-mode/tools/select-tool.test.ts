@@ -55,6 +55,18 @@ function rightClick(
   );
 }
 
+function modifierClick(tool: SelectTool, worldPos: Position) {
+  return tool.onPointerDown(
+    {
+      metaKey: true,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+    } as PointerEvent,
+    { worldPos, screenX: 0, screenY: 0 },
+  );
+}
+
 function dragMarquee(tool: SelectTool, from: Position, to: Position) {
   const event = {
     metaKey: false,
@@ -435,6 +447,93 @@ describe("SelectTool right-click selection context menu", () => {
       selectedObjects: [firstApple, flower],
       contextMenuType: "selection",
     });
+  });
+});
+
+describe("SelectTool modifier-click selection", () => {
+  beforeEach(() => {
+    vi.stubGlobal("window", {
+      navigator: { platform: "MacIntel" },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("removes a selected object without starting a drag", () => {
+    const { store, tool, firstApple, secondApple } = createTool();
+    store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedObjects: [firstApple, secondApple],
+      });
+
+    expect(modifierClick(tool, firstApple)).toBe(true);
+
+    expect(getSelection(store)?.selectedObjects).toEqual([secondApple]);
+    expect(getSelection(store)?.isDragging).toBe(false);
+  });
+
+  it("removes selected vertices, polygons, and pictures", () => {
+    const polygon = {
+      grass: false,
+      vertices: [position(300, 300), position(400, 300), position(300, 400)],
+    };
+
+    const vertexCase = createTool();
+    vertexCase.store.getState().actions.setPolygons([polygon]);
+    vertexCase.store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedVertices: polygon.vertices.map((vertex) => ({
+          polygon,
+          vertex,
+        })),
+      });
+    modifierClick(vertexCase.tool, polygon.vertices[0]);
+    expect(getSelection(vertexCase.store)?.selectedVertices).toEqual(
+      polygon.vertices.slice(1).map((vertex) => ({ polygon, vertex })),
+    );
+
+    const polygonCase = createTool();
+    polygonCase.store.getState().actions.setPolygons([polygon]);
+    polygonCase.store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedVertices: polygon.vertices.map((vertex) => ({
+          polygon,
+          vertex,
+        })),
+      });
+    modifierClick(polygonCase.tool, position(350, 300));
+    expect(getSelection(polygonCase.store)?.selectedVertices).toEqual([]);
+
+    const pictureCase = createTool();
+    const picturePosition = position(10, 10);
+    pictureCase.store.getState().actions.setPictures([
+      {
+        name: "picture",
+        texture: "",
+        mask: "",
+        position: picturePosition,
+        distance: 100,
+        clip: Clip.Unclipped,
+      },
+    ]);
+    pictureCase.store
+      .getState()
+      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
+        selectedPictures: [picturePosition],
+        hoveredPictureBounds: {
+          position: picturePosition,
+          width: 10,
+          height: 10,
+          distance: 100,
+        },
+      });
+    modifierClick(pictureCase.tool, picturePosition);
+    expect(getSelection(pictureCase.store)?.selectedPictures).toEqual([]);
   });
 });
 

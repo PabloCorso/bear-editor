@@ -468,6 +468,10 @@ export class SelectTool extends Tool<SelectToolState> {
         Math.max(selectionThresholds.object / state.zoom, OBJECT_DIAMETER / 2),
       );
       if (selectedObject) {
+        if (modifier) {
+          this.selectionMutations.toggleObject(selectedObject);
+          return true;
+        }
         this.selectionMutations.addObject(selectedObject);
         this.startDragging(context.worldPos);
         return true;
@@ -480,6 +484,10 @@ export class SelectTool extends Tool<SelectToolState> {
         toolState?.selectedObjects ?? [],
       );
       clearIfNewSingleSelect(isSelected);
+      if (modifier && isSelected) {
+        this.selectionMutations.toggleObject(hoveredObject);
+        return true;
+      }
       this.selectionMutations.addObject(hoveredObject);
       this.startDragging(context.worldPos);
       return true;
@@ -493,6 +501,10 @@ export class SelectTool extends Tool<SelectToolState> {
           toolState?.selectedObjects ?? [],
         );
         clearIfNewSingleSelect(isSelected);
+        if (modifier && isSelected) {
+          this.selectionMutations.toggleObject(object);
+          return true;
+        }
         this.selectionMutations.addObject(object);
         this.startDragging(context.worldPos);
         return true;
@@ -509,6 +521,10 @@ export class SelectTool extends Tool<SelectToolState> {
         toolState?.selectedObjects ?? [],
       );
       clearIfNewSingleSelect(isSelected);
+      if (modifier && isSelected) {
+        this.selectionMutations.toggleObject(object);
+        return true;
+      }
       this.selectionMutations.addObject(object);
       this.startDragging(context.worldPos);
       return true;
@@ -528,6 +544,10 @@ export class SelectTool extends Tool<SelectToolState> {
       );
 
       clearIfNewSingleSelect(isSelected);
+      if (modifier && isSelected) {
+        this.selectionMutations.toggleVertex(vertex.polygon, vertex.vertex);
+        return true;
+      }
       this.selectionMutations.addVertex(vertex.polygon, vertex.vertex);
       this.startDragging(context.worldPos);
       return true;
@@ -551,6 +571,10 @@ export class SelectTool extends Tool<SelectToolState> {
         polygonSelectionCount === polygonEdge.vertices.length &&
         polygonSelectionCount > 0;
       clearIfNewSingleSelect(isSelected);
+      if (modifier && isSelected) {
+        this.selectionMutations.togglePolygon(polygonEdge);
+        return true;
+      }
       this.selectionMutations.replacePolygon(polygonEdge);
       this.startDragging(context.worldPos);
       return true;
@@ -561,6 +585,10 @@ export class SelectTool extends Tool<SelectToolState> {
         hoveredPicture.position,
       );
       clearIfNewSingleSelect(isSelected);
+      if (modifier && isSelected) {
+        this.selectionMutations.togglePicture(hoveredPicture.position);
+        return true;
+      }
       this.selectionMutations.addPicture(hoveredPicture.position);
       this.startDragging(context.worldPos);
       return true;
