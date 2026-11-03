@@ -1,7 +1,4 @@
-import {
-  PlusIcon,
-  DotsThreeVerticalIcon,
-} from "@phosphor-icons/react/dist/ssr";
+import { PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import {
   useEditor,
   useEditorActions,
@@ -15,7 +12,10 @@ import {
 import {
   builtinShapes,
   createShapePolygons,
+  isCompositeLibraryItem,
+  libraryContentBounds,
   shapeBounds,
+  DEFAULT_ARROW_ASPECT_RATIO,
   MAX_SHAPE_POINTS,
   type CustomShape,
 } from "~/editor/helpers/shapes";
@@ -27,12 +27,9 @@ import {
   type ToolControlButtonProps,
 } from "./tool";
 import { Toolbar } from "~/components/ui/toolbar";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "~/components/ui/dropdown-menu";
+import { Popover, PopoverTrigger } from "~/components/ui/popover";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import {
   CanvasTipGroup,
   CanvasTipSegment,
@@ -41,6 +38,10 @@ import {
   CanvasTipKeyButton,
 } from "./canvas-tip";
 import { cn } from "~/utils/misc";
+import {
+  SettingsPopoverContent,
+  SettingsPopoverFields,
+} from "./settings-popover";
 
 // Toolbar icons always use the default geometry, independently of the draft.
 const builtinShapeItems = builtinShapes.map((shape) => ({
@@ -48,21 +49,36 @@ const builtinShapeItems = builtinShapes.map((shape) => ({
   polygons: createShapePolygons({
     shape: shape.id,
     start: { x: 0, y: 0 },
-    end: { x: 1, y: 1 },
+    end: {
+      x: shape.id === "arrow" ? DEFAULT_ARROW_ASPECT_RATIO : 1,
+      y: 1,
+    },
   }),
 }));
 
 export function ShapePreview({
   polygons,
+  custom,
   className,
 }: {
   polygons: Polygon[];
+  custom?: CustomShape;
   className?: string;
 }) {
-  const bounds = shapeBounds(polygons);
-  if (!bounds.width || !bounds.height || !Number.isFinite(bounds.width))
-    return null;
-  const pad = Math.max(bounds.width, bounds.height) * 0.08;
+  const rawBounds = custom
+    ? libraryContentBounds(custom)
+    : shapeBounds(polygons);
+  if (!Number.isFinite(rawBounds.minX)) return null;
+  const markerSize = Math.max(rawBounds.width, rawBounds.height, 1) * 0.08;
+  const width = Math.max(rawBounds.width, markerSize * 2);
+  const height = Math.max(rawBounds.height, markerSize * 2);
+  const bounds = {
+    minX: rawBounds.minX - (width - rawBounds.width) / 2,
+    minY: rawBounds.minY - (height - rawBounds.height) / 2,
+    width,
+    height,
+  };
+  const pad = Math.max(width, height) * 0.08;
   return (
     <svg
       aria-hidden
@@ -78,6 +94,33 @@ export function ShapePreview({
           stroke="currentColor"
           strokeWidth="1.5"
           vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      {custom?.pictures.map((picture, index) => (
+        <rect
+          key={`picture-${index}`}
+          x={picture.position.x - markerSize / 2}
+          y={picture.position.y - markerSize / 2}
+          width={markerSize}
+          height={markerSize}
+          fill="currentColor"
+          fillOpacity="0.35"
+          stroke="currentColor"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+      {[
+        ...(custom?.apples.map((apple) => apple.position) ?? []),
+        ...(custom?.killers ?? []),
+        ...(custom?.flowers ?? []),
+      ].map((position, index) => (
+        <circle
+          key={`object-${index}`}
+          cx={position.x}
+          cy={position.y}
+          r={markerSize / 2}
+          fill="currentColor"
         />
       ))}
     </svg>
@@ -98,37 +141,117 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
     ...builtinShapeItems,
     ...shapes.map((shape) => ({ ...shape, custom: shape })),
   ];
-  const selected = items.find((s) => s.id === toolState.shapeId) ?? items[0];
   const tool = () => getTool<ShapeTool>("shape");
   return (
     <ToolControlMenu
       id="shape"
       button={
-        <ToolControlButton
-          {...defaultTools.shape}
-          {...props}
-          name={selected.name}
-        >
-          <ShapePreview polygons={selected.polygons} className="h-6 w-6" />
+        <ToolControlButton {...defaultTools.shape} {...props}>
+          <ShapePreview
+            polygons={builtinShapeItems[0].polygons}
+            className="h-6 w-6"
+          />
         </ToolControlButton>
       }
     >
       <Toolbar
         orientation="vertical"
-        className="w-[112px] gap-1 p-1"
-        aria-label="Shapes"
+        className="w-[104px] gap-0.5 p-1"
+        aria-label="Library"
       >
-        <ul className="flex w-full flex-col gap-1">
+        <ul className="flex w-full flex-col gap-0.5 [&>li+li]:border-t [&>li+li]:border-separator [&>li+li]:pt-0.5">
+          <li className="px-1.5 py-1 text-[10px] font-bold text-secondary">
+            Shapes
+          </li>
           {items.map((item) => (
             <li
               key={item.id}
-              className="relative"
               ref={
                 item.id === toolState.shapeId
                   ? scrollSelectedShapeIntoView
                   : undefined
               }
             >
+              {item.custom && item.id === shapes[0]?.id && (
+                <div className="px-1.5 py-1 text-[10px] font-bold text-secondary">
+                  Saved
+                </div>
+              )}
+              {item.custom && (
+                <Popover modal={false}>
+                  <PopoverTrigger>
+                    <button
+                      type="button"
+                      className="flex h-5 w-full cursor-pointer items-center justify-center truncate rounded px-1.5 text-center text-[10px] font-medium text-secondary outline-hidden hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring aria-expanded:bg-primary-hover/50 aria-expanded:text-primary"
+                      aria-label={`Edit ${item.name}`}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <span className="w-full truncate text-center">
+                        {item.name}
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <SettingsPopoverContent
+                    title="Library item properties"
+                    closeLabel="Close library item properties"
+                  >
+                    <SettingsPopoverFields>
+                      <label
+                        htmlFor={`shape-name-${item.id}`}
+                        className="text-xs font-bold text-secondary"
+                      >
+                        Name
+                      </label>
+                      <Input
+                        key={item.name}
+                        id={`shape-name-${item.id}`}
+                        size="sm"
+                        defaultValue={item.name}
+                        maxLength={80}
+                        className="w-32"
+                        onFocus={(event) => event.currentTarget.select()}
+                        onBlur={(event) => {
+                          const name =
+                            event.currentTarget.value.trim() || item.name;
+                          setCustomShapes(
+                            shapes.map((shape) =>
+                              shape.id === item.id ? { ...shape, name } : shape,
+                            ),
+                          );
+                          event.currentTarget.value = name;
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            event.currentTarget.blur();
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            event.currentTarget.value = item.name;
+                            event.currentTarget.blur();
+                          }
+                        }}
+                      />
+                    </SettingsPopoverFields>
+                    <div className="mt-2 border-t border-separator pt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full text-red-300 hover:bg-red-950/50 hover:text-red-200"
+                        onClick={() => {
+                          if (item.id === toolState.shapeId)
+                            tool()?.selectShape("ellipse");
+                          setCustomShapes(
+                            shapes.filter((shape) => shape.id !== item.id),
+                          );
+                        }}
+                      >
+                        Delete item
+                      </Button>
+                    </div>
+                  </SettingsPopoverContent>
+                </Popover>
+              )}
               <button
                 type="button"
                 aria-pressed={
@@ -139,73 +262,32 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
                   setToolMenuOpen(false);
                 }}
                 className={cn(
-                  "flex w-full cursor-pointer flex-col items-center gap-1 rounded p-2 text-secondary hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring",
+                  "flex h-[96px] w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded p-1 text-secondary hover:bg-primary-hover/50 hover:text-primary focus-visible:focus-ring",
                   !toolState.capturing &&
                     item.id === toolState.shapeId &&
                     "bg-primary-hover/50 text-primary",
                 )}
               >
-                <span className="max-w-full truncate text-[10px] font-medium">
-                  {item.name}
-                </span>
-                <ShapePreview polygons={item.polygons} />
+                {!item.custom && (
+                  <span className="max-w-full truncate text-[10px] font-medium">
+                    {item.name}
+                  </span>
+                )}
+                <ShapePreview
+                  polygons={item.polygons}
+                  custom={item.custom}
+                  className="h-20 w-20"
+                />
               </button>
-              {item.custom && (
-                <>
-                  <input
-                    key={item.name}
-                    aria-label={`Rename ${item.name}`}
-                    defaultValue={item.name}
-                    maxLength={80}
-                    className="mt-1 w-full rounded border border-separator bg-transparent px-1 text-center text-[10px]"
-                    onBlur={(event) => {
-                      const name = event.target.value.trim() || item.name;
-                      setCustomShapes(
-                        shapes.map((s) =>
-                          s.id === item.id ? { ...s, name } : s,
-                        ),
-                      );
-                      event.target.value = name;
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") event.currentTarget.blur();
-                    }}
-                  />
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger>
-                      <button
-                        type="button"
-                        aria-label={`Options for ${item.name}`}
-                        className="absolute top-5 right-0 rounded p-1 hover:bg-primary-hover"
-                      >
-                        <DotsThreeVerticalIcon />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="right">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          if (item.id === toolState.shapeId)
-                            tool()?.selectShape("ellipse");
-                          setCustomShapes(
-                            shapes.filter((s) => s.id !== item.id),
-                          );
-                        }}
-                      >
-                        Delete shape
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
             </li>
           ))}
           <li>
             <button
               type="button"
-              aria-label="Add custom shape"
+              aria-label="Save polygons from canvas"
               aria-pressed={toolState.capturing}
               className={cn(
-                "flex h-20 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded border border-dashed border-separator text-secondary hover:bg-primary-hover/50 focus-visible:focus-ring",
+                "flex h-[96px] w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded border border-dashed border-separator text-secondary hover:bg-primary-hover/50 focus-visible:focus-ring",
                 toolState.capturing && "bg-primary-hover/50",
               )}
               onClick={() => {
@@ -213,8 +295,8 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
                 setToolMenuOpen(false);
               }}
             >
-              <PlusIcon className="size-7" />
-              <span className="text-[10px]">Add shape</span>
+              <PlusIcon className="size-6" />
+              <span className="text-[10px]">Save polygons</span>
             </button>
           </li>
         </ul>
@@ -227,13 +309,16 @@ export function ShapeToolInfo() {
   const state =
     useEditorToolState<ShapeToolState>("shape") ?? defaultShapeState;
   const { getTool } = useEditorActions();
+  const selectedItem = useEditor((editor) =>
+    editor.customShapes.find((item) => item.id === state.shapeId),
+  );
   const adjust = (
     field: "ellipseVertices" | "starPoints" | "starInnerRadius",
     delta: number,
   ) => getTool<ShapeTool>("shape")?.adjustOption(field, delta);
   if (state.capturing)
     return (
-      <CanvasTipGroup title="Add shape">
+      <CanvasTipGroup title="Save polygons">
         <CanvasTipSegment>
           Click a polygon or drag around whole polygons
         </CanvasTipSegment>
@@ -251,12 +336,17 @@ export function ShapeToolInfo() {
     <CanvasTipGroup
       title={
         builtinShapes.find((s) => s.id === state.shapeId)?.name ??
-        "Custom shape"
+        selectedItem?.name ??
+        "Library item"
       }
     >
-      <CanvasTipSegment>
-        Keep proportions <CanvasTipKey>Shift</CanvasTipKey>
-      </CanvasTipSegment>
+      {selectedItem && isCompositeLibraryItem(selectedItem) ? (
+        <CanvasTipSegment>Original size</CanvasTipSegment>
+      ) : (
+        <CanvasTipSegment>
+          Keep proportions <CanvasTipKey>Shift</CanvasTipKey>
+        </CanvasTipSegment>
+      )}
       {(state.shapeId === "ellipse" || state.shapeId === "star") && (
         <CanvasTipNumberControl
           label={state.shapeId === "ellipse" ? "Vertices" : "Points"}

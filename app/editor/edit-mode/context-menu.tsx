@@ -150,6 +150,26 @@ export function EditorContextMenu() {
   );
   const canToggleGrass = selectedPolygons.length > 0;
   const selectedPictures = getSelectedPictures(selectToolState, pictures);
+  const completeSelectedPolygons = getCompleteSelectedPolygons(
+    selectToolState,
+    polygons,
+  );
+  const selectedKillers = killers.filter((killer) =>
+    selectToolState.selectedObjects.includes(killer),
+  );
+  const selectedFlowers = flowers.filter((flower) =>
+    selectToolState.selectedObjects.includes(flower),
+  );
+  const selectionCanBeSaved =
+    (!selectToolState.selectedVertices.length ||
+      completeSelectedPolygons.length > 0) &&
+    Boolean(
+      completeSelectedPolygons.length ||
+      selectedApples.length ||
+      selectedKillers.length ||
+      selectedFlowers.length ||
+      selectedPictures.length,
+    );
   const hasSelection =
     selectToolState.selectedVertices.length > 0 ||
     selectToolState.selectedObjects.length > 0 ||
@@ -324,13 +344,15 @@ export function EditorContextMenu() {
       direct={directMenu}
       anchor={anchor}
       onClose={() => selectTool?.closeContextMenu()}
-      canAddShape={
-        getCompleteSelectedPolygons(selectToolState, polygons).length > 0
-      }
-      onAddShape={() =>
-        getTool<ShapeTool>("shape")?.saveShape(
-          getCompleteSelectedPolygons(selectToolState, polygons),
-        )
+      canSaveToLibrary={selectionCanBeSaved}
+      onSaveToLibrary={() =>
+        getTool<ShapeTool>("shape")?.saveLibraryItem({
+          polygons: completeSelectedPolygons,
+          apples: selectedApples,
+          killers: selectedKillers,
+          flowers: selectedFlowers,
+          pictures: selectedPictures,
+        })
       }
       canTransform={selectTool?.canTransformSelection() ?? false}
       transforming={Boolean(
@@ -621,8 +643,8 @@ function SelectionActionsMenu({
   direct,
   anchor,
   onClose,
-  canAddShape,
-  onAddShape,
+  canSaveToLibrary,
+  onSaveToLibrary,
   canTransform,
   transforming,
   skewing,
@@ -640,8 +662,8 @@ function SelectionActionsMenu({
   direct: boolean;
   anchor: PointAnchor;
   onClose: () => void;
-  canAddShape: boolean;
-  onAddShape: () => void;
+  canSaveToLibrary: boolean;
+  onSaveToLibrary: () => void;
   canTransform: boolean;
   transforming: boolean;
   skewing: boolean;
@@ -703,11 +725,6 @@ function SelectionActionsMenu({
         side="bottom"
         sideOffset={direct ? 0 : 12}
       >
-        {canAddShape && (
-          <DropdownMenuItem onClick={onAddShape}>
-            Add to shapes
-          </DropdownMenuItem>
-        )}
         {canTransform && (
           <>
             <DropdownMenuSub>
@@ -791,6 +808,16 @@ function SelectionActionsMenu({
                   </DropdownMenuGroup>
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+            </DropdownMenuGroup>
+          </>
+        )}
+        {canSaveToLibrary && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={onSaveToLibrary}>
+                Save to library
+              </DropdownMenuItem>
             </DropdownMenuGroup>
           </>
         )}

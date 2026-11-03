@@ -1,7 +1,14 @@
-import type { Polygon, Position } from "~/editor/elma-types";
+import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 
 export type BuiltinShape = "ellipse" | "rectangle" | "star" | "arrow";
-export type CustomShape = { id: string; name: string; polygons: Polygon[] };
+export type LibraryContent = {
+  polygons: Polygon[];
+  apples: Apple[];
+  killers: Position[];
+  flowers: Position[];
+  pictures: Picture[];
+};
+export type CustomShape = LibraryContent & { id: string; name: string };
 export const builtinShapes: { id: BuiltinShape; name: string }[] = [
   { id: "ellipse", name: "Ellipse" },
   { id: "rectangle", name: "Rectangle" },
@@ -12,6 +19,7 @@ export const DEFAULT_SHAPE_SIZE = 4;
 export const DEFAULT_ELLIPSE_VERTICES = 10;
 export const DEFAULT_STAR_POINTS = 5;
 export const DEFAULT_STAR_INNER_RADIUS = 50;
+export const DEFAULT_ARROW_ASPECT_RATIO = 2;
 export const MAX_SHAPE_POINTS = 200;
 
 export function shapeBounds(polygons: Polygon[]) {
@@ -27,6 +35,36 @@ export function shapeBounds(polygons: Polygon[]) {
       maxY = Math.max(maxY, y);
     }
   return { minX, minY, width: maxX - minX, height: maxY - minY };
+}
+
+export function libraryContentBounds(content: LibraryContent) {
+  const points = [
+    ...content.polygons.flatMap((polygon) => polygon.vertices),
+    ...content.apples.map((apple) => apple.position),
+    ...content.killers,
+    ...content.flowers,
+    ...content.pictures.map((picture) => picture.position),
+  ];
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (const { x, y } of points) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return { minX, minY, width: maxX - minX, height: maxY - minY };
+}
+
+export function isCompositeLibraryItem(item: CustomShape) {
+  return Boolean(
+    item.apples.length ||
+    item.killers.length ||
+    item.flowers.length ||
+    item.pictures.length,
+  );
 }
 
 export function normalizeShape(polygons: Polygon[]): Polygon[] | null {
@@ -46,6 +84,44 @@ export function normalizeShape(polygons: Polygon[]): Polygon[] | null {
     grass: p.grass,
     vertices: p.vertices.map((v) => ({ x: v.x - minX, y: v.y - minY })),
   }));
+}
+
+export function normalizeLibraryContent(
+  content: LibraryContent,
+): LibraryContent | null {
+  const bounds = libraryContentBounds(content);
+  if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY))
+    return null;
+  const translate = ({ x, y }: Position) => ({
+    x: x - bounds.minX,
+    y: y - bounds.minY,
+  });
+  return {
+    polygons: content.polygons.map((polygon) => ({
+      grass: polygon.grass,
+      vertices: polygon.vertices.map(translate),
+    })),
+    apples: content.apples.map((apple) => ({
+      ...apple,
+      position: translate(apple.position),
+    })),
+    killers: content.killers.map(translate),
+    flowers: content.flowers.map(translate),
+    pictures: content.pictures.map((picture) => ({
+      ...picture,
+      position: translate(picture.position),
+    })),
+  };
+}
+
+function isStoredPosition(value: unknown): value is Position {
+  return Boolean(
+    value &&
+    typeof (value as Position).x === "number" &&
+    Number.isFinite((value as Position).x) &&
+    typeof (value as Position).y === "number" &&
+    Number.isFinite((value as Position).y),
+  );
 }
 
 export function loadCustomShapes(value: unknown): CustomShape[] {
@@ -73,11 +149,47 @@ export function loadCustomShapes(value: unknown): CustomShape[] {
       )
     )
       return [];
-    const polygons = normalizeShape(item.polygons);
-    if (!polygons) return [];
+    const apples = Array.isArray(item.apples) ? item.apples : [];
+    const killers = Array.isArray(item.killers) ? item.killers : [];
+    const flowers = Array.isArray(item.flowers) ? item.flowers : [];
+    const pictures = Array.isArray(item.pictures) ? item.pictures : [];
+    if (
+      apples.some(
+        (apple: Partial<Apple> | null) =>
+          !apple ||
+          !isStoredPosition(apple.position) ||
+          typeof apple.animation !== "number" ||
+          typeof apple.gravity !== "number",
+      ) ||
+      killers.some((killer: unknown) => !isStoredPosition(killer)) ||
+      flowers.some((flower: unknown) => !isStoredPosition(flower)) ||
+      pictures.some(
+        (picture: Partial<Picture> | null) =>
+          !picture ||
+          !isStoredPosition(picture.position) ||
+          typeof picture.name !== "string" ||
+          typeof picture.texture !== "string" ||
+          typeof picture.mask !== "string" ||
+          typeof picture.distance !== "number" ||
+          typeof picture.clip !== "number",
+      )
+    )
+      return [];
+    const content = normalizeLibraryContent({
+      polygons: item.polygons,
+      apples,
+      killers,
+      flowers,
+      pictures,
+    });
+    if (!content) return [];
     ids.add(item.id);
     return [
-      { id: item.id, name: item.name.trim().slice(0, 80) || "Shape", polygons },
+      {
+        id: item.id,
+        name: item.name.trim().slice(0, 80) || "Library item",
+        ...content,
+      },
     ];
   });
 }
@@ -92,13 +204,7 @@ export function getCompleteSelectedPolygons(
     | undefined,
   polygons: Polygon[],
 ): Polygon[] {
-  if (
-    !selection ||
-    selection.selectedObjects.length ||
-    selection.selectedPictures.length ||
-    !selection.selectedVertices.length
-  )
-    return [];
+  if (!selection || !selection.selectedVertices.length) return [];
   const selected = new Set(selection.selectedVertices.map((s) => s.vertex));
   const candidates = polygons.filter((p) =>
     p.vertices.some((v) => selected.has(v)),
@@ -130,7 +236,11 @@ export function createShapePolygons({
   const customBounds =
     typeof shape === "object" ? shapeBounds(shape.polygons) : undefined;
   if (constrain) {
-    const ratio = customBounds ? customBounds.width / customBounds.height : 1;
+    const ratio = customBounds
+      ? customBounds.width / customBounds.height
+      : shape === "arrow"
+        ? DEFAULT_ARROW_ASPECT_RATIO
+        : 1;
     const height = Math.max(Math.abs(dy), Math.abs(dx) / ratio);
     dx = (dx < 0 ? -1 : 1) * height * ratio;
     dy = (dy < 0 ? -1 : 1) * height;

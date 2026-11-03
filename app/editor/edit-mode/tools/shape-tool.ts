@@ -6,15 +6,19 @@ import type { Polygon, Position } from "~/editor/elma-types";
 import {
   builtinShapes,
   createShapePolygons,
-  normalizeShape,
+  isCompositeLibraryItem,
+  libraryContentBounds,
+  normalizeLibraryContent,
   shapeBounds,
   DEFAULT_SHAPE_SIZE,
+  DEFAULT_ARROW_ASPECT_RATIO,
   DEFAULT_ELLIPSE_VERTICES,
   DEFAULT_STAR_POINTS,
   DEFAULT_STAR_INNER_RADIUS,
   MAX_SHAPE_POINTS,
   type BuiltinShape,
   type CustomShape,
+  type LibraryContent,
 } from "~/editor/helpers/shapes";
 import { findPolygonEdgeNearPosition } from "~/editor/helpers/selection-helpers";
 import {
@@ -81,16 +85,25 @@ export class ShapeTool extends Tool<ShapeToolState> {
     this.getState().setToolState({ capturing: false });
   }
   saveShape(polygons: Polygon[]) {
-    const normalized = normalizeShape(polygons);
+    return this.saveLibraryItem({
+      polygons,
+      apples: [],
+      killers: [],
+      flowers: [],
+      pictures: [],
+    });
+  }
+  saveLibraryItem(content: LibraryContent) {
+    const normalized = normalizeLibraryContent(content);
     if (!normalized) return false;
     const { state } = this.getState();
     const id = crypto.randomUUID();
     const names = new Set(state.customShapes.map((s) => s.name));
     let number = 1;
-    while (names.has(`Shape ${number}`)) number++;
+    while (names.has(`Item ${number}`)) number++;
     state.actions.setCustomShapes([
       ...state.customShapes,
-      { id, name: `Shape ${number}`, polygons: normalized },
+      { id, name: `Item ${number}`, ...normalized },
     ]);
     state.actions.activateTool(this.meta.id);
     this.selectShape(id);
@@ -203,7 +216,7 @@ export class ShapeTool extends Tool<ShapeToolState> {
   getCursor() {
     return "crosshair";
   }
-  getDrafts(bypass?: boolean) {
+  getDrafts(bypass?: boolean): Partial<LibraryContent> {
     const { state, toolState } = this.getState();
     if (!toolState || toolState.capturing) return {};
     if (!toolState.start && !state.mouseOnCanvas) return {};
@@ -211,6 +224,13 @@ export class ShapeTool extends Tool<ShapeToolState> {
       state.customShapes.find((s) => s.id === toolState.shapeId) ??
       builtinShapes.find((shape) => shape.id === toolState.shapeId)?.id;
     if (!shape) return {};
+    if (typeof shape === "object" && isCompositeLibraryItem(shape)) {
+      const position =
+        toolState.start && toolState.end && this.dragged
+          ? this.snapPosition(toolState.end, bypass)
+          : (toolState.start ?? this.snapPosition(state.mousePosition, bypass));
+      return this.getPlacementContent(shape, position);
+    }
     if (toolState.start && toolState.end && this.dragged) {
       return {
         polygons: createShapePolygons({
@@ -247,17 +267,50 @@ export class ShapeTool extends Tool<ShapeToolState> {
       }));
     }
     const { toolState } = this.getState();
-    const halfSize = DEFAULT_SHAPE_SIZE / 2;
+    const halfWidth = DEFAULT_SHAPE_SIZE / 2;
+    const halfHeight =
+      halfWidth / (shape === "arrow" ? DEFAULT_ARROW_ASPECT_RATIO : 1);
     return createShapePolygons({
       ...toolState,
       shape,
-      start: { x: position.x - halfSize, y: position.y - halfSize },
-      end: { x: position.x + halfSize, y: position.y + halfSize },
+      start: { x: position.x - halfWidth, y: position.y - halfHeight },
+      end: { x: position.x + halfWidth, y: position.y + halfHeight },
     });
+  }
+  private getPlacementContent(
+    item: CustomShape,
+    position: Position,
+  ): LibraryContent {
+    const bounds = libraryContentBounds(item);
+    const offset = {
+      x: position.x - bounds.minX - bounds.width / 2,
+      y: position.y - bounds.minY - bounds.height / 2,
+    };
+    const translate = (point: Position) => ({
+      x: point.x + offset.x,
+      y: point.y + offset.y,
+    });
+    return {
+      polygons: item.polygons.map((polygon) => ({
+        grass: polygon.grass,
+        vertices: polygon.vertices.map(translate),
+      })),
+      apples: item.apples.map((apple) => ({
+        ...apple,
+        position: translate(apple.position),
+      })),
+      killers: item.killers.map(translate),
+      flowers: item.flowers.map(translate),
+      pictures: item.pictures.map((picture) => ({
+        ...picture,
+        position: translate(picture.position),
+      })),
+    };
   }
   getWorldOverlays(): WorldRenderOverlayItem[] {
     const { state, toolState } = this.getState();
     if (toolState?.capturing && toolState.start && toolState.end) {
+      const captured = this.capturePolygons();
       return [
         {
           type: "rect",
@@ -270,7 +323,30 @@ export class ShapeTool extends Tool<ShapeToolState> {
           strokeColor: uiColors.boundsSelected,
           lineWidth: 1 / state.zoom,
         },
+        ...captured.map((polygon) => ({
+          type: "polyline" as const,
+          points: polygon.vertices,
+          closed: true,
+          color: uiColors.boundsHover,
+          width: uiStrokeWidths.boundsHoverScreen / state.zoom,
+          layer: "top" as const,
+        })),
       ];
+    }
+    if (toolState?.capturing && state.mouseOnCanvas) {
+      const polygon = this.findCapturePolygon(state.mousePosition);
+      return polygon
+        ? [
+            {
+              type: "polyline" as const,
+              points: polygon.vertices,
+              closed: true,
+              color: uiColors.boundsHover,
+              width: uiStrokeWidths.boundsHoverScreen / state.zoom,
+              layer: "top" as const,
+            },
+          ]
+        : [];
     }
     return (this.getDrafts().polygons ?? []).flatMap((p) => [
       {
@@ -308,15 +384,7 @@ export class ShapeTool extends Tool<ShapeToolState> {
     )
       return [];
     if (!this.dragged) {
-      const polygon =
-        findPolygonEdgeNearPosition(
-          end,
-          state.polygons,
-          selectionThresholds.polygonEdge / state.zoom,
-        ) ??
-        [...state.polygons]
-          .reverse()
-          .find((p) => isPointInPolygon(end, p.vertices));
+      const polygon = this.findCapturePolygon(end);
       return polygon ? [polygon] : [];
     }
     return state.polygons.filter((p) =>
@@ -329,12 +397,37 @@ export class ShapeTool extends Tool<ShapeToolState> {
       ),
     );
   }
+  private findCapturePolygon(position: Position) {
+    const { state } = this.getState();
+    return (
+      findPolygonEdgeNearPosition(
+        position,
+        state.polygons,
+        selectionThresholds.polygonEdge / state.zoom,
+      ) ??
+      [...state.polygons]
+        .reverse()
+        .find((polygon) => isPointInPolygon(position, polygon.vertices))
+    );
+  }
   private commit(bypass?: boolean) {
-    const polygons = this.getDrafts(bypass).polygons ?? [];
-    if (polygons.length) {
-      const { state } = this.getState();
-      state.actions.setPolygons([...state.polygons, ...polygons]);
-    }
+    const drafts = this.getDrafts(bypass);
+    const { state } = this.getState();
+    if (
+      !drafts.polygons?.length &&
+      !drafts.apples?.length &&
+      !drafts.killers?.length &&
+      !drafts.flowers?.length &&
+      !drafts.pictures?.length
+    )
+      return this.clear();
+    this.store.setState({
+      polygons: [...state.polygons, ...(drafts.polygons ?? [])],
+      apples: [...state.apples, ...(drafts.apples ?? [])],
+      killers: [...state.killers, ...(drafts.killers ?? [])],
+      flowers: [...state.flowers, ...(drafts.flowers ?? [])],
+      pictures: [...state.pictures, ...(drafts.pictures ?? [])],
+    });
     this.clear();
   }
 }

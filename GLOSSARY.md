@@ -23,3 +23,11 @@ The finish object. A valid, finishable level has at least one flower.
 A place where ground polygon edges intersect, including an edge intersecting
 another edge of the same polygon.
 _Avoid_: Crossing
+
+**Library**:
+The collection of built-in shapes and saved reusable level content.
+
+**Library item**:
+A reusable arrangement of duplicable level content, such as polygons, objects,
+pictures, textures, and colors.
+_Avoid_: Custom shape, stamp, preset
