@@ -1,5 +1,9 @@
 import { defaultGridSettings, normalizeGridSettings } from "./grid";
 import {
+  defaultPictureSelectionSettings,
+  normalizePictureSelectionSettings,
+} from "./helpers/picture-selection";
+import {
   DEFAULT_LEVEL_TITLE,
   normalizeLevelTitle,
 } from "./helpers/level-title";
@@ -63,7 +67,7 @@ function parseStoredItem<T>(key: string): T | null {
 
 const defaultEditorPreferences: EditorPreferences = {
   defaultLevelTitle: DEFAULT_LEVEL_TITLE,
-  checkTopologyOnSave: true,
+  checkTopologyOnSave: false,
   customShapes: [],
   animateSprites: true,
   isUIVisible: true,
@@ -71,6 +75,7 @@ const defaultEditorPreferences: EditorPreferences = {
   playModeZoom: DEFAULT_PLAY_MODE_ZOOM,
   playSettings: defaultPlaySettings,
   vertexEdgeClickBehavior: "default",
+  pictureSelection: defaultPictureSelectionSettings,
   autoGrassOptions: defaultAutoGrassOptions,
   grid: defaultGridSettings,
 };
@@ -112,6 +117,9 @@ export function loadEditorPreferences(): EditorPreferences {
       ...(preferences?.playSettings ?? {}),
       keyBindings: loadPlayKeyBindings(preferences?.playSettings?.keyBindings),
     },
+    pictureSelection: normalizePictureSelectionSettings(
+      preferences?.pictureSelection,
+    ),
     vertexEdgeClickBehavior: loadVertexEdgeClickBehavior(
       preferences?.vertexEdgeClickBehavior,
     ),
@@ -171,6 +179,7 @@ function getComparableEditorPreferences(state: EditorState): EditorPreferences {
     playModeZoom: state.playModeZoom,
     playSettings: state.playSettings,
     vertexEdgeClickBehavior: state.vertexEdgeClickBehavior,
+    pictureSelection: state.pictureSelection,
     autoGrassOptions: state.autoGrassOptions,
     grid: state.grid,
   };

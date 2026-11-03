@@ -15,7 +15,7 @@ import {
 } from "~/editor/render/affine-math";
 import { getObjectFrame, getObjectSprite } from "~/editor/render/object-assets";
 import { PICTURE_SCALE } from "~/editor/render/picture-metrics";
-import { getPictureWorldOutlineSegments } from "~/editor/render/picture-metrics";
+import { getPictureSelectionSegments } from "~/editor/helpers/picture-selection";
 import { buildWebGLBikePose } from "~/editor/render/webgl-bike-pose";
 import { type WebGLRenderContext } from "~/editor/render/webgl-render-context";
 import { WebGLShapeDrawer } from "~/editor/render/webgl-shape-drawer";
@@ -238,9 +238,21 @@ export class WebGLWorldItemDrawer {
     item: WorldRenderPictureItem,
     scene: WorldRenderScene,
   ) {
-    const outlineSegments = getPictureWorldOutlineSegments(
+    const outlineSegments = getPictureSelectionSegments(
       item,
       this.lgrAssets,
+      item.boundaryShape,
+    );
+    const anchorSize = 3 / scene.viewport.zoom;
+    this.shapes.drawRectOutline(
+      item.position.x - anchorSize,
+      item.position.y - anchorSize,
+      anchorSize * 2,
+      anchorSize * 2,
+      item.boundsLineWidth ?? 0.02,
+      item.boundsColor ?? colors.selection,
+      scene,
+      item.boundsOpacity ?? 1,
     );
     if (!outlineSegments || outlineSegments.length === 0) return;
 

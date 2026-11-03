@@ -1,5 +1,6 @@
-import { Checkbox } from "~/components/ui/checkbox";
+import { Switch } from "~/components/ui/switch";
 import { defaultGridSettings } from "~/editor/grid";
+import { defaultPictureSelectionSettings } from "~/editor/helpers/picture-selection";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -240,7 +241,6 @@ function GeneralSettingsPanel({
   const store = useEditorStore();
   const levelFolderName = useEditorLevelFolderName();
   const lgrAssets = useLgrAssets();
-  const checkTopologyOnSave = useEditor((state) => state.checkTopologyOnSave);
   const forceUpdate = useForceUpdate();
   const canPickFolder =
     supportsFilePickers() && "showDirectoryPicker" in window;
@@ -382,31 +382,6 @@ function GeneralSettingsPanel({
         )}
       </section>
 
-      <section className="flex flex-col gap-3" aria-labelledby="saving-heading">
-        <SettingsSectionHeading
-          id="saving-heading"
-          title="Saving"
-          description="Choose when to check for level issues."
-        />
-        <div className="flex flex-col gap-1.5">
-          <Checkbox
-            checked={checkTopologyOnSave}
-            onCheckedChange={(checked) =>
-              store.getState().actions.setCheckTopologyOnSave(checked)
-            }
-            aria-describedby="check-topology-on-save-description"
-          >
-            Check topology on save
-          </Checkbox>
-          <p
-            id="check-topology-on-save-description"
-            className="pl-6 text-xs text-secondary"
-          >
-            Show errors and warnings after saving. Saving still completes.
-          </p>
-        </div>
-      </section>
-
       <footer className="-mr-2.5 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
         <p className="flex items-center gap-1.5 text-sm whitespace-nowrap text-secondary">
           <span className="font-medium text-primary">Bear Level Editor</span>
@@ -523,6 +498,9 @@ function PreferencesSettingsPanel() {
               setCustomDefaultLevelTemplate(null);
               setCustomTemplateError(null);
               setEditorVertexEdgeClickBehavior("default");
+              store
+                .getState()
+                .actions.setPictureSelection(defaultPictureSelectionSettings);
             }}
             className="ml-auto h-6 px-2"
             size="sm"
@@ -673,7 +651,97 @@ function PreferencesSettingsPanel() {
           })}
         </div>
       </section>
+      <PictureSelectionPreferences />
     </TabsContent>
+  );
+}
+
+function PictureSelectionPreferences() {
+  const settings = useEditor((state) => state.pictureSelection);
+  const checkTopologyOnSave = useEditor((state) => state.checkTopologyOnSave);
+  const store = useEditorStore();
+  const { setPictureSelection } = store.getState().actions;
+  const fields = [
+    {
+      key: "boundary",
+      label: "Boundary shape",
+      options: [
+        { value: "outline", label: "Visible outline" },
+        { value: "rectangle", label: "Image rectangle" },
+      ],
+    },
+    {
+      key: "click",
+      label: "Click to select",
+      options: [
+        { value: "interior", label: "Inside boundary" },
+        { value: "border", label: "Border only" },
+        { value: "anchor", label: "Top-left point only" },
+      ],
+    },
+    {
+      key: "area",
+      label: "Area selection",
+      options: [
+        { value: "bounds", label: "Touch bounds" },
+        { value: "anchor", label: "Enclose anchor" },
+      ],
+    },
+  ] as const;
+  return (
+    <div className="grid gap-6 sm:grid-cols-2">
+      <section className="flex flex-col gap-3">
+        <SettingsSectionHeading
+          title="Picture selection"
+          description="Choose how pictures and textures are selected."
+        />
+        <div className="flex flex-col gap-3">
+          {fields.map((field) => (
+            <label
+              key={field.key}
+              className="flex items-center justify-between gap-4 text-sm"
+            >
+              <span>{field.label}</span>
+              <Select
+                value={settings[field.key]}
+                items={[...field.options]}
+                onValueChange={(value) => {
+                  if (value) setPictureSelection({ [field.key]: value });
+                }}
+              >
+                <SelectTrigger className="h-9 w-48 px-3 font-normal">
+                  <SelectValue />
+                  <SelectTriggerIcon />
+                </SelectTrigger>
+                <SelectContent>
+                  {field.options.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          ))}
+        </div>
+      </section>
+      <section className="flex flex-col gap-3" aria-labelledby="saving-heading">
+        <SettingsSectionHeading
+          id="saving-heading"
+          title="Saving"
+          description="Choose when to check for level issues."
+        />
+        <label className="flex items-center justify-between gap-4 text-sm">
+          <span>Check topology on save</span>
+          <Switch
+            checked={checkTopologyOnSave}
+            onCheckedChange={(checked) =>
+              store.getState().actions.setCheckTopologyOnSave(checked)
+            }
+          />
+        </label>
+      </section>
+    </div>
   );
 }
 
@@ -940,7 +1008,7 @@ function LevelPresetPreview({
           store: createEditorStore({
             initialPreferences: {
               defaultLevelTitle: DEFAULT_LEVEL_TITLE,
-              checkTopologyOnSave: true,
+              checkTopologyOnSave: false,
               customShapes: [],
               animateSprites: false,
               isUIVisible: true,
@@ -951,6 +1019,7 @@ function LevelPresetPreview({
               playModeZoom: DEFAULT_PLAY_MODE_ZOOM,
               playSettings: defaultPlaySettings,
               vertexEdgeClickBehavior: "default",
+              pictureSelection: defaultPictureSelectionSettings,
               autoGrassOptions: defaultAutoGrassOptions,
               grid: defaultGridSettings,
             },

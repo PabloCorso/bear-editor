@@ -10,6 +10,10 @@ import {
   type ImageExportOptions,
 } from "~/editor/helpers/image-export";
 import { getTopologyOverlays } from "../scene/topology-overlays";
+import {
+  getPictureSelectionSegments,
+  isPictureSelectionHit,
+} from "~/editor/helpers/picture-selection";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import { type EditorState } from "~/editor/editor-state";
 import {
@@ -58,7 +62,6 @@ import { buildEditorWorldScene } from "~/editor/edit-mode/scene/editor-scene-bui
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import {
   getPictureWorldDimensions,
-  getPictureWorldOutlineSegments,
   isWorldPointInPictureVisiblePixel,
 } from "~/editor/render/picture-metrics";
 import {
@@ -1589,19 +1592,29 @@ export class EditorEngine {
       if (!pictureDimensions) continue;
 
       const { width, height } = pictureDimensions;
-      const isInPictureBounds =
-        worldPos.x >= picture.position.x &&
-        worldPos.x <= picture.position.x + width &&
-        worldPos.y >= picture.position.y &&
-        worldPos.y <= picture.position.y + height;
-      if (!isInPictureBounds) continue;
+      const matchesSelection = isPictureSelectionHit(
+        worldPos,
+        picture,
+        this.lgrAssets,
+        state.pictureSelection,
+        selectionThresholds.vertex / state.zoom,
+      );
+      if (!matchesSelection) continue;
       const isTexture = Boolean(picture.texture && picture.mask);
 
-      const isVisibleOnTopLayer = this.isPictureCandidateSelectable(
-        state,
-        picture,
-        worldPos,
-      );
+      const useVisiblePixels =
+        state.pictureSelection.boundary === "outline" &&
+        state.pictureSelection.click === "interior";
+      const isAnchorHit =
+        Math.hypot(
+          worldPos.x - picture.position.x,
+          worldPos.y - picture.position.y,
+        ) <=
+        selectionThresholds.vertex / state.zoom;
+      const isVisibleOnTopLayer =
+        !useVisiblePixels ||
+        isAnchorHit ||
+        this.isPictureCandidateSelectable(state, picture, worldPos);
       pictureCandidates.push({
         picture,
         width,
@@ -1931,9 +1944,10 @@ export class EditorEngine {
               rect.minY > viewportRect.maxY
             )
           ) {
-            const outlineSegments = getPictureWorldOutlineSegments(
+            const outlineSegments = getPictureSelectionSegments(
               picture,
               this.lgrAssets,
+              state.pictureSelection.boundary,
             );
             if (outlineSegments && outlineSegments.length > 0) {
               overlays.push(
@@ -1974,9 +1988,10 @@ export class EditorEngine {
         continue;
       }
 
-      const outlineSegments = getPictureWorldOutlineSegments(
+      const outlineSegments = getPictureSelectionSegments(
         picture,
         this.lgrAssets,
+        state.pictureSelection.boundary,
       );
       if (outlineSegments && outlineSegments.length > 0) {
         overlays.push(

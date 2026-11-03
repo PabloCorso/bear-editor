@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## 2026-10-01
+## 2026-11-01
 
 - Add a configurable canvas grid and snap to grid under Level options → Grid. Hold Alt for free placement and movement.
 - Select by edge enclosed by selected vertices instead of selection the whole polygon @Infe.
@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
 - Add tool settings and reset.
 - Add PNG export.
 - Add skew and improve selection mirroring.
+
+## 2026-10-27
+
+- Add picture selection preferences for outline or rectangle boundaries, interior/border/anchor clicks, and anchor-based area selection.
 
 ## 2026-10-26
 

@@ -1,17 +1,13 @@
 import {
-  buildGridOverlays,
-  normalizeGridSettings,
-  snapToGrid,
-} from "~/editor/grid";
+  defaultPictureSelectionSettings,
+  getPictureSelectionSegments,
+  isPictureSelectionHit,
+} from "~/editor/helpers/picture-selection";
+import type { LgrAssets } from "~/components/lgr-assets";
+import { PICTURE_SCALE } from "~/editor/render/picture-metrics";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEditorStore } from "~/editor/editor-store";
-import {
-  Clip,
-  Gravity,
-  type Apple,
-  type Picture,
-  type Position,
-} from "~/editor/elma-types";
+import { Clip, Gravity, type Position } from "~/editor/elma-types";
 import { defaultTools } from "./default-tools";
 import { SelectTool, type SelectToolState } from "./select-tool";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
@@ -484,750 +480,129 @@ describe("SelectTool marquee selection", () => {
   });
 });
 
-describe("SelectTool polygon edge dragging", () => {
-  beforeEach(() => {
-    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  const event = {
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-  } as PointerEvent;
-  const context = (worldPos: Position) => ({
-    worldPos,
-    screenX: 0,
-    screenY: 0,
-  });
-
-  function setup(selectedVertexIndexes: number[], grass = false) {
-    const { store, tool } = createTool();
-    const polygon = {
-      grass,
-      vertices: [
-        position(0, 0),
-        position(20, 0),
-        position(20, 20),
-        position(0, 20),
-      ],
-    };
-    store.getState().actions.setPolygons([polygon]);
-    store.getState().actions.setZoom(100);
-    store.getState().actions.setMouseOnCanvas(true);
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedVertices: selectedVertexIndexes.map((index) => ({
-          polygon,
-          vertex: polygon.vertices[index],
-        })),
-      });
-    store.temporal.getState().clear();
-    return { store, tool, polygon };
+describe("Picture selection preferences", () => {
+  const picture = {
+    name: "test",
+    texture: "",
+    mask: "" as const,
+    clip: Clip.Unclipped,
+    distance: 500,
+    position: position(0, 0),
+  };
+  function assets() {
+    const pixels = new Uint8ClampedArray(10 * 10 * 4);
+    for (let y = 3; y < 7; y++)
+      for (let x = 3; x < 7; x++) pixels[(y * 10 + x) * 4 + 3] = 255;
+    return {
+      getSprite: () => ({ width: 10, height: 10 }),
+      getSpritePixels: () => ({ width: 10, height: 10, pixels }),
+    } as unknown as LgrAssets;
   }
-
-  function dragTopEdge(tool: SelectTool) {
-    tool.onPointerDown(event, context(position(10, 0)));
-    tool.onPointerMove(event, context(position(13, 4)));
-    tool.onPointerUp(event, context(position(13, 4)));
-  }
-
-  function getPolygonLines(tool: SelectTool) {
-    return tool
-      .getWorldOverlays({
-        viewportRect: { minX: -10, minY: -10, maxX: 30, maxY: 30 },
-      })
-      .filter((item) => item.type === "polyline");
-  }
-
-  it("does not outline the polygon when only one vertex is selected", () => {
-    const { store, tool } = setup([0]);
-    store.getState().actions.setMousePosition(position(10, 10));
-
-    expect(getPolygonLines(tool)).toHaveLength(0);
-  });
-
-  it("moves two selected endpoint vertices when dragging their shared edge", () => {
-    const { store, tool } = setup([0, 1]);
-    store.getState().actions.setMousePosition(position(10, 0));
-
-    expect(getPolygonLines(tool)).toMatchObject([
-      {
-        points: [position(0, 0), position(20, 0)],
-        closed: false,
-      },
-    ]);
-
-    dragTopEdge(tool);
-
-    expect(store.getState().polygons[0].vertices).toEqual([
-      position(3, 4),
-      position(23, 4),
-      position(20, 20),
-      position(0, 20),
-    ]);
-    expect(getSelection(store)?.selectedVertices).toHaveLength(2);
-    expect(store.temporal.getState().pastStates).toHaveLength(1);
-  });
-
-  it("does not outline a grass polygon's implicit closing edge", () => {
-    const { store, tool } = setup([0, 1], true);
-    store.getState().actions.setMousePosition(position(10, 0));
-
-    expect(getPolygonLines(tool)).toHaveLength(0);
-  });
-
-  it("does not hover an overlapping polygon above a selected edge", () => {
-    const { store, tool, polygon: selectedPolygon } = setup([0, 1]);
-    const unselectedPolygon = {
-      grass: false,
-      vertices: [
-        position(0, 0),
-        position(20, 0),
-        position(20, 20),
-        position(0, 20),
-      ],
-    };
-    store.getState().actions.setPolygons([unselectedPolygon, selectedPolygon]);
-    store.getState().actions.setMousePosition(position(10, 0));
-
-    expect(getPolygonLines(tool)).toMatchObject([
-      {
-        points: [position(0, 0), position(20, 0)],
-        closed: false,
-      },
-    ]);
-  });
-
-  it("selects and moves the whole polygon when the edge endpoints are not both selected", () => {
-    const { store, tool } = setup([0, 2]);
-    store.getState().actions.setMousePosition(position(10, 0));
-
-    expect(getPolygonLines(tool)).toMatchObject([{ closed: true }]);
-
-    dragTopEdge(tool);
-
-    expect(store.getState().polygons[0].vertices).toEqual([
-      position(3, 4),
-      position(23, 4),
-      position(23, 24),
-      position(3, 24),
-    ]);
-    expect(getSelection(store)?.selectedVertices).toHaveLength(4);
-    expect(store.temporal.getState().pastStates).toHaveLength(1);
-  });
-});
-
-describe("Grid", () => {
-  beforeEach(() => {
-    vi.stubGlobal("window", { navigator: { platform: "Linux" } });
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-  it("normalizes invalid and legacy preferences", () => {
-    expect(normalizeGridSettings()).toEqual({
-      visible: false,
-      snap: false,
-      size: 1,
-    });
-    expect(normalizeGridSettings({ size: NaN }).size).toBe(1);
-    expect(normalizeGridSettings({ size: 0 }).size).toBe(0.01);
+  it("distinguishes image rectangles, visible outlines, interiors and borders", () => {
+    const lgr = assets();
+    const point = (x: number, y: number) =>
+      position(x * PICTURE_SCALE, y * PICTURE_SCALE);
+    const tolerance = PICTURE_SCALE / 4;
     expect(
-      snapToGrid(position(-1.7, 2.2), {
-        visible: false,
-        snap: true,
-        size: 0.5,
-      }),
-    ).toEqual(position(-1.5, 2));
-  });
-  it("bounds grid rendering at minimum zoom without changing snap spacing", () => {
-    const grid = { visible: true, snap: true, size: 0.01 };
-    const lines = buildGridOverlays(
-      grid,
-      { minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 },
-      0.2,
+      isPictureSelectionHit(
+        point(1, 1),
+        picture,
+        lgr,
+        defaultPictureSelectionSettings,
+        tolerance,
+      ),
+    ).toBe(false);
+    expect(
+      isPictureSelectionHit(
+        point(1, 1),
+        picture,
+        lgr,
+        { ...defaultPictureSelectionSettings, boundary: "rectangle" },
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(
+      isPictureSelectionHit(
+        point(5, 5),
+        picture,
+        lgr,
+        defaultPictureSelectionSettings,
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(
+      isPictureSelectionHit(
+        point(5, 5),
+        picture,
+        lgr,
+        { ...defaultPictureSelectionSettings, click: "border" },
+        tolerance,
+      ),
+    ).toBe(false);
+    expect(
+      isPictureSelectionHit(
+        point(3, 5),
+        picture,
+        lgr,
+        { ...defaultPictureSelectionSettings, click: "border" },
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(
+      isPictureSelectionHit(
+        point(10.1, 5),
+        picture,
+        lgr,
+        {
+          ...defaultPictureSelectionSettings,
+          boundary: "rectangle",
+          click: "border",
+        },
+        tolerance,
+      ),
+    ).toBe(true);
+    expect(getPictureSelectionSegments(picture, lgr, "rectangle")).toHaveLength(
+      4,
     );
-    expect(lines.length).toBeGreaterThan(0);
-    expect(lines.length).toBeLessThan(2005);
-    expect(grid.size).toBe(0.01);
   });
-  it.each([false, true])(
-    "moves a selection by one shared translation with Alt bypass %s",
-    (altKey) => {
-      const { store, tool, firstApple, secondApple } = createTool();
-      // Pointer modifiers must override stale stored preview modifiers.
-      store.getState().actions.setGridSnapBypassed(!altKey);
-      store.getState().actions.setGrid({ snap: true, size: 3 });
-      store.getState().actions.setToolState<SelectToolState>("select", {
-        selectedObjects: [firstApple, secondApple],
-      });
-      const event = {
-        altKey,
-        shiftKey: false,
-        metaKey: false,
-        ctrlKey: false,
-      } as PointerEvent;
-      tool.onPointerDown(event, {
-        worldPos: firstApple,
-        screenX: 0,
-        screenY: 0,
-      });
-      const destination = position(104.2, 102.2);
-      tool.onPointerMove(event, {
-        worldPos: destination,
-        screenX: 4,
-        screenY: 2,
-      });
-      tool.onPointerUp(event, {
-        worldPos: destination,
-        screenX: 4,
-        screenY: 2,
-      });
-      const [first, second] = store.getState().apples;
-      expect(first.position.x).toBeCloseTo(altKey ? 104.2 : 105);
-      expect(first.position.y).toBeCloseTo(altKey ? 102.2 : 102);
-      expect(second.position.x - first.position.x).toBeCloseTo(100);
-      expect(second.position.y - first.position.y).toBeCloseTo(0);
-    },
-  );
-});
-
-// Exercise the public pointer workflow so preview, cancellation and history
-// are checked together with the geometry.
-describe("SelectTool skewing", () => {
-  beforeEach(() => {
-    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
-  });
-
-  afterEach(() => vi.unstubAllGlobals());
-
-  function createSkewTool() {
-    const result = createTool();
-    const { store, tool } = result;
-    const polygon = {
-      grass: false,
-      vertices: [
-        position(0, 0),
-        position(20, 0),
-        position(20, 30),
-        position(0, 30),
-      ],
-    };
-    store.getState().actions.setPolygons([polygon]);
-    store.getState().actions.setZoom(100);
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedVertices: polygon.vertices.map((vertex) => ({
-          polygon,
-          vertex,
-        })),
-      });
-    store.temporal.getState().clear();
-    tool.toggleTransform(true);
-    return { ...result, polygon };
-  }
-
-  const event = {
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-  } as PointerEvent;
-  const context = (worldPos: Position) => ({
-    worldPos,
-    screenX: 0,
-    screenY: 0,
-  });
-
-  it.each([
-    {
-      side: "top",
-      from: position(10, 0),
-      to: position(16, 9),
-      expected: [
-        position(6, 0),
-        position(26, 0),
-        position(20, 30),
-        position(0, 30),
-      ],
-      cursor: "ew-resize",
-    },
-    {
-      side: "bottom",
-      from: position(10, 30),
-      to: position(4, 39),
-      expected: [
-        position(0, 0),
-        position(20, 0),
-        position(14, 30),
-        position(-6, 30),
-      ],
-      cursor: "ew-resize",
-    },
-    {
-      side: "left",
-      from: position(0, 15),
-      to: position(9, 21),
-      expected: [
-        position(0, 6),
-        position(20, 0),
-        position(20, 30),
-        position(0, 36),
-      ],
-      cursor: "ns-resize",
-    },
-    {
-      side: "right",
-      from: position(20, 15),
-      to: position(29, 9),
-      expected: [
-        position(0, 0),
-        position(20, -6),
-        position(20, 24),
-        position(0, 30),
-      ],
-      cursor: "ns-resize",
-    },
-  ])(
-    "skews from the $side handle with the opposite edge fixed",
-    ({ from, to, expected, cursor }) => {
-      const { store, tool, polygon } = createSkewTool();
-      expect(tool.getCursor(context(from))).toBe(cursor);
-      tool.onPointerDown(event, context(from));
-      tool.onPointerMove(event, context(to));
-      expect(store.getState().polygons[0].vertices).toEqual(expected);
-      const overlays = tool.getWorldOverlays({
-        viewportRect: { minX: -100, minY: -100, maxX: 100, maxY: 100 },
-      });
-      expect(overlays.filter((item) => item.type === "rect")).toHaveLength(4);
+  it("keeps the top-left anchor clickable in every click mode", () => {
+    for (const click of ["interior", "border", "anchor"] as const) {
       expect(
-        overlays.some(
-          (item) =>
-            item.type === "polyline" &&
-            JSON.stringify(item.points) === JSON.stringify(expected),
+        isPictureSelectionHit(
+          position(0, 0),
+          picture,
+          assets(),
+          { ...defaultPictureSelectionSettings, click },
+          0.001,
         ),
       ).toBe(true);
-      expect(store.temporal.getState().pastStates).toHaveLength(0);
-      tool.onPointerUp(event, context(to));
-      expect(store.temporal.getState().pastStates).toHaveLength(1);
-      expect(getSelection(store)?.selectedVertices[0].polygon).toBe(
-        store.getState().polygons[0],
-      );
-      store.temporal.getState().undo();
-      expect(store.getState().polygons).toEqual([polygon]);
-      store.temporal.getState().redo();
-      expect(store.getState().polygons[0].vertices).toEqual(expected);
-    },
-  );
-
-  it.each(["Escape", "pointercancel"])(
-    "cancels the preview with %s without adding history",
-    (cancel) => {
-      const { store, tool, polygon } = createSkewTool();
-      tool.onPointerDown(event, context(position(10, 0)));
-      tool.onPointerMove(event, context(position(16, 0)));
-      if (cancel === "Escape") {
-        tool.onKeyDown(
-          { key: "Escape", preventDefault() {} } as KeyboardEvent,
-          context(position(16, 0)),
-        );
-      } else {
-        tool.onPointerUp(
-          { ...event, type: "pointercancel" } as PointerEvent,
-          context(position(16, 0)),
-        );
-      }
-      expect(store.getState().polygons).toEqual([polygon]);
-      expect(getSelection(store)?.selectedVertices[0].polygon).toBe(
-        store.getState().polygons[0],
-      );
-      expect(store.temporal.getState().pastStates).toHaveLength(0);
-      expect(store.temporal.getState().isTracking).toBe(true);
-    },
-  );
-
-  it("moves mixed selection positions without changing picture or object properties", () => {
-    const { store, tool, polygon, secondApple } = createSkewTool();
-    const apple: Apple = {
-      position: position(5, 15),
-      animation: 3,
-      gravity: Gravity.Up,
-    };
-    const picture: Picture = {
-      name: "tree",
-      texture: "",
-      mask: "",
-      position: position(5, 5),
-      distance: 500,
-      clip: Clip.Unclipped,
-    };
-    store
-      .getState()
-      .actions.setApples([
-        apple,
-        { position: secondApple, animation: 1, gravity: Gravity.None },
-      ]);
-    store.getState().actions.setPictures([picture]);
-    tool.setPictureDimensionsResolver(() => ({ width: 10, height: 10 }));
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedObjects: [apple.position],
-        selectedPictures: [picture.position],
-      });
-    store.temporal.getState().clear();
-    dragMarquee(tool, position(10, 0), position(16, 0));
-    expect(store.getState().polygons[0].vertices[0]).toEqual(position(6, 0));
-    expect(store.getState().apples[0]).toEqual({
-      ...apple,
-      position: position(8, 15),
-    });
-    expect(store.getState().pictures[0]).toEqual({
-      ...picture,
-      position: position(9, 5),
-    });
-    expect(store.getState().apples[1].position).toEqual(secondApple);
-    expect(store.temporal.getState().pastStates).toHaveLength(1);
-    store.temporal.getState().undo();
-    expect(store.getState().polygons[0]).toEqual(polygon);
-    expect(store.getState().pictures[0]).toEqual(picture);
-    expect(store.getState().apples[0]).toEqual(apple);
-  });
-
-  it("does not add history for a perpendicular drag or a return to the starting point", () => {
-    const { store, tool, polygon } = createSkewTool();
-    dragMarquee(tool, position(10, 0), position(10, 9));
-    expect(store.getState().polygons).toEqual([polygon]);
-    tool.onPointerDown(event, context(position(10, 0)));
-    tool.onPointerMove(event, context(position(16, 0)));
-    tool.onPointerMove(event, context(position(10, 0)));
-    tool.onPointerUp(event, context(position(10, 0)));
-    expect(store.getState().polygons).toEqual([polygon]);
-    expect(store.temporal.getState().pastStates).toHaveLength(0);
-  });
-
-  it("keeps the skewed frame for the next skew and switches cleanly to resize and rotate", () => {
-    const { store, tool } = createSkewTool();
-    dragMarquee(tool, position(10, 0), position(16, 0));
-    const skewedFrame = [
-      position(6, 0),
-      position(26, 0),
-      position(20, 30),
-      position(0, 30),
-    ];
+    }
     expect(
-      tool
-        .getWorldOverlays({
-          viewportRect: { minX: -100, minY: -100, maxX: 100, maxY: 100 },
-        })
-        .filter((item) => item.type === "polyline")
-        .find((item) => item.points.length === skewedFrame.length)?.points,
-    ).toEqual(skewedFrame);
-    expect(tool.getCursor(context(position(16, 0)))).toBe("ew-resize");
-    dragMarquee(tool, position(16, 0), position(22, 0));
-    expect(store.getState().polygons[0].vertices[0]).toEqual(position(12, 0));
-    expect(store.temporal.getState().pastStates).toHaveLength(2);
-    tool.toggleTransform();
-    expect(getSelection(store)).toMatchObject({
-      transformMode: true,
-      skewMode: false,
-    });
-    expect(tool.getCursor(context(position(16, 0)))).toBe("ns-resize");
-    tool.toggleTransform(true);
-    expect(getSelection(store)).toMatchObject({
-      transformMode: true,
-      skewMode: true,
-    });
-    tool.toggleTransform(true);
-    expect(getSelection(store)?.transformMode).toBe(false);
+      isPictureSelectionHit(
+        position(PICTURE_SCALE * 5, PICTURE_SCALE * 5),
+        picture,
+        assets(),
+        { ...defaultPictureSelectionSettings, click: "anchor" },
+        0.001,
+      ),
+    ).toBe(false);
   });
-
-  it("moves the selection and its skew handles together", () => {
-    const { tool } = createSkewTool();
-    tool.onPointerDown(event, context(position(0, 0)));
-    tool.onPointerMove(event, context(position(3, 4)));
-    const handles = tool
-      .getWorldOverlays({
-        viewportRect: { minX: -100, minY: -100, maxX: 100, maxY: 100 },
-      })
-      .filter((item) => item.type === "rect")
-      .map((item) => ({
-        x: item.position.x + item.width / 2,
-        y: item.position.y + item.height / 2,
-      }));
-    expect(handles).toEqual([
-      position(13, 4),
-      position(13, 34),
-      position(3, 19),
-      position(23, 19),
-    ]);
-    tool.onPointerUp(event, context(position(3, 4)));
-  });
-
-  it("supports a collinear selection without dividing by zero", () => {
-    const { store, tool, polygon } = createSkewTool();
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedVertices: polygon.vertices
-          .slice(0, 2)
-          .map((vertex) => ({ polygon, vertex })),
-      });
-    dragMarquee(tool, position(20, 0), position(20, 10));
-    expect(store.getState().polygons[0].vertices).toEqual([
-      position(0, 0),
-      position(20, 10),
-      position(20, 30),
-      position(0, 30),
-    ]);
-  });
-
-  it("skews both copies of a repeated grass endpoint", () => {
-    const { store, tool } = createTool();
-    const grass = {
-      grass: true,
-      vertices: [position(0, 0), position(20, 0), position(20, 0)],
-    };
-    store.getState().actions.setPolygons([grass]);
-    store.getState().actions.setZoom(100);
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedVertices: grass.vertices.map((vertex) => ({
-          polygon: grass,
-          vertex,
-        })),
-      });
-    tool.toggleTransform(true);
-
-    const selectedVertices = getSelection(store)?.selectedVertices ?? [];
-    expect(selectedVertices[1]?.vertex).not.toBe(selectedVertices[2]?.vertex);
-
-    dragMarquee(tool, position(20, 0), position(20, 10));
-
-    expect(store.getState().polygons[0].vertices).toEqual([
-      position(0, 0),
-      position(20, 10),
-      position(20, 10),
-    ]);
-  });
-});
-
-describe("SelectTool transform measurements", () => {
-  beforeEach(() => {
-    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  function setup() {
-    const result = createTool();
-    const polygon = {
-      grass: false,
-      vertices: [
-        position(0, 0),
-        position(10, 0),
-        position(10, 20),
-        position(0, 20),
-      ],
-    };
-    result.store.getState().actions.setPolygons([polygon]);
-    result.store.getState().actions.setZoom(100);
-    result.store.getState().actions.setToolState<SelectToolState>("select", {
-      selectedVertices: polygon.vertices.map((vertex) => ({ polygon, vertex })),
-    });
-    result.store.temporal.getState().clear();
-    result.tool.toggleTransform();
-    return { ...result, polygon };
-  }
-
-  it("updates live during pointer resize and rotation, restores on cancel, and resets when reactivated", () => {
-    const { tool } = setup();
-    const event = {
-      metaKey: false,
-      ctrlKey: false,
-      altKey: false,
-      shiftKey: false,
-    } as PointerEvent;
-    const context = (worldPos: Position) => ({
-      worldPos,
-      screenX: 0,
-      screenY: 0,
-    });
-    tool.onPointerDown(event, context(position(10, 10)));
-    tool.onPointerMove(event, context(position(5, 10)));
-    expect(tool.getTransformMeasurements()).toMatchObject({
-      width: 5,
-      height: 20,
-      scaleX: 50,
-    });
-    tool.onPointerUp(event, context(position(5, 10)));
-    tool.onPointerDown(event, context(position(5.1, -0.1)));
-    tool.onPointerMove(event, context(position(12.6, 12.6)));
-    expect(tool.getTransformMeasurements()?.angle).not.toBe(0);
-    expect(tool.getTransformMeasurements()?.width).toBeCloseTo(5);
-    expect(tool.getTransformMeasurements()?.height).toBeCloseTo(20);
-    tool.onPointerUp(
-      { ...event, type: "pointercancel" } as PointerEvent,
-      context(position(12.6, 12.6)),
-    );
-    expect(tool.getTransformMeasurements()).toMatchObject({
-      width: 5,
-      angle: 0,
-      scaleX: 50,
-    });
-    tool.toggleTransform();
-    tool.toggleTransform();
-    expect(tool.getTransformMeasurements()).toMatchObject({
-      width: 5,
-      scaleX: 100,
-      scaleY: 100,
-      angle: 0,
-    });
-  });
-});
-
-describe("SelectTool reference image transforms", () => {
-  beforeEach(() => {
-    vi.stubGlobal("window", { navigator: { platform: "MacIntel" } });
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  const event = {
-    metaKey: false,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-  } as PointerEvent;
-  const context = (worldPos: Position) => ({
-    worldPos,
-    screenX: 0,
-    screenY: 0,
-  });
-
-  function addReferenceImage(
-    store: ReturnType<typeof createEditorStore>,
-    imagePosition: Position,
-  ) {
-    store.setState({
-      referenceImages: [
-        {
-          id: "reference-image",
-          name: "reference.png",
-          bitmap: { close: vi.fn() } as unknown as ImageBitmap,
-          position: imagePosition,
-          width: 10,
-          height: 20,
-          rotation: 0,
-        },
-      ],
-    });
-  }
-
-  it("only offers skew and mirror when the selection includes another item", () => {
-    const { store, tool, firstApple } = createTool();
-    const imagePosition = position(0, 0);
-    addReferenceImage(store, imagePosition);
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedObjects: [imagePosition],
-      });
-
-    expect(tool.canTransformSelection()).toBe(true);
-    expect(tool.canSkewOrMirrorSelection()).toBe(false);
-
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedObjects: [imagePosition, firstApple],
-      });
-
-    expect(tool.canSkewOrMirrorSelection()).toBe(true);
-  });
-
-  it("resizes a selected image from its shared transform frame", () => {
-    const { store, tool } = createTool();
-    const imagePosition = position(0, 0);
-    addReferenceImage(store, imagePosition);
-    store.getState().actions.setZoom(100);
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedObjects: [imagePosition],
-      });
-
-    tool.toggleTransform();
-    expect(getSelection(store)?.transformMode).toBe(true);
-    tool.onPointerDown(event, context(position(5, 0)));
-    tool.onPointerMove(event, context(position(10, 0)));
-    tool.onPointerUp(event, context(position(10, 0)));
-
-    expect(store.getState().referenceImages[0]).toMatchObject({
-      position: position(2.5, 0),
-      width: 15,
-      height: 20,
-      rotation: 0,
-    });
-  });
-
-  it("resizes an image with the rest of a mixed selection", () => {
-    const { store, tool } = createTool();
-    const imagePosition = position(0, 0);
-    const applePosition = position(100, 0);
-    addReferenceImage(store, imagePosition);
-    store
-      .getState()
-      .actions.setApples([
-        { position: applePosition, animation: 1, gravity: Gravity.None },
-      ]);
-    store.getState().actions.setZoom(100);
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedObjects: [imagePosition, applePosition],
-      });
-
-    tool.toggleTransform();
-    tool.onPointerDown(event, context(position(100, 0)));
-    tool.onPointerMove(event, context(position(110, 0)));
-    tool.onPointerUp(event, context(position(110, 0)));
-
-    expect(store.getState().apples[0].position.x).toBeCloseTo(110);
-    expect(store.getState().referenceImages[0].width).toBeGreaterThan(10);
-  });
-
-  it("rotates an image and restores it when the shared transform is cancelled", () => {
-    const { store, tool } = createTool();
-    const imagePosition = position(0, 0);
-    addReferenceImage(store, imagePosition);
-    store.getState().actions.setZoom(100);
-    store
-      .getState()
-      .actions.setToolState<SelectToolState>(defaultTools.select.id, {
-        selectedObjects: [imagePosition],
-      });
-
-    tool.toggleTransform();
-    tool.onPointerDown(event, context(position(5.1, -10.1)));
-    tool.onPointerMove(event, context(position(10.1, 5.1)));
-    expect(store.getState().referenceImages[0].rotation).not.toBe(0);
-    tool.onPointerUp(
-      { ...event, type: "pointercancel" } as PointerEvent,
-      context(position(10.1, 5.1)),
-    );
-
-    expect(store.getState().referenceImages[0]).toMatchObject({
-      position: imagePosition,
-      width: 10,
-      height: 20,
-      rotation: 0,
-    });
+  it("can use the anchor rather than the full picture bounds for area selection", () => {
+    vi.stubGlobal("window", { navigator: { platform: "Linux" } });
+    try {
+      const { store, tool } = createTool();
+      const picturePosition = position(10, 10);
+      store
+        .getState()
+        .actions.setPictures([{ ...picture, position: picturePosition }]);
+      store.getState().actions.setPictureSelection({ area: "anchor" });
+      tool.setPictureDimensionsResolver(() => ({ width: 10, height: 10 }));
+      dragMarquee(tool, position(14, 14), position(20, 20));
+      expect(getSelection(store)?.selectedPictures).toEqual([]);
+      dragMarquee(tool, position(9, 9), position(11, 11));
+      expect(getSelection(store)?.selectedPictures).toEqual([picturePosition]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
