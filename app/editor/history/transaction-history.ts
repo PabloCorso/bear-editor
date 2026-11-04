@@ -1,29 +1,40 @@
 import { createStore } from "zustand/vanilla";
 
-export type HistoryAction = { label: string; toolId?: string };
-export type HistoryEntry<T> = HistoryAction & {
+export type HistoryAction<TKind extends string = string> = {
+  kind: TKind;
+  label: string;
+  toolId?: string;
+};
+export type HistoryEntry<
+  T,
+  TKind extends string = string,
+> = HistoryAction<TKind> & {
   readonly id: string;
   readonly timestamp: number;
   readonly before: T;
   readonly after: T;
 };
-export type HistoryState<T> = {
-  readonly entries: readonly HistoryEntry<T>[];
+export type HistoryState<T, TKind extends string = string> = {
+  readonly entries: readonly HistoryEntry<T, TKind>[];
   /** Number of applied entries. Zero is the retained initial state. */
   readonly cursor: number;
-  readonly active: HistoryAction | null;
+  readonly active: HistoryAction<TKind> | null;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
 };
 export type HistoryTransaction = {
   readonly active: boolean;
   update: <R>(mutate: () => R) => R;
-  commit: () => void;
+  /** Apply the final input, if any, and capture the completed action once. */
+  complete: (finalUpdate?: () => void) => void;
   cancel: () => void;
 };
 
 /** History owns immutable snapshots; callers own meaningful edit boundaries. */
-export function createTransactionHistory<T>(options: {
+export function createTransactionHistory<
+  T,
+  TKind extends string = string,
+>(options: {
   capture: () => T;
   restore: (snapshot: T) => void;
   /** Compare editable content, excluding selection and other context. */
@@ -33,7 +44,7 @@ export function createTransactionHistory<T>(options: {
   limit?: number;
 }) {
   const limit = Math.max(1, options.limit ?? 200);
-  const state = createStore<HistoryState<T>>(() => ({
+  const state = createStore<HistoryState<T, TKind>>(() => ({
     entries: [],
     cursor: 0,
     active: null,
@@ -42,10 +53,11 @@ export function createTransactionHistory<T>(options: {
   }));
   let pending: {
     before: T;
-    action: HistoryAction;
+    action: HistoryAction<TKind>;
     transaction: HistoryTransaction;
   } | null = null;
   let restoring = false;
+  let updateDepth = 0;
   let disposed = false;
 
   const retain = () => {
@@ -78,13 +90,14 @@ export function createTransactionHistory<T>(options: {
     }
   };
   const cancelActive = () => pending?.transaction.cancel();
-  const begin = (action: HistoryAction): HistoryTransaction => {
+  const begin = (action: HistoryAction<TKind>): HistoryTransaction => {
     if (disposed) throw new Error("History has been disposed.");
     if (restoring)
       throw new Error("Cannot begin an edit while restoring history.");
     if (pending)
       throw new Error(
-        "An edit is already active. Use execute() to compose edits.",
+        `Cannot start "${action.label}" while "${pending.action.label}" is active. ` +
+          "User actions cannot nest; compose domain mutations through the active transaction.",
       );
     const before = options.capture();
     const transaction: HistoryTransaction = {
@@ -94,6 +107,7 @@ export function createTransactionHistory<T>(options: {
       update: (mutate) => {
         if (!transaction.active)
           throw new Error("This edit has already ended.");
+        updateDepth += 1;
         try {
           const result = mutate();
           if (
@@ -108,10 +122,13 @@ export function createTransactionHistory<T>(options: {
         } catch (error) {
           transaction.cancel();
           throw error;
+        } finally {
+          updateDepth -= 1;
         }
       },
-      commit: () => {
+      complete: (finalUpdate) => {
         if (!transaction.active) return;
+        if (finalUpdate) transaction.update(finalUpdate);
         const after = options.capture();
         pending = null;
         if (options.equal(before, after)) {
@@ -145,13 +162,32 @@ export function createTransactionHistory<T>(options: {
     publish();
     return transaction;
   };
-  const execute = <R>(action: HistoryAction, mutate: () => R): R => {
+  const execute = <R>(action: HistoryAction<TKind>, mutate: () => R): R => {
     if (restoring) return mutate();
-    if (pending) return pending.transaction.update(mutate);
+    if (pending && updateDepth > 0)
+      throw new Error(
+        `Cannot start "${action.label}" while "${pending.action.label}" is active. ` +
+          "User actions cannot nest; compose domain mutations through the active transaction.",
+      );
+    if (pending) {
+      // A separate UI action supersedes an unfinished gesture. Let the tool
+      // clear its private interaction state before rolling its content back.
+      options.prepareRestore?.();
+      cancelActive();
+    }
     const transaction = begin(action);
     const result = transaction.update(mutate);
-    transaction.commit();
+    transaction.complete();
     return result;
+  };
+  /**
+   * Record one domain mutation. It joins the owning user action when one is
+   * active, or uses the supplied fallback action when called on its own.
+   */
+  const record = <R>(action: HistoryAction<TKind>, mutate: () => R): R => {
+    if (restoring) return mutate();
+    if (pending) return pending.transaction.update(mutate);
+    return execute(action, mutate);
   };
   const navigate = (cursor: number, target?: T) => {
     const { entries } = state.getState();
@@ -172,6 +208,7 @@ export function createTransactionHistory<T>(options: {
     state,
     begin,
     execute,
+    record,
     cancelActive,
     undo: () => {
       if (pending) {
@@ -193,21 +230,6 @@ export function createTransactionHistory<T>(options: {
         return;
       }
       navigate(state.getState().cursor + 1);
-    },
-    /** null selects the initial retained state. IDs survive history trimming. */
-    goTo: (id: string | null) => {
-      const cursor =
-        id === null
-          ? 0
-          : state.getState().entries.findIndex((entry) => entry.id === id) + 1;
-      if (id !== null && cursor === 0) return;
-      if (pending) {
-        const before = pending.before;
-        options.prepareRestore?.();
-        cancelActive();
-        restore(before);
-      }
-      navigate(cursor);
     },
     clear: () => {
       cancelActive();

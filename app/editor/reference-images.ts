@@ -163,7 +163,7 @@ export async function importReferenceImage(
   state.actions.getActiveTool()?.cancelInteraction();
   store.history.cancelActive();
   state.actions.activateTool("select");
-  store.history.execute({ label: "Import reference image" }, () => {
+  store.history.execute({ kind: "reference-image.import" }, () => {
     state.actions.addReferenceImage(image);
     const nextState = store.getState();
     nextState.actions.setToolState("select", {

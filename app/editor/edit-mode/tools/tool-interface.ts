@@ -5,6 +5,7 @@ import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import type { ToolMeta } from "./default-tools";
+import type { EditorHistoryActionKind } from "~/editor/history/editor-history-actions";
 
 export type ToolState<T = unknown> = Record<string, T>;
 export type ToolCursor = string;
@@ -31,13 +32,13 @@ export abstract class Tool<T extends ToolState = ToolState> {
   }
 
   /** Group all content and selection changes made by one completed action. */
-  protected edit<R>(label: string, mutate: () => R): R {
-    return this.store.history.execute({ label, toolId: this.meta.id }, mutate);
+  protected edit<R>(kind: EditorHistoryActionKind, mutate: () => R): R {
+    return this.store.history.execute({ kind, toolId: this.meta.id }, mutate);
   }
 
   /** For live edits spanning events. Draft-only tools commit with edit(). */
-  protected beginEdit(label: string) {
-    return this.store.history.begin({ label, toolId: this.meta.id });
+  protected beginEdit(kind: EditorHistoryActionKind) {
+    return this.store.history.begin({ kind, toolId: this.meta.id });
   }
 
   cancelInteraction(): void {

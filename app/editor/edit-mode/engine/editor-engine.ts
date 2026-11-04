@@ -102,11 +102,24 @@ type EditorEngineOptions = {
   rendererBackend?: WorldSceneRendererBackend;
 };
 
-const KEYBOARD_PAN_STEP = 200;
+const KEYBOARD_PAN_STEP = 50;
 const KEYBOARD_ZOOM_STEP_DIVISOR = 100;
 const WHEEL_PAN_MULTIPLIER = 0.5;
 const TOUCH_CONTEXT_MENU_DELAY_MS = 500;
 const TOUCH_CONTEXT_MENU_MOVE_TOLERANCE_PX = 8;
+
+export function settleLostPointerCapture(
+  event: Pick<PointerEvent, "buttons">,
+  interaction: {
+    active: () => boolean;
+    complete: () => void;
+    cancel: () => void;
+  },
+) {
+  if (!interaction.active()) return;
+  if (event.buttons === 0) interaction.complete();
+  if (interaction.active()) interaction.cancel();
+}
 
 function matchesToolShortcut(event: KeyboardEvent, shortcut: string) {
   const normalized = shortcut.toUpperCase();
@@ -684,10 +697,15 @@ export class EditorEngine {
     }
   };
 
-  private handleLostPointerCapture = () => {
-    if (!this.store.history.state.getState().active) return;
-    this.store.getState().actions.getActiveTool()?.cancelInteraction();
-    this.store.history.cancelActive();
+  private handleLostPointerCapture = (event: PointerEvent) => {
+    settleLostPointerCapture(event, {
+      active: () => Boolean(this.store.history.state.getState().active),
+      complete: () => this.dispatchToolPointerEvent("up", event),
+      cancel: () => {
+        this.store.getState().actions.getActiveTool()?.cancelInteraction();
+        this.store.history.cancelActive();
+      },
+    });
   };
 
   private handlePointerCancel = (event: PointerEvent) => {
@@ -1120,6 +1138,7 @@ export class EditorEngine {
         panSpeed: this.panSpeed,
       });
       this.syncMousePositionFromScreenPoint(screenPoint);
+      event.preventDefault();
       return;
     }
 

@@ -53,11 +53,13 @@ export class AppleTool extends Tool<AppleToolState> {
     }
     if (!toolState) return false;
     const position = this.snapPosition(context.worldPos, _event.altKey);
-    state.actions.addApple({
-      position,
-      animation: toolState.animation,
-      gravity: toolState.gravity,
-    });
+    this.edit("apple.add", () =>
+      state.actions.addApple({
+        position,
+        animation: toolState.animation,
+        gravity: toolState.gravity,
+      }),
+    );
     return true;
   }
 

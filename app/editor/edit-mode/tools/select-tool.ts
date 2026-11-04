@@ -17,6 +17,7 @@ import type { Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
 import type { EditorStore } from "~/editor/editor-store";
 import type { HistoryTransaction } from "~/editor/history/transaction-history";
+import type { EditorHistoryActionKind } from "~/editor/history/editor-history-actions";
 import { defaultTools } from "./default-tools";
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
@@ -77,6 +78,15 @@ import {
 } from "~/editor/helpers/selection-transform";
 
 export type MirrorSelectionDirection = "horizontal" | "vertical";
+
+const KEYBOARD_NUDGE_STEP = 0.1;
+const KEYBOARD_NUDGE_MULTIPLIER = 10;
+const keyboardNudgeDirections: Partial<Record<string, Position>> = {
+  ArrowLeft: { x: -1, y: 0 } as Position,
+  ArrowRight: { x: 1, y: 0 } as Position,
+  ArrowUp: { x: 0, y: 1 } as Position,
+  ArrowDown: { x: 0, y: -1 } as Position,
+};
 
 export type SelectToolState = {
   selectedVertices: Array<{ polygon: Polygon; vertex: Position }>;
@@ -164,6 +174,8 @@ export class SelectTool extends Tool<SelectToolState> {
   private marqueeStartPos = { x: 0, y: 0 };
   private marqueeEndPos = { x: 0, y: 0 };
   private dragEdit: HistoryTransaction | null = null;
+  private keyboardMoveEdit: HistoryTransaction | null = null;
+  private keyboardMoveKeys = new Set<string>();
   private dragHasChanges = false;
 
   onDeactivate(): void {
@@ -177,6 +189,7 @@ export class SelectTool extends Tool<SelectToolState> {
   cancelInteraction(): void {
     this.finishTransformDrag(false);
     this.endDragEdit(false);
+    this.endKeyboardMove(false);
     if (this.isMarqueeSelecting) this.cancelAreaSelection();
     this.transformFrame = null;
     this.transformOrigin = null;
@@ -630,21 +643,35 @@ export class SelectTool extends Tool<SelectToolState> {
 
   onPointerUp(_event: PointerEvent, _context: EventContext): boolean {
     if (this.transformDrag) {
-      if (_event.type !== "pointercancel")
-        this.handleTransformDrag(
-          _context.worldPos,
-          _event.shiftKey,
-          _event.altKey,
-        );
-      this.finishTransformDrag(_event.type !== "pointercancel");
+      const complete = _event.type !== "pointercancel";
+      this.finishTransformDrag(
+        complete,
+        complete
+          ? () =>
+              this.handleTransformDrag(
+                _context.worldPos,
+                _event.shiftKey,
+                _event.altKey,
+              )
+          : undefined,
+      );
       return true;
     }
     if (this.isDragging) {
-      if (_event.type !== "pointercancel")
-        this.handleDragging(_context.worldPos, _event.shiftKey, _event.altKey);
+      const complete = _event.type !== "pointercancel";
       this.isDragging = false;
       this.getState().setToolState({ isDragging: false });
-      this.endDragEdit(_event.type !== "pointercancel");
+      this.endDragEdit(
+        complete,
+        complete
+          ? () =>
+              this.handleDragging(
+                _context.worldPos,
+                _event.shiftKey,
+                _event.altKey,
+              )
+          : undefined,
+      );
       return true;
     }
 
@@ -694,6 +721,19 @@ export class SelectTool extends Tool<SelectToolState> {
     }
     if (event.key === "Escape" && this.getState().toolState?.transformMode) {
       this.getState().setToolState({ transformMode: false });
+      event.preventDefault();
+      return true;
+    }
+
+    const nudgeDirection = keyboardNudgeDirections[event.key];
+    if (
+      nudgeDirection &&
+      !this.isDragging &&
+      !this.isMarqueeSelecting &&
+      this.hasSelection()
+    ) {
+      this.keyboardMoveKeys.add(event.key);
+      this.nudgeSelection(nudgeDirection, event.shiftKey, event.altKey);
       event.preventDefault();
       return true;
     }
@@ -752,6 +792,15 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
     return false;
+  }
+
+  onKeyUp(event: KeyboardEvent): boolean {
+    if (!keyboardNudgeDirections[event.key]) return false;
+    this.keyboardMoveKeys.delete(event.key);
+    if (!this.keyboardMoveEdit) return false;
+    if (!this.keyboardMoveKeys.size) this.endKeyboardMove(true);
+    event.preventDefault();
+    return true;
   }
 
   public canTransformSelection(): boolean {
@@ -837,44 +886,39 @@ export class SelectTool extends Tool<SelectToolState> {
       x: direction === "horizontal" ? 2 * center.x - point.x : point.x,
       y: direction === "vertical" ? 2 * center.y - point.y : point.y,
     }));
-    this.store.history.execute(
-      { label: "Mirror selection", toolId: this.meta.id },
-      () => {
-        if (vertices)
-          this.selectionMutations.moveVertices(positions.slice(0, vertices));
-        if (objects) {
-          this.selectionMutations.moveObjects(
-            positions
-              .slice(vertices, vertices + objects)
-              .map((point, index) => ({
-                x: point.x - objectOffsets[index].x,
-                y: point.y - objectOffsets[index].y,
-              })),
-          );
-        }
-        if (toolState.selectedPictures.length) {
-          const pictures = toolState.selectedPictures.length;
-          this.selectionMutations.movePictures(
-            positions
-              .slice(vertices + objects, vertices + objects + pictures)
-              .map((point, index) => {
-                // Reflect visual centres while retaining each picture's anchor offset.
-                const origin = toolState.selectedPictures[index];
-                const pictureCenter = points[vertices + objects + index];
-                return {
-                  x: point.x + origin.x - pictureCenter.x,
-                  y: point.y + origin.y - pictureCenter.y,
-                };
-              }),
-          );
-        }
-        for (const artifact of geometry.artifacts) {
-          artifact.apply(
-            positions.slice(artifact.start, artifact.start + artifact.length),
-          );
-        }
-      },
-    );
+    this.edit("selection.mirror", () => {
+      if (vertices)
+        this.selectionMutations.moveVertices(positions.slice(0, vertices));
+      if (objects) {
+        this.selectionMutations.moveObjects(
+          positions.slice(vertices, vertices + objects).map((point, index) => ({
+            x: point.x - objectOffsets[index].x,
+            y: point.y - objectOffsets[index].y,
+          })),
+        );
+      }
+      if (toolState.selectedPictures.length) {
+        const pictures = toolState.selectedPictures.length;
+        this.selectionMutations.movePictures(
+          positions
+            .slice(vertices + objects, vertices + objects + pictures)
+            .map((point, index) => {
+              // Reflect visual centres while retaining each picture's anchor offset.
+              const origin = toolState.selectedPictures[index];
+              const pictureCenter = points[vertices + objects + index];
+              return {
+                x: point.x + origin.x - pictureCenter.x,
+                y: point.y + origin.y - pictureCenter.y,
+              };
+            }),
+        );
+      }
+      for (const artifact of geometry.artifacts) {
+        artifact.apply(
+          positions.slice(artifact.start, artifact.start + artifact.length),
+        );
+      }
+    });
     this.transformFrame = null;
     this.closeContextMenu();
   }
@@ -1069,12 +1113,12 @@ export class SelectTool extends Tool<SelectToolState> {
     this.startDragging(
       worldPos,
       handle === "rotate"
-        ? "Rotate selection"
+        ? "selection.rotate"
         : handle === "move"
-          ? "Move selection"
+          ? "selection.move"
           : toolState.skewMode
-            ? "Skew selection"
-            : "Resize selection",
+            ? "selection.skew"
+            : "selection.resize",
     );
     this.transformDrag = new TransformSession({
       frame,
@@ -1150,19 +1194,25 @@ export class SelectTool extends Tool<SelectToolState> {
     }
   }
 
-  private finishTransformDrag(commit: boolean): void {
+  private finishTransformDrag(
+    complete: boolean,
+    finalUpdate?: () => void,
+  ): void {
     const drag = this.transformDrag;
     if (!drag) return;
-    if (commit) {
-      this.transformFrame = {
-        frame: drag.previewFrame,
-        points: this.getTransformPoints().map(clonePosition),
-      };
+    try {
+      this.endDragEdit(complete, finalUpdate);
+      if (complete) {
+        this.transformFrame = {
+          frame: drag.previewFrame,
+          points: this.getTransformPoints().map(clonePosition),
+        };
+      }
+    } finally {
+      this.transformDrag = null;
+      this.isDragging = false;
+      this.getState().setToolState({ isDragging: false });
     }
-    this.transformDrag = null;
-    this.isDragging = false;
-    this.getState().setToolState({ isDragging: false });
-    this.endDragEdit(commit);
   }
 
   private getTransformOverlays(): WorldRenderOverlayItem[] {
@@ -1273,12 +1323,9 @@ export class SelectTool extends Tool<SelectToolState> {
     );
     if (!nextPictures) return false;
 
-    this.store.history.execute(
-      { label: "Arrange pictures", toolId: this.meta.id },
-      () => {
-        state.actions.setPictures(nextPictures);
-      },
-    );
+    this.edit("selection.arrange-pictures", () => {
+      state.actions.setPictures(nextPictures);
+    });
     this.closeContextMenu();
     return true;
   }
@@ -1390,7 +1437,10 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   };
 
-  private startDragging(worldPos: Position, label = "Move selection"): void {
+  private startDragging(
+    worldPos: Position,
+    kind: EditorHistoryActionKind = "selection.move",
+  ): void {
     const { toolState } = this.getState();
     if (!toolState) return;
 
@@ -1398,7 +1448,7 @@ export class SelectTool extends Tool<SelectToolState> {
     this.getState().setToolState({ isDragging: true });
     this.dragStartPos = worldPos;
     this.dragHasChanges = false;
-    this.beginDragEdit(label);
+    this.beginDragEdit(kind);
 
     // Store original positions of selected items for delta calculations
     this.dragOriginPositions = getSelectionDragOrigins(toolState);
@@ -1497,6 +1547,46 @@ export class SelectTool extends Tool<SelectToolState> {
       this.selectionMutations.movePictures(positions.pictures);
   }
 
+  private nudgeSelection(
+    direction: Position,
+    largeStep: boolean,
+    bypassGrid: boolean,
+  ): void {
+    const { state, toolState } = this.getState();
+    if (!toolState) return;
+    const step =
+      (state.grid.snap && !bypassGrid ? state.grid.size : KEYBOARD_NUDGE_STEP) *
+      (largeStep ? KEYBOARD_NUDGE_MULTIPLIER : 1);
+    const origins = getSelectionDragOrigins(toolState);
+    const rawDelta = {
+      x: direction.x * step,
+      y: direction.y * step,
+    } as Position;
+    const delta = origins[0]
+      ? this.snapTranslation(origins[0], rawDelta, bypassGrid)
+      : rawDelta;
+    const positions = origins.map(
+      (origin) =>
+        ({ x: origin.x + delta.x, y: origin.y + delta.y }) as Position,
+    );
+    const vertices = toolState.selectedVertices.length;
+    const objects = toolState.selectedObjects.length;
+
+    this.keyboardMoveEdit ??= this.beginEdit("selection.move");
+    this.keyboardMoveEdit.update(() => {
+      if (vertices)
+        this.selectionMutations.moveVertices(positions.slice(0, vertices));
+      if (objects)
+        this.selectionMutations.moveObjects(
+          positions.slice(vertices, vertices + objects),
+        );
+      if (toolState.selectedPictures.length)
+        this.selectionMutations.movePictures(
+          positions.slice(vertices + objects),
+        );
+    });
+  }
+
   private finalizeMarqueeSelection(): void {
     const lasso = this.areaSelectionVariant === "lasso";
     if (lasso && this.lassoPath.length < 3) return;
@@ -1567,17 +1657,31 @@ export class SelectTool extends Tool<SelectToolState> {
     if (selection) setToolState(selection);
   }
 
-  private beginDragEdit(label: string) {
+  private beginDragEdit(kind: EditorHistoryActionKind) {
     if (this.dragEdit?.active) return;
-    this.dragEdit = this.beginEdit(label);
+    this.dragEdit = this.beginEdit(kind);
   }
 
-  private endDragEdit(commit: boolean) {
+  private endDragEdit(complete: boolean, finalUpdate?: () => void) {
     const edit = this.dragEdit;
-    this.dragEdit = null;
-    this.dragHasChanges = false;
-    if (commit) edit?.commit();
-    else edit?.cancel();
+    try {
+      if (complete) edit?.complete(finalUpdate);
+      else edit?.cancel();
+    } finally {
+      this.dragEdit = null;
+      this.dragHasChanges = false;
+    }
+  }
+
+  private endKeyboardMove(complete: boolean) {
+    const edit = this.keyboardMoveEdit;
+    try {
+      if (complete) edit?.complete();
+      else edit?.cancel();
+    } finally {
+      this.keyboardMoveEdit = null;
+      this.keyboardMoveKeys.clear();
+    }
   }
 
   private copySelection(): boolean {
@@ -1608,46 +1712,40 @@ export class SelectTool extends Tool<SelectToolState> {
 
   private commitPaste(pasted: PastedSelection): boolean {
     const { state, setToolState } = this.getState();
-    this.store.history.execute(
-      { label: "Paste selection", toolId: this.meta.id },
-      () => {
-        if (pasted.polygons.length > 0) {
-          state.actions.setPolygons([...state.polygons, ...pasted.polygons]);
-        }
-        if (pasted.apples.length > 0) {
-          state.actions.setApples([...state.apples, ...pasted.apples]);
-        }
-        if (pasted.killers.length > 0) {
-          state.actions.setKillers([...state.killers, ...pasted.killers]);
-        }
-        if (pasted.flowers.length > 0) {
-          state.actions.setFlowers([...state.flowers, ...pasted.flowers]);
-        }
-        if (pasted.pictures.length > 0) {
-          state.actions.setPictures([...state.pictures, ...pasted.pictures]);
-        }
-        setToolState({
-          selectedVertices: pasted.selectedVertices,
-          selectedObjects: pasted.selectedObjects,
-          selectedPictures: pasted.selectedPictures,
-          hoveredObject: undefined,
-          hoveredPictureBounds: undefined,
-          contextMenuType: undefined,
-        });
-      },
-    );
+    this.edit("selection.paste", () => {
+      if (pasted.polygons.length > 0) {
+        state.actions.setPolygons([...state.polygons, ...pasted.polygons]);
+      }
+      if (pasted.apples.length > 0) {
+        state.actions.setApples([...state.apples, ...pasted.apples]);
+      }
+      if (pasted.killers.length > 0) {
+        state.actions.setKillers([...state.killers, ...pasted.killers]);
+      }
+      if (pasted.flowers.length > 0) {
+        state.actions.setFlowers([...state.flowers, ...pasted.flowers]);
+      }
+      if (pasted.pictures.length > 0) {
+        state.actions.setPictures([...state.pictures, ...pasted.pictures]);
+      }
+      setToolState({
+        selectedVertices: pasted.selectedVertices,
+        selectedObjects: pasted.selectedObjects,
+        selectedPictures: pasted.selectedPictures,
+        hoveredObject: undefined,
+        hoveredPictureBounds: undefined,
+        contextMenuType: undefined,
+      });
+    });
 
     return true;
   }
 
   private deleteSelection(): void {
-    this.store.history.execute(
-      { label: "Delete selection", toolId: this.meta.id },
-      () => {
-        this.selectionMutations.deleteSelection();
-        this.clear();
-      },
-    );
+    this.edit("selection.delete", () => {
+      this.selectionMutations.deleteSelection();
+      this.clear();
+    });
   }
 }
 

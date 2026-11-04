@@ -64,7 +64,7 @@ export function LevelPropertiesControl() {
     const previousGround = groundTexture;
     if (nextSky === previousSky) return;
 
-    history.execute({ label: "Change sky texture" }, () => {
+    history.execute({ kind: "texture.change-sky" }, () => {
       if (nextSky === previousGround) setGround(previousSky);
       setSky(nextSky);
     });
@@ -75,7 +75,7 @@ export function LevelPropertiesControl() {
     const previousGround = groundTexture;
     if (nextGround === previousGround) return;
 
-    history.execute({ label: "Change ground texture" }, () => {
+    history.execute({ kind: "texture.change-ground" }, () => {
       if (nextGround === previousSky) setSky(previousGround);
       setGround(nextGround);
     });

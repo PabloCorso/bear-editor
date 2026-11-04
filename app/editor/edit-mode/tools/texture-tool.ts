@@ -63,15 +63,17 @@ export class TextureTool extends Tool<TextureToolState> {
     const mask =
       toolState.mask || defaults.mask || standardSprites.textureMasks[0];
 
-    state.actions.addPicture({
-      ...defaults,
-      distance: toolState.distance,
-      clip: toolState.clip,
-      name: "",
-      texture: toolState.texture,
-      mask,
-      position,
-    });
+    this.edit("texture.place", () =>
+      state.actions.addPicture({
+        ...defaults,
+        distance: toolState.distance,
+        clip: toolState.clip,
+        name: "",
+        texture: toolState.texture,
+        mask,
+        position,
+      }),
+    );
 
     return true;
   }

@@ -21,6 +21,7 @@ import {
   uiStrokeWidths,
 } from "~/editor/constants";
 import type { EditorStore } from "~/editor/editor-store";
+import type { EditorHistoryActionKind } from "~/editor/history/editor-history-actions";
 import { defaultTools } from "./default-tools";
 import type { Polygon, Position } from "~/editor/elma-types";
 import {
@@ -1738,19 +1739,19 @@ export class VertexTool extends Tool<VertexToolState> {
 
   private runEdit(mutate: () => void) {
     const { toolState } = this.getState();
-    const labels: Record<string, string> = {
-      vertex: "Edit polygon",
-      grass: "Edit grass",
-      brush: "Draw polygon",
-      draw: "Draw polygon",
-      smooth: "Smooth polygon",
-      pipe: "Create pipe",
-      cutConnect: "Cut and connect polygons",
-      frame: "Create frame",
-      autoGrass: "Generate grass",
+    const actions: Record<string, EditorHistoryActionKind> = {
+      vertex: "polygon.edit",
+      grass: "polygon.edit-grass",
+      brush: "polygon.draw",
+      draw: "polygon.draw",
+      smooth: "polygon.smooth",
+      pipe: "polygon.create-pipe",
+      cutConnect: "polygon.cut-connect",
+      frame: "polygon.create-frame",
+      autoGrass: "polygon.generate-grass",
     };
     return this.edit(
-      labels[toolState?.variant ?? "vertex"] ?? "Edit polygons",
+      actions[toolState?.variant ?? "vertex"] ?? "polygons.edit",
       mutate,
     );
   }

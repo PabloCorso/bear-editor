@@ -118,7 +118,7 @@ export abstract class PolygonBooleanTool extends Tool<PolygonBooleanToolState> {
     const result = this.getResult(source, target);
     if (result.status !== "ready") return true;
     // One history entry for both removals and all result contours, including holes.
-    this.edit(`${this.meta.name} polygons`, () => {
+    this.edit(`polygon.${this.operation}`, () => {
       state.actions.setPolygons(
         state.polygons.flatMap((polygon) =>
           polygon === source

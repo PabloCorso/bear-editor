@@ -1,4 +1,3 @@
-import { HistoryControl } from "./history-control";
 import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
@@ -97,7 +96,6 @@ export function CanvasToolbar({
         <Toolbar className="w-fit gap-2">
           <UndoToolButton />
           <RedoToolButton />
-          <HistoryControl />
         </Toolbar>
         <Toolbar className="w-fit gap-2">
           <ToolButton

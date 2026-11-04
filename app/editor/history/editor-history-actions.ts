@@ -1,0 +1,69 @@
+export const editorHistoryActionLabels = {
+  "level.rename": "Rename level",
+  "texture.change-lgr": "Change LGR",
+  "texture.change-ground": "Change ground texture",
+  "texture.change-sky": "Change sky texture",
+  "test-start.add": "Add test start",
+  "test-start.move": "Move test start",
+  "test-start.rename": "Rename test start",
+  "test-start.activate": "Activate test start",
+  "test-start.delete": "Delete test start",
+  "test-start.promote": "Promote test start",
+  "reference-image.import": "Import reference image",
+  "reference-image.edit": "Edit reference image",
+  "reference-image.delete": "Delete reference image",
+  "start.move": "Move start",
+  "apple.add": "Add apple",
+  "apple.edit": "Edit apple",
+  "apple.delete": "Delete apple",
+  "killer.add": "Add killer",
+  "killer.delete": "Delete killer",
+  "flower.add": "Add flower",
+  "flower.delete": "Delete flower",
+  "picture.add": "Add picture",
+  "picture.place": "Place picture",
+  "texture.place": "Place texture",
+  "picture.delete": "Delete picture",
+  "apples.edit": "Edit apples",
+  "killers.edit": "Edit killers",
+  "flowers.edit": "Edit flowers",
+  "pictures.edit": "Edit pictures",
+  "polygons.edit": "Edit polygons",
+  "selection.move": "Move selection",
+  "selection.rotate": "Rotate selection",
+  "selection.resize": "Resize selection",
+  "selection.skew": "Skew selection",
+  "selection.mirror": "Mirror selection",
+  "selection.arrange-pictures": "Arrange pictures",
+  "selection.paste": "Paste selection",
+  "selection.delete": "Delete selection",
+  "polygon.edit": "Edit polygon",
+  "polygon.edit-grass": "Edit grass",
+  "polygon.draw": "Draw polygon",
+  "polygon.smooth": "Smooth polygon",
+  "polygon.create-pipe": "Create pipe",
+  "polygon.cut-connect": "Cut and connect polygons",
+  "polygon.create-frame": "Create frame",
+  "polygon.generate-grass": "Generate grass",
+  "polygon.union": "Union polygons",
+  "polygon.subtract": "Subtract polygons",
+  "polygon.intersect": "Intersect polygons",
+  "polygon.exclude": "Exclude polygons",
+  "text.place": "Place text",
+  "library-item.place": "Place library item",
+  "topology.repair": "Repair topology",
+} as const;
+
+export type EditorHistoryActionKind = keyof typeof editorHistoryActionLabels;
+
+export type EditorHistoryAction = {
+  kind: EditorHistoryActionKind;
+  toolId?: string;
+};
+
+export function describeEditorHistoryAction({
+  kind,
+  toolId,
+}: EditorHistoryAction) {
+  return { kind, label: editorHistoryActionLabels[kind], toolId };
+}

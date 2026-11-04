@@ -23,6 +23,7 @@ import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import { FileSession } from "~/editor/helpers/file-session";
 import { LevelFolder } from "~/editor/helpers/level-folder";
 import fastDeepEqual from "fast-deep-equal";
+import type { EditorHistoryActionKind } from "./history/editor-history-actions";
 import { trackEvent, trackFirstEdit } from "~/analytics";
 import { defaultLevelVisibility } from "./level-visibility";
 import {
@@ -690,49 +691,52 @@ export function createEditorStore({
       },
     };
   }) as EditorStore;
-  editorStore.history = createEditorHistory(editorStore, historyLimit);
+  const { history, record } = createEditorHistory(editorStore, historyLimit);
+  editorStore.history = history;
   Object.assign(internalStore, { history: editorStore.history });
 
   // Domain actions are undoable by default. Compound edits join the active
   // transaction; UI/session plumbing never enters document history.
-  const labels = {
-    setLevelName: "Rename level",
-    setLgr: "Change LGR",
-    setGround: "Change ground texture",
-    setSky: "Change sky texture",
-    addTestStart: "Add test start",
-    moveTestStart: "Move test start",
-    renameTestStart: "Rename test start",
-    activateTestStart: "Activate test start",
-    deleteTestStart: "Delete test start",
-    promoteTestStart: "Promote test start",
-    addReferenceImage: "Import reference image",
-    updateReferenceImage: "Edit reference image",
-    removeReferenceImage: "Delete reference image",
-    setStart: "Move start",
-    addApple: "Add apple",
-    updateApple: "Edit apple",
-    removeApple: "Delete apple",
-    addKiller: "Add killer",
-    removeKiller: "Delete killer",
-    addFlower: "Add flower",
-    removeFlower: "Delete flower",
-    addPicture: "Add picture",
-    removePicture: "Delete picture",
-    setApples: "Edit apples",
-    setKillers: "Edit killers",
-    setFlowers: "Edit flowers",
-    setPictures: "Edit pictures",
-    setPolygons: "Edit polygons",
-  } satisfies Partial<Record<keyof EditorState["actions"], string>>;
+  const historyActions = {
+    setLevelName: "level.rename",
+    setLgr: "texture.change-lgr",
+    setGround: "texture.change-ground",
+    setSky: "texture.change-sky",
+    addTestStart: "test-start.add",
+    moveTestStart: "test-start.move",
+    renameTestStart: "test-start.rename",
+    activateTestStart: "test-start.activate",
+    deleteTestStart: "test-start.delete",
+    promoteTestStart: "test-start.promote",
+    addReferenceImage: "reference-image.import",
+    updateReferenceImage: "reference-image.edit",
+    removeReferenceImage: "reference-image.delete",
+    setStart: "start.move",
+    addApple: "apple.add",
+    updateApple: "apple.edit",
+    removeApple: "apple.delete",
+    addKiller: "killer.add",
+    removeKiller: "killer.delete",
+    addFlower: "flower.add",
+    removeFlower: "flower.delete",
+    addPicture: "picture.add",
+    removePicture: "picture.delete",
+    setApples: "apples.edit",
+    setKillers: "killers.edit",
+    setFlowers: "flowers.edit",
+    setPictures: "pictures.edit",
+    setPolygons: "polygons.edit",
+  } satisfies Partial<
+    Record<keyof EditorState["actions"], EditorHistoryActionKind>
+  >;
   const actions = { ...editorStore.getState().actions };
-  for (const key of Object.keys(labels) as (keyof typeof labels)[]) {
+  for (const key of Object.keys(
+    historyActions,
+  ) as (keyof typeof historyActions)[]) {
     const mutate = actions[key] as (...args: unknown[]) => unknown;
     Object.assign(actions, {
       [key]: (...args: unknown[]) =>
-        editorStore.history.execute({ label: labels[key] }, () =>
-          mutate(...args),
-        ),
+        record({ kind: historyActions[key] }, () => mutate(...args)),
     });
   }
   editorStore.setState({ actions });

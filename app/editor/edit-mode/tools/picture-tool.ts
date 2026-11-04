@@ -54,15 +54,17 @@ export class PictureTool extends Tool<PictureToolState> {
     const defaults =
       standardSprites.pictures.find((pic) => pic.name === toolState.name) ||
       defaultPictureState;
-    state.actions.addPicture({
-      ...defaults,
-      distance: toolState.distance,
-      clip: toolState.clip,
-      name: toolState.name,
-      texture: "",
-      mask: "",
-      position,
-    });
+    this.edit("picture.place", () =>
+      state.actions.addPicture({
+        ...defaults,
+        distance: toolState.distance,
+        clip: toolState.clip,
+        name: toolState.name,
+        texture: "",
+        mask: "",
+        position,
+      }),
+    );
     return true;
   }
 

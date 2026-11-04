@@ -12,7 +12,11 @@ export class FlowerTool extends Tool {
 
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
     const { state } = this.getState();
-    state.actions.addFlower(this.snapPosition(context.worldPos, _event.altKey));
+    this.edit("flower.add", () =>
+      state.actions.addFlower(
+        this.snapPosition(context.worldPos, _event.altKey),
+      ),
+    );
     return true;
   }
 

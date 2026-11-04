@@ -20,7 +20,7 @@ export function applyTopologyRepair(
   if (!issue) return false;
   const polygons = getTopologyRepairPolygons(state.polygons, issue);
   if (!polygons) return false;
-  store.history.execute({ label: "Repair topology" }, () => {
+  store.history.execute({ kind: "topology.repair" }, () => {
     state.actions.setPolygons(polygons);
     state.actions.setToolState<SelectToolState>("select", {
       selectedVertices: [],

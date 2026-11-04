@@ -190,28 +190,25 @@ export class TextTool extends Tool<TextToolState> {
     if (!toolState?.draft || !this.polygons.length) return;
     const placed = this.at(toolState.draft.position);
     setToolState({ draft: undefined });
-    this.store.history.execute(
-      { label: "Place text", toolId: this.meta.id },
-      () => {
-        state.actions.setPolygons([...state.polygons, ...placed]);
-        state.actions.activateTool("select");
-        state.actions.setToolState<SelectToolState>("select", {
-          selectedVertices: placed.flatMap((polygon) =>
-            polygon.vertices.map((vertex) => ({ polygon, vertex })),
-          ),
-          selectedObjects: [],
-          selectedPictures: [],
-          isDragging: false,
-          isMarqueeSelecting: false,
-          transformMode: false,
-          skewMode: false,
-          hoveredObject: undefined,
-          hoveredPictureBounds: undefined,
-          contextMenuType: undefined,
-          contextMenuPosition: undefined,
-        });
-      },
-    );
+    this.edit("text.place", () => {
+      state.actions.setPolygons([...state.polygons, ...placed]);
+      state.actions.activateTool("select");
+      state.actions.setToolState<SelectToolState>("select", {
+        selectedVertices: placed.flatMap((polygon) =>
+          polygon.vertices.map((vertex) => ({ polygon, vertex })),
+        ),
+        selectedObjects: [],
+        selectedPictures: [],
+        isDragging: false,
+        isMarqueeSelecting: false,
+        transformMode: false,
+        skewMode: false,
+        hoveredObject: undefined,
+        hoveredPictureBounds: undefined,
+        contextMenuType: undefined,
+        contextMenuPosition: undefined,
+      });
+    });
   }
 
   private at(position: Position, polygons = this.polygons): Polygon[] {

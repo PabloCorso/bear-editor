@@ -5,14 +5,15 @@ Status: accepted
 ## Decision
 
 Keep Zustand for editor state. Use the editor-owned transaction service in
-`app/editor/history/` for undo, redo, and timeline navigation. Remove Zundo,
+`app/editor/history/` for undo and redo. Remove Zundo,
 time-based recording, private middleware calls, and parallel selection stacks.
 
-A history entry is one user action with an ID, timestamp, label, optional tool ID,
-and immutable before/after snapshots. A cursor points between entries. History
-retains at most 200 entries by default (`historyLimit` is configurable when creating
-a store). Editing after undo discards the future only when a changed action commits.
-Unchanged actions, selection changes, and cancellation preserve redo.
+A history entry is one user action with a stable semantic kind, ID, timestamp,
+derived display label, optional tool ID, and immutable before/after snapshots. A
+cursor points between entries. History retains at most 200 entries by default
+(`historyLimit` is configurable when creating a store). Editing after undo discards
+the future only when a changed action commits. Unchanged actions, selection changes,
+and cancellation preserve redo.
 
 Each snapshot contains both editable content and selection context. Selection uses
 exact references into that snapshot's immutable content, not coordinate matching.
@@ -20,6 +21,11 @@ This distinguishes overlapping vertices and pictures without adding editor IDs t
 Elma data or building a second identity system. Replacing a polygon while keeping
 its vertices can rebind selection through vertex identity. Tools replacing positions
 must update selection in the same transaction.
+
+`EditorHistoryContent` is the authoritative undoable state seam. Adding an editable
+field there makes capture and restore fail type-checking until history handles it;
+transient editor fields remain outside it deliberately. All stored content and
+selection references are immutable.
 
 Undo applies the undone entry's **before** snapshot, including the selection at the
 start of that action. Redo applies its **after** snapshot. Jumping to an entry applies
@@ -43,15 +49,18 @@ bitmap. GPU texture lifetime remains owned by the renderer.
 
 ## Adding an editing action or tool
 
-Domain mutation actions in `editor-store.ts` have explicit history labels. These
+Domain mutation actions in `editor-store.ts` have explicit fallback action kinds. These
 produce one entry when called alone and join an active transaction when composing a
-larger action. Add each new content action to that label map. Plain `setState` is for
-UI plumbing, loading, restoration, or mutations explicitly inside a transaction.
+larger action. Add each new content action to the typed action map. Plain `setState`
+is for UI plumbing, loading, restoration, or mutations explicitly inside a
+transaction.
 
-For a completed operation, use `Tool.edit` (or `store.history.execute` outside tools):
+For a completed operation, use `Tool.edit` (or `store.history.execute` outside tools).
+Action kinds and their labels are defined centrally in
+`editor-history-actions.ts`:
 
 ```ts
-this.edit("Create pipe", () => {
+this.edit("polygon.create-pipe", () => {
   // Include every content mutation AND the resulting selection here.
   actions.setPolygons(polygons);
   actions.setApples(apples);
@@ -63,13 +72,13 @@ For live manipulation, keep the transaction handle across events:
 
 ```ts
 // After resolving selection, before modifying geometry.
-this.editing = this.beginEdit("Move selection");
+this.editing = this.beginEdit("selection.move");
 
 // Pointer movement updates the live canvas inside the open transaction.
 this.editing.update(() => moveSelection(position));
 
-// Pointer release applies the final pointer position, then commits once.
-this.editing.commit();
+// Completion atomically applies the release position, then captures once.
+this.editing.complete(() => moveSelection(releasePosition));
 
 // Cancellation restores the complete before snapshot and creates no entry.
 this.editing.cancel();
@@ -81,13 +90,22 @@ also deselects. Escape, pointer cancellation, lost capture, window blur, documen
 replacement, and engine teardown must not leave an open gesture. `isInteracting`
 lets the shared Undo control recognize uncommitted tool drafts.
 
+Lost pointer capture is terminal according to button state: with no buttons pressed
+it completes the gesture from that event, covering release/capture ordering races;
+with a button still pressed it is a genuine interruption and cancels the gesture.
+
 Draft-only tools keep previews outside editable content, then call `edit` once when
 the operation is accepted. A multi-click polygon is not one transaction per click.
 Do not wrap every pointer event automatically: the tool defines the action boundary.
 
-Only one live transaction can own the document. Nested `execute` calls compose into
-that transaction. A failed update rolls it back. Completed/cancelled handles cannot
-commit later, and stale updates throw. Undo/redo during a live transaction cancels
+Only one live transaction can own the document. Explicit user actions cannot nest
+inside another action's mutation: attempting that throws and rolls the outer action
+back. A separate UI action supersedes and cancels an unfinished gesture before it
+starts. History-aware domain mutation methods use the internal `record` path, which
+joins the active action or creates their specific fallback action when called alone.
+This prevents an unrelated user action from being silently relabelled as part of a
+gesture. A failed update rolls the action back. Completed/cancelled handles cannot
+complete later, and stale updates throw. Undo/redo during a live transaction cancels
 it first without consuming a committed entry. History navigation discards tool drafts
 and resets transient selection frames before restoring state.
 
@@ -96,11 +114,11 @@ verify the originating document is still active, then commit the completed resul
 Do not leave transactions open while awaiting clipboard reads, imports, fonts, or
 future AI generation.
 
-## Timeline and limits
+## Undo, redo, and limits
 
 The reactive history store exposes entries, cursor, active action, and undo/redo
-availability. `undo`, `redo`, and `goTo(entryId)` share snapshot restoration. The
-History control next to Undo/Redo provides direct navigation in both directions.
+availability. Undo and redo share the same snapshot restoration path. No direct
+timeline navigation is exposed in the user interface.
 
 This is bounded, in-memory, single-user history. Unchanged immutable data is shared;
 we do not deep-clone the entire level per frame or replay tool commands. Persistence,

@@ -1,10 +1,15 @@
 import { rebindSelectedVertices } from "../edit-mode/tools/selection-identity";
 import { getSessionArtifacts, findSessionArtifact } from "../session-artifacts";
 import fastDeepEqual from "fast-deep-equal";
-import type { EditorState } from "../editor-state";
+import type { EditorHistoryContent, EditorState } from "../editor-state";
 import type { StoreApi } from "zustand";
 import type { SelectToolState } from "../edit-mode/tools/select-tool";
 import { createTransactionHistory } from "./transaction-history";
+import {
+  describeEditorHistoryAction,
+  type EditorHistoryAction,
+  type EditorHistoryActionKind,
+} from "./editor-history-actions";
 
 /** Selection references belong to the exact immutable content in this snapshot.
  * No coordinate matching or parallel history stack is needed, even for overlaps.
@@ -13,24 +18,8 @@ type HistorySelection = Pick<
   SelectToolState,
   "selectedVertices" | "selectedObjects" | "selectedPictures"
 >;
-export type HistoryContent = Pick<
-  EditorState,
-  | "levelName"
-  | "lgr"
-  | "ground"
-  | "sky"
-  | "polygons"
-  | "apples"
-  | "killers"
-  | "flowers"
-  | "start"
-  | "pictures"
-  | "top10"
-  | "testStarts"
-  | "referenceImages"
->;
 export type EditorHistorySnapshot = {
-  content: HistoryContent;
+  content: EditorHistoryContent;
   selection: HistorySelection;
 };
 
@@ -39,12 +28,15 @@ export function createEditorHistory(
   limit?: number,
 ) {
   const bitmaps = new Set<ImageBitmap>();
-  return createTransactionHistory<EditorHistorySnapshot>({
+  const history = createTransactionHistory<
+    EditorHistorySnapshot,
+    EditorHistoryActionKind
+  >({
     limit,
     capture: () => {
       const state = store.getState();
       const selection = state.toolState.select as SelectToolState | undefined;
-      const content: HistoryContent = {
+      const content: EditorHistoryContent = {
         levelName: state.levelName,
         lgr: state.lgr,
         ground: state.ground,
@@ -137,5 +129,18 @@ export function createEditorHistory(
       }
     },
   });
+  const { record, ...publicHistory } = history;
+  return {
+    history: {
+      ...publicHistory,
+      begin: (action: EditorHistoryAction) =>
+        history.begin(describeEditorHistoryAction(action)),
+      execute: <R>(action: EditorHistoryAction, mutate: () => R) =>
+        history.execute(describeEditorHistoryAction(action), mutate),
+    },
+    /** Store wiring only: tools must define actions through begin/execute. */
+    record: <R>(action: EditorHistoryAction, mutate: () => R) =>
+      record(describeEditorHistoryAction(action), mutate),
+  };
 }
-export type EditorHistory = ReturnType<typeof createEditorHistory>;
+export type EditorHistory = ReturnType<typeof createEditorHistory>["history"];

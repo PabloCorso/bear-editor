@@ -298,6 +298,14 @@ function getShortcutGroups(
               label: "Move selected vertices along an edge",
             },
             {
+              shortcut: ["←", "↑", "→", "↓"],
+              label: "Move selection by 0.1 units or one grid step",
+            },
+            {
+              shortcut: "Shift + ← ↑ → ↓",
+              label: "Move selection by 1 unit or 10 grid steps",
+            },
+            {
               shortcut: "R",
               label: "Toggle resize & rotate",
             },
@@ -719,7 +727,7 @@ function getShortcutGroups(
       items: [
         {
           shortcut: "Alt",
-          label: "Hold to bypass grid snapping while placing or dragging",
+          label: "Hold to bypass grid snapping while placing or moving",
         },
         {
           shortcut: "Enter",
@@ -776,7 +784,7 @@ function getShortcutGroups(
         },
         {
           shortcut: ["←", "↑", "→", "↓"],
-          label: "Pan canvas",
+          label: "Pan canvas when nothing is selected",
         },
         {
           shortcut: GO_TO_PLAY_START_SHORTCUT,
