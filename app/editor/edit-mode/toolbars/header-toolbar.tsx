@@ -270,10 +270,6 @@ export function HeaderToolbar({
           <LevelOptionsMenu
             isLoading={isLoading}
             onOpenProperties={() => setPropertiesOpen(true)}
-            onOpenToolSettings={() => {
-              setSettingsTab("tools");
-              setSettingsOpen(true);
-            }}
           />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
@@ -297,10 +293,6 @@ export function HeaderToolbar({
             <LevelOptionsMenu
               isLoading={isLoading}
               onOpenProperties={() => setPropertiesOpen(true)}
-              onOpenToolSettings={() => {
-                setSettingsTab("tools");
-                setSettingsOpen(true);
-              }}
             />
           </Toolbar>
 
@@ -357,11 +349,9 @@ export function HeaderToolbar({
 function LevelOptionsMenu({
   isLoading,
   onOpenProperties,
-  onOpenToolSettings,
 }: {
   isLoading?: boolean;
   onOpenProperties: () => void;
-  onOpenToolSettings: () => void;
 }) {
   const { getTool } = useEditorActions();
   const store = useEditorStore();
@@ -428,12 +418,6 @@ function LevelOptionsMenu({
             onClick={onOpenProperties}
           >
             Level properties
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            iconBefore={<GearIcon />}
-            onClick={onOpenToolSettings}
-          >
-            Tool settings
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
