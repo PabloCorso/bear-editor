@@ -13,9 +13,9 @@ This side project does not use an issue tracker for planning. Use
 request as specification sources. Never create or publish issues or tickets
 unless explicitly requested by a human.
 
-Domain language lives in a root `GLOSSARY.md`, and architectural decisions live
-in `docs/adr/`. Create either lazily, only when a skill has a concrete term or
-decision to record.
+Domain language lives in the root `GLOSSARY.md`. Update it only when a concrete
+term needs to be shared across the project. Keep implementation decisions in
+code rather than creating architectural decision records.
 
 ## Verification
 

@@ -20,8 +20,8 @@ Planned features and feedback for Bear Editor.
   - Explore previewed simplification, polygon-operation repairs and object relocation where the intended result is clear.
 
 - Faster loads
-  - Prioritize the initial HTML response delay. [Investigation](docs/elmajs-bundling.md#priority-relative-to-server-response-time) measured 8.7 s to first byte on the initial request versus 1.0 s on the next; confirm whether SSR function cold starts are responsible, then evaluate a static/prerendered editor shell or HTML caching. The cause and any connection to Netlify's free tier remain unconfirmed.
-  - Smaller follow-up: use the existing `elmajs` ESM build to enable tree shaking. [Bundle measurements](docs/elmajs-bundling.md#measured-production-output) showed a 24.6 kB minified / 7.2 kB gzip reduction in the main editor chunk. Implementation and browser validation remain; this does not address the initial HTML response delay.
+  - Investigate the initial HTML response delay, then evaluate a static or prerendered editor shell or HTML caching.
+  - Use the existing `elmajs` ESM build to enable tree shaking, with browser and SSR validation.
 
 ## Known issues
 

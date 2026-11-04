@@ -45,7 +45,6 @@ export abstract class Tool<T extends ToolState = ToolState> {
     this.clear?.();
   }
 
-  // Tool policies and preview/commit conventions: docs/tool-snapping.md.
   protected snapPosition(position: Position, bypass?: boolean): Position {
     const state = this.store.getState();
     return (bypass ?? state.gridSnapBypassed)

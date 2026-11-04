@@ -1,5 +1,5 @@
 // EOL public source f12a1f6 (2026). Keep versioned compatibility rules here,
-// separate from editor geometry tolerances. See docs/topology-checks.md.
+// separate from editor geometry tolerances.
 export const EOL_LEVEL_LIMITS = {
   polygons: 1200,
   vertices: 20000, // Ground AND grass.

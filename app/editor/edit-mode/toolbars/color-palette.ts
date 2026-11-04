@@ -3,7 +3,7 @@ type Color = {
   rgb: [number, number, number];
 };
 
-// Curated from the decoded Default.lgr inventory in docs/color-palette-analysis.html.
+// Curated from the decoded Default.lgr inventory.
 // Other packs use the nearest available decoded color for each target.
 const BASE_COLORS = [
   "FCFCFC",

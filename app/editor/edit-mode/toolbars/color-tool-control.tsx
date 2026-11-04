@@ -135,7 +135,7 @@ function ColorListControl({
               });
           }}
         >
-          <PaletteIcon weight="duotone" />
+          <PaletteIcon />
         </ToolControlButton>
       }
     >
