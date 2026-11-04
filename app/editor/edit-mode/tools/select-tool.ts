@@ -630,6 +630,12 @@ export class SelectTool extends Tool<SelectToolState> {
 
   onPointerUp(_event: PointerEvent, _context: EventContext): boolean {
     if (this.transformDrag) {
+      if (_event.type !== "pointercancel")
+        this.handleTransformDrag(
+          _context.worldPos,
+          _event.shiftKey,
+          _event.altKey,
+        );
       this.finishTransformDrag(_event.type !== "pointercancel");
       return true;
     }

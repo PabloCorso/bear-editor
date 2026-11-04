@@ -1253,13 +1253,13 @@ describe("History transaction edge cases", () => {
     tool.onPointerDown(event, at(80, 80));
     tool.onPointerMove(event, at(100, 100));
     expect(store.history.state.getState().entries).toHaveLength(0);
-    tool.onPointerUp(event, at(100, 100));
+    tool.onPointerUp(event, at(110, 110));
     const resized = store.getState().polygons[0];
-    expect(resized).not.toEqual(polygon);
+    expect(resized.vertices[2]).toEqual(position(110, 110));
     expect(store.history.state.getState().entries[0].label).toBe(
       "Resize selection",
     );
-    tool.onPointerDown(event, at(100, 100));
+    tool.onPointerDown(event, at(110, 110));
     tool.onPointerMove(event, at(120, 120));
     tool.onPointerUp(
       { ...event, type: "pointercancel" } as PointerEvent,
