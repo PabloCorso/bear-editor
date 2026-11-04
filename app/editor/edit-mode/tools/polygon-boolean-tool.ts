@@ -40,6 +40,9 @@ export abstract class PolygonBooleanTool extends Tool<PolygonBooleanToolState> {
   onDeactivate() {
     this.clear();
   }
+  isInteracting(): boolean {
+    return !!this.getState().toolState?.source;
+  }
   clear() {
     this.cachedResult = undefined;
     this.getState().setToolState({ source: null, originalPolygons: null });
@@ -115,16 +118,18 @@ export abstract class PolygonBooleanTool extends Tool<PolygonBooleanToolState> {
     const result = this.getResult(source, target);
     if (result.status !== "ready") return true;
     // One history entry for both removals and all result contours, including holes.
-    state.actions.setPolygons(
-      state.polygons.flatMap((polygon) =>
-        polygon === source
-          ? result.polygons
-          : polygon === target
-            ? []
-            : [polygon],
-      ),
-    );
-    this.clear();
+    this.edit(`polygon.${this.operation}`, () => {
+      state.actions.setPolygons(
+        state.polygons.flatMap((polygon) =>
+          polygon === source
+            ? result.polygons
+            : polygon === target
+              ? []
+              : [polygon],
+        ),
+      );
+      this.clear();
+    });
     return true;
   }
 

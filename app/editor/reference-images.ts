@@ -160,17 +160,19 @@ export async function importReferenceImage(
     height: asset.height * scale,
     rotation: 0,
   };
-  store.setState({
-    referenceImages: [...state.referenceImages, image],
-  });
-  const nextState = store.getState();
-  nextState.actions.activateTool("select");
-  nextState.actions.setToolState("select", {
-    selectedVertices: [],
-    selectedObjects: [image.position],
-    selectedPictures: [],
-    transformMode: false,
-    contextMenuType: undefined,
-    contextMenuPosition: undefined,
+  state.actions.getActiveTool()?.cancelInteraction();
+  store.history.cancelActive();
+  state.actions.activateTool("select");
+  store.history.execute({ kind: "reference-image.import" }, () => {
+    state.actions.addReferenceImage(image);
+    const nextState = store.getState();
+    nextState.actions.setToolState("select", {
+      selectedVertices: [],
+      selectedObjects: [image.position],
+      selectedPictures: [],
+      transformMode: false,
+      contextMenuType: undefined,
+      contextMenuPosition: undefined,
+    });
   });
 }

@@ -12,7 +12,11 @@ export class KillerTool extends Tool {
 
   onPointerDown(_event: PointerEvent, context: EventContext): boolean {
     const { state } = this.getState();
-    state.actions.addKiller(this.snapPosition(context.worldPos, _event.altKey));
+    this.edit("killer.add", () =>
+      state.actions.addKiller(
+        this.snapPosition(context.worldPos, _event.altKey),
+      ),
+    );
     return true;
   }
 

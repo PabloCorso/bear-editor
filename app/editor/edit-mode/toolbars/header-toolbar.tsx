@@ -786,13 +786,33 @@ function LevelTitleInput({
 }: React.ComponentProps<typeof Input> & { isLoading?: boolean }) {
   const { setLevelName } = useEditorActions();
   const levelName = useLevelName();
+  const [draft, setDraft] = useState({ source: levelName, value: levelName });
+  const cancelled = useRef(false);
+  if (draft.source !== levelName)
+    setDraft({ source: levelName, value: levelName });
   return (
     <Input
       type="text"
       name="level-name"
       maxLength={LEVEL_TITLE_MAX_LENGTH}
-      value={isLoading ? "" : levelName}
-      onChange={(e) => setLevelName(e.target.value)}
+      value={isLoading ? "" : draft.value}
+      onFocus={() => {
+        cancelled.current = false;
+      }}
+      onBlur={(event) => {
+        if (!cancelled.current) setLevelName(event.currentTarget.value);
+        else setDraft({ source: levelName, value: levelName });
+        cancelled.current = false;
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          cancelled.current = true;
+          event.currentTarget.blur();
+        } else if (event.key === "Enter") event.currentTarget.blur();
+      }}
+      onChange={(event) =>
+        setDraft({ source: levelName, value: event.target.value })
+      }
       className={cn(
         "min-w-[12rem] flex-1 px-3",
         { "animate-pulse": isLoading },

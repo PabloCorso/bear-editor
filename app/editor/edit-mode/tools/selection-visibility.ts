@@ -1,6 +1,6 @@
+import { rebindSelectedVertices } from "./selection-identity";
 import {
   findSessionArtifact,
-  getSessionArtifactKey,
   getSessionArtifacts,
 } from "~/editor/session-artifacts";
 import type { Picture, Position } from "~/editor/elma-types";
@@ -95,12 +95,9 @@ export class SelectionVisibility {
     });
     const selectedPictures = source.selectedPictures.filter((position) => {
       if (!kinds.has("pictures") && !kinds.has("textures")) return false;
-      const picture =
-        this.state.pictures.find((entry) => entry.position === position) ??
-        this.state.pictures.find(
-          (entry) =>
-            entry.position.x === position.x && entry.position.y === position.y,
-        );
+      const picture = this.state.pictures.find(
+        (entry) => entry.position === position,
+      );
       return Boolean(
         picture &&
         ((kinds.has("pictures") && picture.name) ||
@@ -142,41 +139,8 @@ export class SelectionVisibility {
   }
 
   reconcile(selection: SelectionSnapshot): SelectionSnapshot | null {
-    const verticesByPosition = new Map<
-      string,
-      SelectToolState["selectedVertices"]
-    >();
-    for (const polygon of this.state.polygons) {
-      for (const vertex of polygon.vertices) {
-        const key = `${vertex.x}:${vertex.y}`;
-        const matches = verticesByPosition.get(key) ?? [];
-        matches.push({ polygon, vertex });
-        verticesByPosition.set(key, matches);
-      }
-    }
-    const consumed = new Set<Position>();
     const selectedVertices = this.polygonsSelectable()
-      ? selection.selectedVertices
-          .map((selected) => {
-            if (
-              this.state.polygons.includes(selected.polygon) &&
-              selected.polygon.vertices.includes(selected.vertex) &&
-              !consumed.has(selected.vertex)
-            ) {
-              consumed.add(selected.vertex);
-              return selected;
-            }
-            const matches =
-              verticesByPosition.get(
-                `${selected.vertex.x}:${selected.vertex.y}`,
-              ) ?? [];
-            const match = matches.find(({ vertex }) => !consumed.has(vertex));
-            if (match) consumed.add(match.vertex);
-            return match ?? null;
-          })
-          .filter((selected): selected is NonNullable<typeof selected> =>
-            Boolean(selected),
-          )
+      ? rebindSelectedVertices(this.state.polygons, selection.selectedVertices)
       : [];
     const selectedObjects = selection.selectedObjects
       .map((object) => this.reconcileObject(object))
@@ -184,8 +148,7 @@ export class SelectionVisibility {
     const selectedPictures = selection.selectedPictures
       .map((position) => {
         const picture = this.state.pictures.find(
-          (entry) =>
-            entry.position.x === position.x && entry.position.y === position.y,
+          (entry) => entry.position === position,
         );
         return picture && this.pictureSelectable(picture)
           ? picture.position
@@ -208,15 +171,7 @@ export class SelectionVisibility {
     ) {
       return object;
     }
-    if (getSessionArtifactKey(object)) return null;
-    const matches = (candidate: Position) =>
-      candidate.x === object.x && candidate.y === object.y;
-    return (
-      this.state.apples.find((apple) => matches(apple.position))?.position ??
-      this.state.killers.find(matches) ??
-      this.state.flowers.find(matches) ??
-      (matches(this.state.start) ? this.state.start : null)
-    );
+    return null;
   }
 }
 

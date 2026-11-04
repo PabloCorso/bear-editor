@@ -102,11 +102,24 @@ type EditorEngineOptions = {
   rendererBackend?: WorldSceneRendererBackend;
 };
 
-const KEYBOARD_PAN_STEP = 200;
+const KEYBOARD_PAN_STEP = 50;
 const KEYBOARD_ZOOM_STEP_DIVISOR = 100;
 const WHEEL_PAN_MULTIPLIER = 0.5;
 const TOUCH_CONTEXT_MENU_DELAY_MS = 500;
 const TOUCH_CONTEXT_MENU_MOVE_TOLERANCE_PX = 8;
+
+export function settleLostPointerCapture(
+  event: Pick<PointerEvent, "buttons">,
+  interaction: {
+    active: () => boolean;
+    complete: () => void;
+    cancel: () => void;
+  },
+) {
+  if (!interaction.active()) return;
+  if (event.buttons === 0) interaction.complete();
+  if (interaction.active()) interaction.cancel();
+}
 
 function matchesToolShortcut(event: KeyboardEvent, shortcut: string) {
   const normalized = shortcut.toUpperCase();
@@ -202,6 +215,11 @@ export class EditorEngine {
     this.pressedKeys.clear();
     this.updateModifierPressed(false);
     this.cancelTouchContextMenuTimer();
+    const tool = this.store.getState().actions.getActiveTool();
+    tool?.cancelInteraction();
+    if (this.store.history.state.getState().active?.toolId === tool?.meta.id)
+      this.store.history.cancelActive();
+    this.isPanning = false;
   };
 
   constructor(
@@ -298,6 +316,10 @@ export class EditorEngine {
     this.canvas.addEventListener("pointerup", this.handlePointerUp, {
       passive: false,
     });
+    this.canvas.addEventListener(
+      "lostpointercapture",
+      this.handleLostPointerCapture,
+    );
     this.canvas.addEventListener("pointercancel", this.handlePointerCancel, {
       passive: false,
     });
@@ -673,6 +695,17 @@ export class EditorEngine {
       this.dispatchToolPointerEvent("up", event);
       this.tryReleasePointerCapture(event.pointerId);
     }
+  };
+
+  private handleLostPointerCapture = (event: PointerEvent) => {
+    settleLostPointerCapture(event, {
+      active: () => Boolean(this.store.history.state.getState().active),
+      complete: () => this.dispatchToolPointerEvent("up", event),
+      cancel: () => {
+        this.store.getState().actions.getActiveTool()?.cancelInteraction();
+        this.store.history.cancelActive();
+      },
+    });
   };
 
   private handlePointerCancel = (event: PointerEvent) => {
@@ -1105,6 +1138,7 @@ export class EditorEngine {
         panSpeed: this.panSpeed,
       });
       this.syncMousePositionFromScreenPoint(screenPoint);
+      event.preventDefault();
       return;
     }
 
@@ -1201,13 +1235,11 @@ export class EditorEngine {
   }
 
   public undo() {
-    this.discardPendingToolDraftBeforeHistory();
-    this.store.temporal.getState().undo();
+    this.store.history.undo();
   }
 
   public redo() {
-    this.discardPendingToolDraftBeforeHistory();
-    this.store.temporal.getState().redo();
+    this.store.history.redo();
   }
 
   private selectAllVisible(): boolean {
@@ -1241,30 +1273,6 @@ export class EditorEngine {
       setCamera: state.actions.setCamera,
       setZoom: state.actions.setZoom,
     });
-  }
-
-  private discardPendingToolDraftBeforeHistory() {
-    const state = this.store.getState();
-    if (state.activeToolId === "shape") {
-      state.actions.getActiveTool()?.clear?.();
-      return;
-    }
-    if (state.activeToolId !== "vertex") return;
-
-    const toolState = state.actions.getToolState<VertexToolState>("vertex");
-    if (toolState?.variant === "cutConnect") {
-      state.actions.getActiveTool()?.clear?.();
-      return;
-    }
-    if (
-      !toolState?.editingPolygon ||
-      toolState.drawingPolygon.vertices.length === 0
-    ) {
-      return;
-    }
-
-    const activeTool = state.actions.getActiveTool();
-    activeTool?.clear?.();
   }
 
   private startRenderLoop() {
@@ -2054,6 +2062,8 @@ export class EditorEngine {
   }
 
   public destroy() {
+    this.store.getState().actions.getActiveTool()?.cancelInteraction();
+    this.store.history.cancelActive();
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
     }
@@ -2065,6 +2075,10 @@ export class EditorEngine {
     this.canvas.removeEventListener("pointermove", this.handlePointerMove);
     this.canvas.removeEventListener("pointerup", this.handlePointerUp);
     this.canvas.removeEventListener("pointercancel", this.handlePointerCancel);
+    this.canvas.removeEventListener(
+      "lostpointercapture",
+      this.handleLostPointerCapture,
+    );
     this.canvas.removeEventListener("pointerleave", this.handlePointerLeave);
     this.canvas.removeEventListener("contextmenu", this.handleRightClick);
     this.canvas.removeEventListener("wheel", this.handleWheel);

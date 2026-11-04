@@ -58,6 +58,14 @@ export class TextTool extends Tool<TextToolState> {
     this.previewPolygons = [];
     this.getState().setToolState({ draft: undefined });
   }
+  isInteracting(): boolean {
+    return !!this.getState().toolState?.draft;
+  }
+  clear() {
+    this.commitWhenReady = false;
+    this.nextResizeAnchor = undefined;
+    this.getState().setToolState({ draft: undefined });
+  }
   getCursor() {
     return "text";
   }
@@ -103,7 +111,7 @@ export class TextTool extends Tool<TextToolState> {
           text: previewText,
         });
         const draft =
-          resizeAnchor && bounds
+          resizeAnchor && bounds && this.getState().toolState?.draft
             ? {
                 position: {
                   x:
@@ -182,22 +190,24 @@ export class TextTool extends Tool<TextToolState> {
     if (!toolState?.draft || !this.polygons.length) return;
     const placed = this.at(toolState.draft.position);
     setToolState({ draft: undefined });
-    state.actions.setPolygons([...state.polygons, ...placed]);
-    state.actions.activateTool("select");
-    state.actions.setToolState<SelectToolState>("select", {
-      selectedVertices: placed.flatMap((polygon) =>
-        polygon.vertices.map((vertex) => ({ polygon, vertex })),
-      ),
-      selectedObjects: [],
-      selectedPictures: [],
-      isDragging: false,
-      isMarqueeSelecting: false,
-      transformMode: false,
-      skewMode: false,
-      hoveredObject: undefined,
-      hoveredPictureBounds: undefined,
-      contextMenuType: undefined,
-      contextMenuPosition: undefined,
+    this.edit("text.place", () => {
+      state.actions.setPolygons([...state.polygons, ...placed]);
+      state.actions.activateTool("select");
+      state.actions.setToolState<SelectToolState>("select", {
+        selectedVertices: placed.flatMap((polygon) =>
+          polygon.vertices.map((vertex) => ({ polygon, vertex })),
+        ),
+        selectedObjects: [],
+        selectedPictures: [],
+        isDragging: false,
+        isMarqueeSelecting: false,
+        transformMode: false,
+        skewMode: false,
+        hoveredObject: undefined,
+        hoveredPictureBounds: undefined,
+        contextMenuType: undefined,
+        contextMenuPosition: undefined,
+      });
     });
   }
 

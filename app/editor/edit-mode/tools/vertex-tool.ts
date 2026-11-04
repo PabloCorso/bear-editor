@@ -1,7 +1,6 @@
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorState } from "~/editor/editor-state";
-import type { PartialEditorState } from "~/editor/editor-store";
 import {
   findPolygonEdgeNearPosition,
   findPolygonLineForEditing,
@@ -22,6 +21,7 @@ import {
   uiStrokeWidths,
 } from "~/editor/constants";
 import type { EditorStore } from "~/editor/editor-store";
+import type { EditorHistoryActionKind } from "~/editor/history/editor-history-actions";
 import { defaultTools } from "./default-tools";
 import type { Polygon, Position } from "~/editor/elma-types";
 import {
@@ -31,7 +31,6 @@ import {
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import { checkModifierKey } from "~/utils/misc";
-import fastDeepEqual from "fast-deep-equal";
 import {
   cutAndConnect,
   DEFAULT_CUT_CONNECT_WIDTH_PX,
@@ -256,6 +255,13 @@ export class VertexTool extends Tool<VertexToolState> {
     if (!finalized) {
       this.clear();
     }
+  }
+
+  isInteracting(): boolean {
+    return (
+      (this.getState().toolState?.drawingPolygon.vertices.length ?? 0) > 0 ||
+      !!this.cutPointer
+    );
   }
 
   clear(): void {
@@ -558,7 +564,7 @@ export class VertexTool extends Tool<VertexToolState> {
     const { state } = this.getState();
     const result = this.getCutPreview(this.snapPosition(end, bypass));
     if (result && result.polygons !== state.polygons) {
-      this.runHistoryBatch(() => {
+      this.runEdit(() => {
         state.actions.setPolygons(result.polygons);
         this.clear();
       });
@@ -838,7 +844,7 @@ export class VertexTool extends Tool<VertexToolState> {
     if (toolState.variant === "smooth") {
       const preview = this.getSmoothPreview(context.worldPos);
       if (preview && preview.polygon !== preview.source) {
-        this.runHistoryBatch(() =>
+        this.runEdit(() =>
           this.replacePolygon(preview.source, preview.polygon),
         );
       }
@@ -906,7 +912,7 @@ export class VertexTool extends Tool<VertexToolState> {
         toolState.frameMode ?? "inside",
       );
       if (polygons)
-        this.runHistoryBatch(() => {
+        this.runEdit(() => {
           state.actions.setPolygons(
             state.polygons.flatMap((polygon) =>
               polygon === target ? polygons : [polygon],
@@ -1281,7 +1287,7 @@ export class VertexTool extends Tool<VertexToolState> {
     });
     if (nextPolygons === state.polygons) return false;
 
-    this.runHistoryBatch(() => {
+    this.runEdit(() => {
       state.actions.setPolygons(nextPolygons);
     });
     return true;
@@ -1621,7 +1627,7 @@ export class VertexTool extends Tool<VertexToolState> {
           (b.x - origin.x) * (a.y - origin.y)
         );
       }, 0);
-      this.runHistoryBatch(() => {
+      this.runEdit(() => {
         if (vertices.length >= 3 && Math.abs(area) > 1e-8) {
           this.addPolygon({ vertices, grass: false });
         }
@@ -1636,7 +1642,7 @@ export class VertexTool extends Tool<VertexToolState> {
         const apples = this.getPipeApples(false);
         const start = this.getPipeStart(false);
         const flower = this.getPipeFlower(false);
-        this.runHistoryBatch(() => {
+        this.runEdit(() => {
           polygons.forEach((polygon) => this.addPolygon(polygon));
           const { state } = this.getState();
           if (start) state.actions.setStart(start);
@@ -1661,7 +1667,7 @@ export class VertexTool extends Tool<VertexToolState> {
         vertices: [...toolState.drawingPolygon.vertices],
         grass: toolState.drawingPolygon.grass,
       };
-      this.runHistoryBatch(() => {
+      this.runEdit(() => {
         if (toolState.editingPolygon) {
           this.replacePolygon(toolState.editingPolygon, finalizedPolygon);
         } else {
@@ -1731,45 +1737,23 @@ export class VertexTool extends Tool<VertexToolState> {
     return result;
   }
 
-  private getHistorySnapshot(): PartialEditorState {
-    const { state } = this.getState();
-    return {
-      levelName: state.levelName,
-      lgr: state.lgr,
-      ground: state.ground,
-      sky: state.sky,
-      polygons: state.polygons,
-      apples: state.apples,
-      killers: state.killers,
-      flowers: state.flowers,
-      start: state.start,
-      pictures: state.pictures,
+  private runEdit(mutate: () => void) {
+    const { toolState } = this.getState();
+    const actions: Record<string, EditorHistoryActionKind> = {
+      vertex: "polygon.edit",
+      grass: "polygon.edit-grass",
+      brush: "polygon.draw",
+      draw: "polygon.draw",
+      smooth: "polygon.smooth",
+      pipe: "polygon.create-pipe",
+      cutConnect: "polygon.cut-connect",
+      frame: "polygon.create-frame",
+      autoGrass: "polygon.generate-grass",
     };
-  }
-
-  private runHistoryBatch(mutate: () => void) {
-    const historyStart = this.getHistorySnapshot();
-    this.store.temporal.getState().pause();
-
-    try {
-      mutate();
-    } finally {
-      this.store.temporal.getState().resume();
-    }
-
-    const historyEnd = this.getHistorySnapshot();
-    if (fastDeepEqual(historyStart, historyEnd)) return;
-
-    const temporalState = this.store.temporal.getState() as {
-      _handleSet?: (
-        pastState: PartialEditorState,
-        replace: undefined,
-        currentState: PartialEditorState,
-        deltaState?: Partial<PartialEditorState> | null,
-      ) => void;
-    };
-
-    temporalState._handleSet?.(historyStart, undefined, historyEnd);
+    return this.edit(
+      actions[toolState?.variant ?? "vertex"] ?? "polygons.edit",
+      mutate,
+    );
   }
 }
 

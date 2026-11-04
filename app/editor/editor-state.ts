@@ -22,20 +22,16 @@ import type {
   PlaySettings,
 } from "./play-mode/play-settings";
 
-type EditorDocumentSnapshot = Pick<
-  EditorLevel,
-  | "levelName"
-  | "lgr"
-  | "ground"
-  | "sky"
-  | "polygons"
-  | "apples"
-  | "killers"
-  | "flowers"
-  | "start"
-  | "pictures"
-  | "top10"
->;
+type EditorDocumentSnapshot = EditorLevel;
+
+/**
+ * The complete undoable editor state. Adding content here makes history
+ * capture and restore fail type-checking until they handle the new field.
+ */
+export type EditorHistoryContent = EditorLevel & {
+  testStarts: import("./test-starts").TestStartSession;
+  referenceImages: ReferenceImage[];
+};
 
 export type EditorDocumentOriginKind =
   | "default"
@@ -75,8 +71,7 @@ export type EditorDocumentInput = {
   pendingRecovery?: boolean;
 };
 
-export type EditorState = EditorLevel & {
-  testStarts: import("./test-starts").TestStartSession;
+export type EditorState = EditorHistoryContent & {
   testStartRename: {
     id: string | null;
     name: string;
@@ -89,8 +84,6 @@ export type EditorState = EditorLevel & {
     id?: string | null;
   } | null;
   documentSession: EditorDocumentSession;
-  referenceImages: ReferenceImage[];
-
   // Editor state
   topologyInspection: TopologyInspection | null;
   activeToolId: string;
@@ -144,6 +137,7 @@ export type EditorState = EditorLevel & {
     activateTestStart: (id: string | null) => void;
     deleteTestStart: (id: string) => void;
     promoteTestStart: (id: string) => void;
+    addReferenceImage: (image: ReferenceImage) => void;
     updateReferenceImage: (
       id: string,
       patch: Partial<
