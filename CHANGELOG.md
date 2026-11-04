@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 - Add a configurable canvas grid and snap to grid under Level options → Grid. Hold Alt for free placement and movement.
 - Select by edge enclosed by selected vertices instead of selection the whole polygon @Infe.
+- Move selections with the arrow keys; hold Shift for larger steps.
 - Deselect with modifier + click @finman.
 - Add smooth tool.
 - Add boolean polygon tools: union, difference, intersection, and exclusive.
@@ -16,6 +17,11 @@ All notable changes to this project will be documented in this file.
 - Add Text tool.
 - Add library with default shapes.
 - Import image.
+- Improve history and undo/redo functionality.
+- Add play mode rewind and save captured ride positions as test starts.
+- Add reusable custom polygon shapes to the shape library.
+- Add picture selection preferences for outline or rectangle boundaries, interior/border/anchor clicks, and anchor-based area selection.
+- Add freehand Lasso alongside Marquee in the Select tool menu.
 
 ## 2026-10-28
 
@@ -24,11 +30,6 @@ All notable changes to this project will be documented in this file.
 - Add tool settings and reset.
 - Add PNG export.
 - Add skew and improve selection mirroring.
-
-## 2026-10-27
-
-- Add picture selection preferences for outline or rectangle boundaries, interior/border/anchor clicks, and anchor-based area selection.
-- Add freehand Lasso alongside Marquee in the Select tool menu.
 
 ## 2026-10-26
 
