@@ -421,13 +421,17 @@ export class ShapeTool extends Tool<ShapeToolState> {
       !drafts.pictures?.length
     )
       return this.clear();
-    this.store.setState({
-      polygons: [...state.polygons, ...(drafts.polygons ?? [])],
-      apples: [...state.apples, ...(drafts.apples ?? [])],
-      killers: [...state.killers, ...(drafts.killers ?? [])],
-      flowers: [...state.flowers, ...(drafts.flowers ?? [])],
-      pictures: [...state.pictures, ...(drafts.pictures ?? [])],
-    });
+    this.store.history.execute(
+      { label: "Place library item", toolId: this.meta.id },
+      () =>
+        this.store.setState({
+          polygons: [...state.polygons, ...(drafts.polygons ?? [])],
+          apples: [...state.apples, ...(drafts.apples ?? [])],
+          killers: [...state.killers, ...(drafts.killers ?? [])],
+          flowers: [...state.flowers, ...(drafts.flowers ?? [])],
+          pictures: [...state.pictures, ...(drafts.pictures ?? [])],
+        }),
+    );
     this.clear();
   }
 }

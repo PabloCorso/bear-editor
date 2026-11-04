@@ -144,6 +144,7 @@ export type EditorState = EditorLevel & {
     activateTestStart: (id: string | null) => void;
     deleteTestStart: (id: string) => void;
     promoteTestStart: (id: string) => void;
+    addReferenceImage: (image: ReferenceImage) => void;
     updateReferenceImage: (
       id: string,
       patch: Partial<

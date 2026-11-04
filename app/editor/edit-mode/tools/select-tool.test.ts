@@ -142,7 +142,7 @@ describe("SelectTool mirroring", () => {
           selectedObjects: [firstApple],
           contextMenuType: "selection",
         });
-      store.temporal.getState().clear();
+      store.history.clear();
 
       tool.mirrorSelection(direction);
 
@@ -164,16 +164,16 @@ describe("SelectTool mirroring", () => {
         store.getState().apples[0].position,
       );
       expect(getSelection(store)?.contextMenuType).toBeUndefined();
-      expect(store.temporal.getState().pastStates).toHaveLength(1);
+      expect(store.history.state.getState().entries).toHaveLength(1);
 
       tool.mirrorSelection(direction);
       expect(store.getState().polygons[0]).toEqual(polygon);
       expect(store.getState().apples[0].position).toEqual(firstApple);
-      store.temporal.getState().undo();
+      store.history.undo();
       expect(store.getState().apples[0].position).toEqual(
         reflected(firstApple),
       );
-      store.temporal.getState().undo();
+      store.history.undo();
       expect(store.getState().polygons[0]).toEqual(polygon);
       expect(store.getState().apples[0].position).toEqual(firstApple);
     },
@@ -856,5 +856,512 @@ describe("SelectTool lasso selection", () => {
     });
     expect(getSelection(store)?.selectedObjects).toEqual([secondApple]);
     expect(getSelection(store)?.isMarqueeSelecting).toBe(false);
+  });
+});
+
+describe("Transactional editor history", () => {
+  beforeEach(() =>
+    vi.stubGlobal("window", { navigator: { platform: "Linux" } }),
+  );
+  afterEach(() => vi.unstubAllGlobals());
+
+  function historyTool() {
+    const context = createTool();
+    context.store.getState().actions.registerTool(context.tool);
+    context.store.history.clear();
+    context.store.getState().actions.markDocumentSaved();
+    return context;
+  }
+  const event = {
+    button: 0,
+    altKey: false,
+    shiftKey: false,
+    ctrlKey: false,
+    metaKey: false,
+  } as PointerEvent;
+  const at = (worldPos: Position) => ({
+    worldPos,
+    screenX: worldPos.x,
+    screenY: worldPos.y,
+  });
+  function startMove(context: ReturnType<typeof historyTool>) {
+    context.tool.onPointerDown(event, at(context.firstApple));
+    context.tool.onPointerMove(event, at(position(110, 120)));
+  }
+
+  it("records one complete drag and restores selected original identities on undo and redo", () => {
+    const context = historyTool();
+    const { store, tool, firstApple } = context;
+    startMove(context);
+    for (let x = 111; x <= 130; x++)
+      tool.onPointerMove(event, at(position(x, 120)));
+    expect(store.history.state.getState().entries).toHaveLength(0);
+    tool.onPointerUp(event, at(position(130, 120)));
+    expect(
+      store.history.state.getState().entries.map((entry) => entry.label),
+    ).toEqual(["Move selection"]);
+    const moved = store.getState().apples[0].position;
+    expect(moved).toEqual(position(130, 120));
+    expect(store.getState().documentSession.dirty).toBe(true);
+    store.history.undo();
+    expect(store.getState().apples[0].position).toBe(firstApple);
+    expect(getSelection(store)?.selectedObjects).toEqual([firstApple]);
+    expect(store.getState().documentSession.dirty).toBe(false);
+    store.history.redo();
+    expect(store.getState().apples[0].position).toBe(moved);
+    expect(getSelection(store)?.selectedObjects[0]).toBe(moved);
+    expect(store.getState().documentSession.dirty).toBe(true);
+  });
+
+  it.each(["pointercancel", "Escape", "cancelInteraction", "undo"])(
+    "rolls back an active move on %s without consuming the previous edit",
+    (reason) => {
+      const context = historyTool();
+      const { store, tool, firstApple } = context;
+      store.getState().actions.setGround("new-ground");
+      startMove(context);
+      if (reason === "pointercancel")
+        tool.onPointerUp(
+          { ...event, type: "pointercancel" } as PointerEvent,
+          at(position(110, 120)),
+        );
+      else if (reason === "Escape")
+        tool.onKeyDown(
+          { key: "Escape", preventDefault() {} } as KeyboardEvent,
+          at(firstApple),
+        );
+      else if (reason === "undo") store.history.undo();
+      else tool.cancelInteraction();
+      expect(store.getState().apples[0].position).toBe(firstApple);
+      expect(getSelection(store)?.selectedObjects[0]).toBe(firstApple);
+      expect(store.getState().ground).toBe("new-ground");
+      expect(store.history.state.getState().cursor).toBe(1);
+      expect(store.history.state.getState().active).toBeNull();
+      store.history.undo();
+      expect(store.getState().ground).toBe("ground");
+    },
+  );
+
+  it("uses each edit's starting selection rather than the previous edit's final selection", () => {
+    const { store, firstApple, secondApple } = historyTool();
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedObjects: [firstApple],
+    });
+    store.getState().actions.setGround("different");
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedObjects: [secondApple],
+    });
+    store.getState().actions.setSky("different-sky");
+    store.history.undo();
+    expect(getSelection(store)?.selectedObjects).toEqual([secondApple]);
+    store.history.undo();
+    expect(getSelection(store)?.selectedObjects).toEqual([firstApple]);
+  });
+
+  it("keeps redo after selection changes, unchanged edits, and drags returning to their origin", () => {
+    const context = historyTool();
+    const { store, tool, firstApple } = context;
+    store.getState().actions.setGround("different");
+    store.history.undo();
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedObjects: [firstApple],
+    });
+    store.getState().actions.setGround("ground");
+    startMove(context);
+    tool.onPointerUp(event, at(firstApple));
+    expect(store.history.state.getState().entries).toHaveLength(1);
+    expect(store.history.state.getState().cursor).toBe(0);
+    expect(store.history.state.getState().canRedo).toBe(true);
+    store.history.redo();
+    expect(store.getState().ground).toBe("different");
+  });
+
+  it("groups nested domain actions and rolls a failed compound edit back atomically", () => {
+    const { store } = historyTool();
+    store.history.execute({ label: "Change textures" }, () => {
+      store.getState().actions.setGround("new-ground");
+      store.history.execute({ label: "Nested edit" }, () =>
+        store.getState().actions.setSky("new-sky"),
+      );
+    });
+    expect(store.history.state.getState().entries).toHaveLength(1);
+    expect(() =>
+      store.history.execute({ label: "Fail" }, () => {
+        store.getState().actions.setGround("bad-ground");
+        store.getState().actions.setSky("bad-sky");
+        throw new Error("failed");
+      }),
+    ).toThrow("failed");
+    expect(store.getState().ground).toBe("new-ground");
+    expect(store.getState().sky).toBe("new-sky");
+    expect(store.history.state.getState().active).toBeNull();
+    expect(store.history.state.getState().entries).toHaveLength(1);
+    store.history.undo();
+    expect(store.getState().ground).toBe("ground");
+    expect(store.getState().sky).toBe("sky");
+  });
+
+  it("travels both ways through the timeline and replaces only the future branch on a new edit", () => {
+    const { store } = historyTool();
+    store.getState().actions.setGround("one");
+    store.getState().actions.setGround("two");
+    store.getState().actions.setGround("three");
+    const [one, two, three] = store.history.state.getState().entries;
+    store.history.goTo(one.id);
+    expect(store.getState().ground).toBe("one");
+    store.history.goTo(three.id);
+    expect(store.getState().ground).toBe("three");
+    store.history.goTo(null);
+    expect(store.getState().ground).toBe("ground");
+    store.history.goTo(two.id);
+    store.getState().actions.setGround("replacement");
+    expect(
+      store.history.state
+        .getState()
+        .entries.map((entry) => entry.id)
+        .slice(0, 2),
+    ).toEqual([one.id, two.id]);
+    expect(store.history.state.getState().canRedo).toBe(false);
+    store.history.goTo(three.id);
+    expect(store.getState().ground).toBe("replacement");
+  });
+
+  it("retains an undoable base when bounded history trims old entries", () => {
+    const store = createEditorStore({ historyLimit: 2 });
+    store.getState().actions.setGround("one");
+    store.getState().actions.setGround("two");
+    store.getState().actions.setGround("three");
+    expect(store.history.state.getState().entries).toHaveLength(2);
+    store.history.goTo(null);
+    expect(store.getState().ground).toBe("one");
+    expect(store.history.state.getState().canUndo).toBe(false);
+    store.history.redo();
+    expect(store.getState().ground).toBe("two");
+  });
+
+  it("restores the exact overlapping vertices and pictures without coordinate matching", () => {
+    const { store, tool } = historyTool();
+    const polygons = [0, 1].map(() => ({
+      grass: false,
+      vertices: [position(10, 10), position(30, 10), position(10, 30)],
+    }));
+    const pictures = ["one", "two"].map((name) => ({
+      name,
+      texture: "",
+      mask: "" as const,
+      clip: Clip.Unclipped,
+      distance: 500,
+      position: position(50, 50),
+    }));
+    store.getState().actions.setPolygons(polygons);
+    store.getState().actions.setPictures(pictures);
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedVertices: [
+        { polygon: polygons[1], vertex: polygons[1].vertices[0] },
+      ],
+      selectedPictures: [pictures[1].position],
+    });
+    store.history.clear();
+    store.getState().actions.setGround("different");
+    store.history.undo();
+    tool.getWorldOverlays({
+      viewportRect: { minX: 0, minY: 0, maxX: 500, maxY: 500 },
+    });
+    expect(getSelection(store)?.selectedVertices[0].polygon).toBe(polygons[1]);
+    expect(getSelection(store)?.selectedPictures[0]).toBe(pictures[1].position);
+    store.history.redo();
+    expect(getSelection(store)?.selectedVertices[0].vertex).toBe(
+      polygons[1].vertices[0],
+    );
+    expect(getSelection(store)?.selectedPictures[0]).toBe(pictures[1].position);
+  });
+
+  it("records paste/duplicate and delete with their completed selection", () => {
+    const { store, tool, firstApple } = historyTool();
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedObjects: [firstApple],
+    });
+    expect(tool.duplicateSelectionWithOffset()).toBe(true);
+    const duplicate = getSelection(store)?.selectedObjects[0];
+    expect(duplicate).not.toBe(firstApple);
+    store.history.undo();
+    expect(store.getState().apples).toHaveLength(2);
+    expect(getSelection(store)?.selectedObjects).toEqual([firstApple]);
+    store.history.redo();
+    expect(getSelection(store)?.selectedObjects).toEqual([duplicate]);
+    tool.deleteCurrentSelection();
+    expect(getSelection(store)?.selectedObjects).toHaveLength(0);
+    store.history.undo();
+    expect(getSelection(store)?.selectedObjects[0]).toBe(duplicate);
+    store.history.redo();
+    expect(store.getState().apples).toHaveLength(2);
+    expect(getSelection(store)?.selectedObjects).toHaveLength(0);
+  });
+
+  it("keeps reference-image bitmaps alive through removal and undo, then releases discarded resources", () => {
+    const { store } = historyTool();
+    const bitmap = { close: vi.fn() } as unknown as ImageBitmap;
+    const image = {
+      id: "reference",
+      name: "reference.png",
+      bitmap,
+      position: position(20, 30),
+      width: 100,
+      height: 60,
+      rotation: 0,
+    };
+    store.getState().actions.addReferenceImage(image);
+    store
+      .getState()
+      .actions.updateReferenceImage(image.id, { width: 150, rotation: 0.5 });
+    expect(store.getState().documentSession.dirty).toBe(false);
+    store.getState().actions.removeReferenceImage(image.id);
+    expect(bitmap.close).not.toHaveBeenCalled();
+    store.history.undo();
+    expect(store.getState().referenceImages[0].width).toBe(150);
+    store.history.undo();
+    expect(store.getState().referenceImages[0]).toBe(image);
+    store.history.undo();
+    expect(store.getState().referenceImages).toHaveLength(0);
+    store.getState().actions.setGround("new branch");
+    expect(bitmap.close).toHaveBeenCalledOnce();
+  });
+
+  it("undoes mixed session and level moves as one action", () => {
+    const { store, tool, firstApple } = historyTool();
+    store.getState().actions.addTestStart(position(80, 100));
+    const testStart = store.getState().testStarts.items[0];
+    const bitmap = { close: vi.fn() } as unknown as ImageBitmap;
+    store.getState().actions.addReferenceImage({
+      id: "image",
+      name: "image",
+      bitmap,
+      position: position(300, 300),
+      width: 20,
+      height: 20,
+      rotation: 0,
+    });
+    const reference = store.getState().referenceImages[0];
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedObjects: [firstApple, testStart.position, reference.position],
+    });
+    store.history.clear();
+    tool.mirrorSelection("horizontal");
+    expect(store.history.state.getState().entries).toHaveLength(1);
+    store.history.undo();
+    expect(store.getState().apples[0].position).toBe(firstApple);
+    expect(store.getState().testStarts.items[0]).toBe(testStart);
+    expect(store.getState().referenceImages[0]).toBe(reference);
+    expect(getSelection(store)?.selectedObjects).toEqual([
+      firstApple,
+      testStart.position,
+      reference.position,
+    ]);
+  });
+
+  it("resets history, selection, and active edits when replacing the document", () => {
+    const context = historyTool();
+    const { store } = context;
+    const bitmap = { close: vi.fn() } as unknown as ImageBitmap;
+    store.getState().actions.addReferenceImage({
+      id: "old-image",
+      name: "old",
+      bitmap,
+      position: position(300, 300),
+      width: 20,
+      height: 20,
+      rotation: 0,
+    });
+    startMove(context);
+    store.getState().actions.replaceDocument({
+      level: {
+        levelName: "New",
+        ground: "ground",
+        sky: "sky",
+        lgr: "default",
+        polygons: [],
+        apples: [],
+        killers: [],
+        flowers: [],
+        pictures: [],
+        start: position(0, 0),
+      },
+      origin: { kind: "default", label: "New", canOverwrite: false },
+    });
+    store.history.undo();
+    expect(store.getState().levelName).toBe("New");
+    expect(store.getState().apples).toHaveLength(0);
+    expect(store.history.state.getState().entries).toHaveLength(0);
+    expect(store.history.state.getState().active).toBeNull();
+    expect(getSelection(store)?.selectedObjects).toHaveLength(0);
+    expect(bitmap.close).toHaveBeenCalledOnce();
+  });
+
+  it("ignores stale transaction completion after cancellation", () => {
+    const { store } = historyTool();
+    const edit = store.history.begin({ label: "Edit" });
+    edit.update(() => store.getState().actions.setGround("changed"));
+    edit.cancel();
+    store.getState().actions.setSky("new-sky");
+    edit.commit();
+    edit.cancel();
+    expect(() =>
+      edit.update(() => store.getState().actions.setGround("bad")),
+    ).toThrow("already ended");
+    expect(store.getState().ground).toBe("ground");
+    expect(store.getState().sky).toBe("new-sky");
+    expect(store.history.state.getState().entries).toHaveLength(1);
+  });
+});
+
+describe("History transaction edge cases", () => {
+  beforeEach(() =>
+    vi.stubGlobal("window", { navigator: { platform: "Linux" } }),
+  );
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("commits resize as one action and cancels a subsequent transform without losing selection", () => {
+    const { store, tool } = createTool();
+    store.getState().actions.registerTool(tool);
+    const polygon = {
+      grass: false,
+      vertices: [
+        position(40, 40),
+        position(80, 40),
+        position(80, 80),
+        position(40, 80),
+      ],
+    };
+    store.getState().actions.setPolygons([polygon]);
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedVertices: polygon.vertices.map((vertex) => ({ polygon, vertex })),
+    });
+    store.history.clear();
+    const event = {
+      button: 0,
+      altKey: false,
+      shiftKey: false,
+      ctrlKey: false,
+      metaKey: false,
+    } as PointerEvent;
+    const at = (x: number, y: number) => ({
+      worldPos: position(x, y),
+      screenX: x,
+      screenY: y,
+    });
+    tool.toggleTransform();
+    tool.onPointerDown(event, at(80, 80));
+    tool.onPointerMove(event, at(100, 100));
+    expect(store.history.state.getState().entries).toHaveLength(0);
+    tool.onPointerUp(event, at(100, 100));
+    const resized = store.getState().polygons[0];
+    expect(resized).not.toEqual(polygon);
+    expect(store.history.state.getState().entries[0].label).toBe(
+      "Resize selection",
+    );
+    tool.onPointerDown(event, at(100, 100));
+    tool.onPointerMove(event, at(120, 120));
+    tool.onPointerUp(
+      { ...event, type: "pointercancel" } as PointerEvent,
+      at(120, 120),
+    );
+    expect(store.getState().polygons[0]).toBe(resized);
+    expect(getSelection(store)?.selectedVertices).toHaveLength(4);
+    store.history.undo();
+    expect(store.getState().polygons[0]).toBe(polygon);
+    expect(getSelection(store)?.selectedVertices[0].polygon).toBe(polygon);
+    store.history.redo();
+    expect(getSelection(store)?.selectedVertices[0].polygon).toBe(resized);
+  });
+
+  it("captures selection against the replacement polygon when only its properties change", () => {
+    const { store } = createTool();
+    const polygon = {
+      grass: false,
+      vertices: [position(10, 10), position(30, 10), position(10, 30)],
+    };
+    store.getState().actions.setPolygons([polygon]);
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedVertices: [{ polygon, vertex: polygon.vertices[1] }],
+    });
+    store.history.clear();
+    const replacement = { ...polygon, grass: true };
+    store.getState().actions.setPolygons([replacement]);
+    store.history.undo();
+    expect(getSelection(store)?.selectedVertices[0].polygon).toBe(polygon);
+    store.history.redo();
+    expect(getSelection(store)?.selectedVertices[0].polygon).toBe(replacement);
+    expect(getSelection(store)?.selectedVertices[0].vertex).toBe(
+      polygon.vertices[1],
+    );
+  });
+
+  it("does not restore deleted objects as selected on redo", () => {
+    const { store, firstApple } = createTool();
+    store.getState().actions.setToolState<SelectToolState>("select", {
+      selectedObjects: [firstApple],
+    });
+    store.history.clear();
+    store.getState().actions.removeApple(store.getState().apples[0]);
+    store.history.undo();
+    expect(getSelection(store)?.selectedObjects).toEqual([firstApple]);
+    store.history.redo();
+    expect(getSelection(store)?.selectedObjects).toHaveLength(0);
+  });
+
+  it("releases newly imported resources when a compound edit fails", () => {
+    const store = createEditorStore();
+    const bitmap = { close: vi.fn() } as unknown as ImageBitmap;
+    expect(() =>
+      store.history.execute({ label: "Fail import" }, () => {
+        store.getState().actions.addReferenceImage({
+          id: "image",
+          name: "image",
+          bitmap,
+          position: position(0, 0),
+          width: 20,
+          height: 20,
+          rotation: 0,
+        });
+        throw new Error("failed");
+      }),
+    ).toThrow("failed");
+    expect(store.getState().referenceImages).toHaveLength(0);
+    expect(bitmap.close).toHaveBeenCalledOnce();
+    expect(store.history.state.getState().entries).toHaveLength(0);
+  });
+
+  it("rejects asynchronous transaction bodies before they can commit a partial action", () => {
+    const store = createEditorStore();
+    expect(() =>
+      store.history.execute({ label: "Async" }, () => {
+        store.getState().actions.setGround("partial");
+        return Promise.resolve();
+      }),
+    ).toThrow("must be synchronous");
+    expect(store.getState().ground).toBe("ground");
+    expect(store.history.state.getState().entries).toHaveLength(0);
+    const edit = store.history.begin({ label: "Outer" });
+    expect(() =>
+      store.history.execute({ label: "Async child" }, () => Promise.resolve()),
+    ).toThrow("must be synchronous");
+    expect(edit.active).toBe(false);
+  });
+
+  it("leaves view preferences and file-save metadata outside timeline restores", () => {
+    const store = createEditorStore();
+    store.getState().actions.setGround("edited");
+    store.getState().actions.markDocumentSaved({ displayName: "saved.lev" });
+    store.getState().actions.setZoom(3);
+    store.getState().actions.setCamera(42, 27);
+    store.getState().actions.setGrid({ snap: true });
+    store.history.undo();
+    expect(store.getState().documentSession.displayName).toBe("saved.lev");
+    expect(store.getState().documentSession.dirty).toBe(true);
+    expect(store.getState().zoom).toBe(3);
+    expect(store.getState().viewPortOffset).toEqual({ x: 42, y: 27 });
+    expect(store.getState().grid.snap).toBe(true);
+    store.history.redo();
+    expect(store.getState().documentSession.dirty).toBe(false);
   });
 });

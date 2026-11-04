@@ -26,17 +26,19 @@ Enter uses a selected player as the play start only when it is the sole selectio
    namespaced key and its actual immutable position reference. Provide geometry
    and only the action handlers that the type supports. Replace positions through
    store actions rather than mutating them.
-3. Include the collection in `EditorHistoryState` and
-   `getEditorHistorySnapshot` so edits undo together with level edits. Reset it
-   when opening a different document, as with test starts.
+3. Include the collection in `HistoryContent` and the capture/restore adapter in
+   `history/editor-history.ts` so edits undo together with level edits. Label its
+   mutation actions in `editor-store.ts` and include any resources in history's
+   retention handling. Reset it when opening a different document.
 4. Render the artifact in the appropriate scene and add its specialized controls
    separately. Shared selection and action dispatch need no new engine branch.
 
 Adapter results are cached per immutable editor state. Artifact identity survives
-position replacement; selection history records stable keys rather than relying
-on coordinates, so overlapping items remain distinct. The position-key lookup
+position replacement through stable keys. History captures selection references
+alongside their exact immutable content snapshots, so overlapping items remain distinct. The position-key lookup
 uses weak references and does not persist artifacts.
 
-`getEditorHistorySnapshot` includes session data for undo/redo.
+`HistoryContent` includes session data for undo/redo; see
+[transactional editor history](adr/0001-transactional-editor-history.md).
 `getLevelSnapshot` remains the boundary for saving, exporting, recovery, and dirty
 tracking. Session edits therefore do not mark the level dirty or enter its file.

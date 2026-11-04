@@ -1,3 +1,4 @@
+import type { HistoryTransaction } from "~/editor/history/transaction-history";
 import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
@@ -784,7 +785,15 @@ function LevelTitleInput({
   isLoading,
   ...props
 }: React.ComponentProps<typeof Input> & { isLoading?: boolean }) {
+  const store = useEditorStore();
   const { setLevelName } = useEditorActions();
+  const editRef = useRef<HistoryTransaction | null>(null);
+  useEffect(
+    () => () => {
+      editRef.current?.commit();
+    },
+    [],
+  );
   const levelName = useLevelName();
   return (
     <Input
@@ -792,7 +801,24 @@ function LevelTitleInput({
       name="level-name"
       maxLength={LEVEL_TITLE_MAX_LENGTH}
       value={isLoading ? "" : levelName}
-      onChange={(e) => setLevelName(e.target.value)}
+      onFocus={() => {
+        editRef.current = store.history.begin({ label: "Rename level" });
+      }}
+      onBlur={() => {
+        editRef.current?.commit();
+        editRef.current = null;
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          editRef.current?.cancel();
+          event.currentTarget.blur();
+        } else if (event.key === "Enter") event.currentTarget.blur();
+      }}
+      onChange={(e) => {
+        if (!editRef.current?.active)
+          editRef.current = store.history.begin({ label: "Rename level" });
+        setLevelName(e.target.value);
+      }}
       className={cn(
         "min-w-[12rem] flex-1 px-3",
         { "animate-pulse": isLoading },

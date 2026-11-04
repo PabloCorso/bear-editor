@@ -15,11 +15,8 @@ import {
 } from "~/editor/constants";
 import type { Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
-import {
-  getEditorHistorySnapshot,
-  type EditorStore,
-  type EditorHistoryState,
-} from "~/editor/editor-store";
+import type { EditorStore } from "~/editor/editor-store";
+import type { HistoryTransaction } from "~/editor/history/transaction-history";
 import { defaultTools } from "./default-tools";
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
@@ -166,38 +163,48 @@ export class SelectTool extends Tool<SelectToolState> {
 
   private marqueeStartPos = { x: 0, y: 0 };
   private marqueeEndPos = { x: 0, y: 0 };
-  private dragHistoryStart: EditorHistoryState | null = null;
+  private dragEdit: HistoryTransaction | null = null;
   private dragHasChanges = false;
-  private isHistoryPaused = false;
 
   onDeactivate(): void {
     this.clear();
   }
 
-  clear(): void {
+  isInteracting(): boolean {
+    return this.isDragging || this.isMarqueeSelecting;
+  }
+
+  cancelInteraction(): void {
     this.finishTransformDrag(false);
+    this.endDragEdit(false);
+    if (this.isMarqueeSelecting) this.cancelAreaSelection();
     this.transformFrame = null;
-    const { setToolState } = this.getState();
-    setToolState({
-      selectedVertices: [],
-      selectedObjects: [],
-      selectedPictures: [],
-      isDragging: false,
-      transformMode: false,
-      skewMode: false,
-      isMarqueeSelecting: false,
-      hoveredObject: undefined,
-      hoveredPictureBounds: undefined,
-      contextMenuType: undefined,
-      contextMenuPosition: undefined,
-    });
+    this.transformOrigin = null;
     this.isDragging = false;
     this.isMarqueeSelecting = false;
     this.lassoPath = [];
     this.areaSelectionBefore = null;
     this.dragOriginPositions = [];
     this.dragConstraintDirections = [];
-    this.endDragHistoryBatch(false);
+    this.getState().setToolState({
+      isDragging: false,
+      isMarqueeSelecting: false,
+    });
+  }
+
+  clear(): void {
+    this.cancelInteraction();
+    this.getState().setToolState({
+      selectedVertices: [],
+      selectedObjects: [],
+      selectedPictures: [],
+      transformMode: false,
+      skewMode: false,
+      hoveredObject: undefined,
+      hoveredPictureBounds: undefined,
+      contextMenuType: undefined,
+      contextMenuPosition: undefined,
+    });
   }
 
   onRightClick(event: MouseEvent, context: EventContext) {
@@ -631,7 +638,7 @@ export class SelectTool extends Tool<SelectToolState> {
         this.handleDragging(_context.worldPos, _event.shiftKey, _event.altKey);
       this.isDragging = false;
       this.getState().setToolState({ isDragging: false });
-      this.endDragHistoryBatch(true);
+      this.endDragEdit(_event.type !== "pointercancel");
       return true;
     }
 
@@ -658,6 +665,12 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
 
+    if (this.isDragging && !this.transformDrag && event.key === "Escape") {
+      this.isDragging = false;
+      this.endDragEdit(false);
+      event.preventDefault();
+      return true;
+    }
     if (this.transformDrag) {
       if (event.key === "Escape") this.finishTransformDrag(false);
       event.preventDefault();
@@ -818,39 +831,44 @@ export class SelectTool extends Tool<SelectToolState> {
       x: direction === "horizontal" ? 2 * center.x - point.x : point.x,
       y: direction === "vertical" ? 2 * center.y - point.y : point.y,
     }));
-    this.runHistoryBatch(() => {
-      if (vertices)
-        this.selectionMutations.moveVertices(positions.slice(0, vertices));
-      if (objects) {
-        this.selectionMutations.moveObjects(
-          positions.slice(vertices, vertices + objects).map((point, index) => ({
-            x: point.x - objectOffsets[index].x,
-            y: point.y - objectOffsets[index].y,
-          })),
-        );
-      }
-      if (toolState.selectedPictures.length) {
-        const pictures = toolState.selectedPictures.length;
-        this.selectionMutations.movePictures(
-          positions
-            .slice(vertices + objects, vertices + objects + pictures)
-            .map((point, index) => {
-              // Reflect visual centres while retaining each picture's anchor offset.
-              const origin = toolState.selectedPictures[index];
-              const pictureCenter = points[vertices + objects + index];
-              return {
-                x: point.x + origin.x - pictureCenter.x,
-                y: point.y + origin.y - pictureCenter.y,
-              };
-            }),
-        );
-      }
-      for (const artifact of geometry.artifacts) {
-        artifact.apply(
-          positions.slice(artifact.start, artifact.start + artifact.length),
-        );
-      }
-    });
+    this.store.history.execute(
+      { label: "Mirror selection", toolId: this.meta.id },
+      () => {
+        if (vertices)
+          this.selectionMutations.moveVertices(positions.slice(0, vertices));
+        if (objects) {
+          this.selectionMutations.moveObjects(
+            positions
+              .slice(vertices, vertices + objects)
+              .map((point, index) => ({
+                x: point.x - objectOffsets[index].x,
+                y: point.y - objectOffsets[index].y,
+              })),
+          );
+        }
+        if (toolState.selectedPictures.length) {
+          const pictures = toolState.selectedPictures.length;
+          this.selectionMutations.movePictures(
+            positions
+              .slice(vertices + objects, vertices + objects + pictures)
+              .map((point, index) => {
+                // Reflect visual centres while retaining each picture's anchor offset.
+                const origin = toolState.selectedPictures[index];
+                const pictureCenter = points[vertices + objects + index];
+                return {
+                  x: point.x + origin.x - pictureCenter.x,
+                  y: point.y + origin.y - pictureCenter.y,
+                };
+              }),
+          );
+        }
+        for (const artifact of geometry.artifacts) {
+          artifact.apply(
+            positions.slice(artifact.start, artifact.start + artifact.length),
+          );
+        }
+      },
+    );
     this.transformFrame = null;
     this.closeContextMenu();
   }
@@ -1042,7 +1060,16 @@ export class SelectTool extends Tool<SelectToolState> {
     const points = geometry.points.map(clonePosition);
     const frame = this.getTransformFrame();
     if (!frame || !toolState) return;
-    this.startDragging(worldPos);
+    this.startDragging(
+      worldPos,
+      handle === "rotate"
+        ? "Rotate selection"
+        : handle === "move"
+          ? "Move selection"
+          : toolState.skewMode
+            ? "Skew selection"
+            : "Resize selection",
+    );
     this.transformDrag = new TransformSession({
       frame,
       handle,
@@ -1120,11 +1147,6 @@ export class SelectTool extends Tool<SelectToolState> {
   private finishTransformDrag(commit: boolean): void {
     const drag = this.transformDrag;
     if (!drag) return;
-    if (!commit && this.dragHistoryStart) {
-      this.store.setState(this.dragHistoryStart);
-      for (const artifact of drag.artifacts) artifact.restore?.();
-      this.getState().setToolState(drag.selection);
-    }
     if (commit) {
       this.transformFrame = {
         frame: drag.previewFrame,
@@ -1134,7 +1156,7 @@ export class SelectTool extends Tool<SelectToolState> {
     this.transformDrag = null;
     this.isDragging = false;
     this.getState().setToolState({ isDragging: false });
-    this.endDragHistoryBatch(commit);
+    this.endDragEdit(commit);
   }
 
   private getTransformOverlays(): WorldRenderOverlayItem[] {
@@ -1245,9 +1267,12 @@ export class SelectTool extends Tool<SelectToolState> {
     );
     if (!nextPictures) return false;
 
-    this.runHistoryBatch(() => {
-      state.actions.setPictures(nextPictures);
-    });
+    this.store.history.execute(
+      { label: "Arrange pictures", toolId: this.meta.id },
+      () => {
+        state.actions.setPictures(nextPictures);
+      },
+    );
     this.closeContextMenu();
     return true;
   }
@@ -1307,7 +1332,7 @@ export class SelectTool extends Tool<SelectToolState> {
     this.isDragging = false;
     this.isMarqueeSelecting = false;
     this.dragOriginPositions = [];
-    this.endDragHistoryBatch(false);
+    this.endDragEdit(false);
 
     setToolState({
       ...selection,
@@ -1359,7 +1384,7 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   };
 
-  private startDragging(worldPos: Position): void {
+  private startDragging(worldPos: Position, label = "Move selection"): void {
     const { toolState } = this.getState();
     if (!toolState) return;
 
@@ -1367,7 +1392,7 @@ export class SelectTool extends Tool<SelectToolState> {
     this.getState().setToolState({ isDragging: true });
     this.dragStartPos = worldPos;
     this.dragHasChanges = false;
-    this.beginDragHistoryBatch();
+    this.beginDragEdit(label);
 
     // Store original positions of selected items for delta calculations
     this.dragOriginPositions = getSelectionDragOrigins(toolState);
@@ -1536,69 +1561,17 @@ export class SelectTool extends Tool<SelectToolState> {
     if (selection) setToolState(selection);
   }
 
-  private getHistorySnapshot(): EditorHistoryState {
-    const { state } = this.getState();
-    return getEditorHistorySnapshot(state);
+  private beginDragEdit(label: string) {
+    if (this.dragEdit?.active) return;
+    this.dragEdit = this.beginEdit(label);
   }
 
-  private beginDragHistoryBatch() {
-    if (this.isHistoryPaused) return;
-    this.dragHistoryStart = this.getHistorySnapshot();
-    this.store.temporal.getState().pause();
-    this.isHistoryPaused = true;
-  }
-
-  private endDragHistoryBatch(commit: boolean) {
-    if (!this.isHistoryPaused) return;
-    this.store.temporal.getState().resume();
-    this.isHistoryPaused = false;
-
-    if (!commit || !this.dragHasChanges || !this.dragHistoryStart) {
-      this.dragHistoryStart = null;
-      this.dragHasChanges = false;
-      return;
-    }
-
-    const temporalState = this.store.temporal.getState() as {
-      _handleSet?: (
-        pastState: EditorHistoryState,
-        replace: undefined,
-        currentState: EditorHistoryState,
-        deltaState?: Partial<EditorHistoryState> | null,
-      ) => void;
-    };
-    temporalState._handleSet?.(
-      this.dragHistoryStart,
-      undefined,
-      this.getHistorySnapshot(),
-    );
-    this.dragHistoryStart = null;
+  private endDragEdit(commit: boolean) {
+    const edit = this.dragEdit;
+    this.dragEdit = null;
     this.dragHasChanges = false;
-  }
-
-  private runHistoryBatch(mutate: () => void) {
-    const historyStart = this.getHistorySnapshot();
-    this.store.temporal.getState().pause();
-
-    try {
-      mutate();
-    } finally {
-      this.store.temporal.getState().resume();
-    }
-
-    const historyEnd = this.getHistorySnapshot();
-    if (fastDeepEqual(historyStart, historyEnd)) return;
-
-    const temporalState = this.store.temporal.getState() as {
-      _handleSet?: (
-        pastState: EditorHistoryState,
-        replace: undefined,
-        currentState: EditorHistoryState,
-        deltaState?: Partial<EditorHistoryState> | null,
-      ) => void;
-    };
-
-    temporalState._handleSet?.(historyStart, undefined, historyEnd);
+    if (commit) edit?.commit();
+    else edit?.cancel();
   }
 
   private copySelection(): boolean {
@@ -1619,47 +1592,56 @@ export class SelectTool extends Tool<SelectToolState> {
       anchor,
       state.documentSession.clipboardSessionId,
     );
-    if (pasted) this.commitPaste(pasted);
+    if (
+      pasted &&
+      this.store.getState().documentSession.clipboardSessionId ===
+        state.documentSession.clipboardSessionId
+    )
+      this.commitPaste(pasted);
   }
 
   private commitPaste(pasted: PastedSelection): boolean {
     const { state, setToolState } = this.getState();
-    this.runHistoryBatch(() => {
-      if (pasted.polygons.length > 0) {
-        state.actions.setPolygons([...state.polygons, ...pasted.polygons]);
-      }
-      if (pasted.apples.length > 0) {
-        state.actions.setApples([...state.apples, ...pasted.apples]);
-      }
-      if (pasted.killers.length > 0) {
-        state.actions.setKillers([...state.killers, ...pasted.killers]);
-      }
-      if (pasted.flowers.length > 0) {
-        state.actions.setFlowers([...state.flowers, ...pasted.flowers]);
-      }
-      if (pasted.pictures.length > 0) {
-        state.actions.setPictures([...state.pictures, ...pasted.pictures]);
-      }
-    });
-
-    setToolState({
-      selectedVertices: pasted.selectedVertices,
-      selectedObjects: pasted.selectedObjects,
-      selectedPictures: pasted.selectedPictures,
-      hoveredObject: undefined,
-      hoveredPictureBounds: undefined,
-      contextMenuType: undefined,
-    });
+    this.store.history.execute(
+      { label: "Paste selection", toolId: this.meta.id },
+      () => {
+        if (pasted.polygons.length > 0) {
+          state.actions.setPolygons([...state.polygons, ...pasted.polygons]);
+        }
+        if (pasted.apples.length > 0) {
+          state.actions.setApples([...state.apples, ...pasted.apples]);
+        }
+        if (pasted.killers.length > 0) {
+          state.actions.setKillers([...state.killers, ...pasted.killers]);
+        }
+        if (pasted.flowers.length > 0) {
+          state.actions.setFlowers([...state.flowers, ...pasted.flowers]);
+        }
+        if (pasted.pictures.length > 0) {
+          state.actions.setPictures([...state.pictures, ...pasted.pictures]);
+        }
+        setToolState({
+          selectedVertices: pasted.selectedVertices,
+          selectedObjects: pasted.selectedObjects,
+          selectedPictures: pasted.selectedPictures,
+          hoveredObject: undefined,
+          hoveredPictureBounds: undefined,
+          contextMenuType: undefined,
+        });
+      },
+    );
 
     return true;
   }
 
   private deleteSelection(): void {
-    this.runHistoryBatch(() => {
-      this.selectionMutations.deleteSelection();
-    });
-
-    this.clear();
+    this.store.history.execute(
+      { label: "Delete selection", toolId: this.meta.id },
+      () => {
+        this.selectionMutations.deleteSelection();
+        this.clear();
+      },
+    );
   }
 }
 

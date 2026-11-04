@@ -1,3 +1,4 @@
+import { HistoryControl } from "./history-control";
 import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
@@ -94,8 +95,9 @@ export function CanvasToolbar({
         {...props}
       >
         <Toolbar className="w-fit gap-2">
-          <UndoToolButton engineRef={engineRef} />
-          <RedoToolButton engineRef={engineRef} />
+          <UndoToolButton />
+          <RedoToolButton />
+          <HistoryControl />
         </Toolbar>
         <Toolbar className="w-fit gap-2">
           <ToolButton
@@ -179,27 +181,17 @@ function CanvasHelpMenu({ onOpenShortcuts }: { onOpenShortcuts: () => void }) {
   );
 }
 
-function UndoToolButton({
-  engineRef,
-  ...props
-}: ToolButtonProps & {
-  engineRef: React.RefObject<EditorEngine | null>;
-}) {
+function UndoToolButton(props: ToolButtonProps) {
   const { undo } = useEditorHistory();
   const canUndo = useEditorCanUndo();
-  const vertexToolState = useEditorToolState<VertexToolState>("vertex");
-  const hasPendingVertexEdit = Boolean(
-    vertexToolState?.editingPolygon &&
-    vertexToolState.drawingPolygon.vertices.length > 0,
-  );
   const modifier = useModifier();
   return (
     <ToolButton
       id="undo"
       name="Undo"
       shortcut={`${modifier} + Z`}
-      onClick={() => engineRef.current?.undo() ?? undo()}
-      disabled={!canUndo && !hasPendingVertexEdit}
+      onClick={undo}
+      disabled={!canUndo}
       {...props}
     >
       <ArrowArcLeftIcon />
@@ -207,12 +199,7 @@ function UndoToolButton({
   );
 }
 
-function RedoToolButton({
-  engineRef,
-  ...props
-}: ToolButtonProps & {
-  engineRef: React.RefObject<EditorEngine | null>;
-}) {
+function RedoToolButton(props: ToolButtonProps) {
   const { redo } = useEditorHistory();
   const canRedo = useEditorCanRedo();
   const modifier = useModifier();
@@ -221,7 +208,7 @@ function RedoToolButton({
       id="redo"
       name="Redo"
       shortcut={`${modifier} + Y`}
-      onClick={() => engineRef.current?.redo() ?? redo()}
+      onClick={redo}
       disabled={!canRedo}
       {...props}
     >

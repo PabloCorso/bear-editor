@@ -30,6 +30,20 @@ export abstract class Tool<T extends ToolState = ToolState> {
     return { state, toolState, setToolState };
   }
 
+  /** Group all content and selection changes made by one completed action. */
+  protected edit<R>(label: string, mutate: () => R): R {
+    return this.store.history.execute({ label, toolId: this.meta.id }, mutate);
+  }
+
+  /** For live edits spanning events. Draft-only tools commit with edit(). */
+  protected beginEdit(label: string) {
+    return this.store.history.begin({ label, toolId: this.meta.id });
+  }
+
+  cancelInteraction(): void {
+    this.clear?.();
+  }
+
   // Tool policies and preview/commit conventions: docs/tool-snapping.md.
   protected snapPosition(position: Position, bypass?: boolean): Position {
     const state = this.store.getState();

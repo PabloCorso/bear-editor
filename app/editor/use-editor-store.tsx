@@ -50,16 +50,25 @@ export function useEditor<T>(selector: (state: EditorState) => T): T {
 }
 
 export function useEditorHistory() {
-  return useEditorStore().temporal.getState();
+  return useEditorStore().history;
 }
 
 export function useEditorCanUndo() {
   const store = useEditorStore();
-  return useZustand(store.temporal, (state) => state.pastStates.length > 0);
+  const canUndo = useZustand(store.history.state, (state) => state.canUndo);
+  const hasDraft = useZustand(
+    store,
+    (state) => state.actions.getActiveTool()?.isInteracting?.() ?? false,
+  );
+  return canUndo || hasDraft;
 }
 export function useEditorCanRedo() {
   const store = useEditorStore();
-  return useZustand(store.temporal, (state) => state.futureStates.length > 0);
+  return useZustand(store.history.state, (state) => state.canRedo);
+}
+
+export function useHistoryState() {
+  return useZustand(useEditorStore().history.state);
 }
 
 export function useLevelName() {

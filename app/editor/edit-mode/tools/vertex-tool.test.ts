@@ -275,7 +275,7 @@ describe("Cut & Connect", () => {
   });
 
   function createCutTool() {
-    const store = createEditorStore({ historyUpdateThrottle: 0 });
+    const store = createEditorStore();
     const tool = new VertexTool(store);
     store.getState().actions.setPolygons([rectangle(0, 0, 10, 10)]);
     tool.onActivate("cutConnect");
@@ -283,7 +283,7 @@ describe("Cut & Connect", () => {
       cutConnectWidthPx: 96,
     });
     store.getState().actions.setMouseOnCanvas(true);
-    store.temporal.getState().clear();
+    store.history.clear();
     return { store, tool };
   }
   const context = (x: number, y: number) => ({
@@ -328,7 +328,7 @@ describe("Cut & Connect", () => {
     const { store, tool } = createCutTool();
     const polygons = [rectangle(0, 0, 4, 6), rectangle(8, 4, 4, 4)];
     store.getState().actions.setPolygons(polygons);
-    store.temporal.getState().clear();
+    store.history.clear();
     tool.onPointerDown(pointer, context(2, 3));
     tool.onPointerUp(pointer, context(2, 3));
     store.getState().actions.setMousePosition(position(8, 3));
@@ -336,7 +336,7 @@ describe("Cut & Connect", () => {
 
     tool.onPointerDown(pointer, context(8, 3));
     expect(store.getState().polygons).toBe(polygons);
-    expect(store.temporal.getState().pastStates).toHaveLength(0);
+    expect(store.history.state.getState().entries).toHaveLength(0);
     expect(tool.getDrafts().replacementPolygons).toBeUndefined();
     expect(
       store.getState().actions.getToolState<VertexToolState>("vertex")
@@ -353,15 +353,15 @@ describe("Cut & Connect", () => {
     const preview = tool.getDrafts().replacementPolygons;
     expect(preview).toHaveLength(2);
     expect(store.getState().polygons).toBe(before);
-    expect(store.temporal.getState().pastStates).toHaveLength(0);
+    expect(store.history.state.getState().entries).toHaveLength(0);
     tool.onPointerDown(pointer, context(12, 5));
     const after = store.getState().polygons;
     expect(after).toBe(preview);
     expect(tool.getDrafts().replacementPolygons).toBeUndefined();
-    expect(store.temporal.getState().pastStates).toHaveLength(1);
-    store.temporal.getState().undo();
+    expect(store.history.state.getState().entries).toHaveLength(1);
+    store.history.undo();
     expect(store.getState().polygons).toEqual(before);
-    store.temporal.getState().redo();
+    store.history.redo();
     expect(store.getState().polygons).toEqual(after);
   });
 
@@ -371,7 +371,7 @@ describe("Cut & Connect", () => {
     tool.onPointerMove(pointer, context(5, 5));
     tool.onPointerUp(pointer, context(12, 5));
     expect(store.getState().polygons).toHaveLength(2);
-    expect(store.temporal.getState().pastStates).toHaveLength(1);
+    expect(store.history.state.getState().entries).toHaveLength(1);
   });
 
   it.each(["escape", "right-click", "deactivate", "pointercancel"])(
@@ -392,7 +392,7 @@ describe("Cut & Connect", () => {
         );
       expect(store.getState().polygons).toBe(before);
       expect(tool.getDrafts().replacementPolygons).toBeUndefined();
-      expect(store.temporal.getState().pastStates).toHaveLength(0);
+      expect(store.history.state.getState().entries).toHaveLength(0);
     },
   );
 
@@ -837,7 +837,7 @@ describe("VertexTool", () => {
 
 describe("Frame tool", () => {
   it("targets the previewed polygon using raw coordinates even on a coarse grid", () => {
-    const store = createEditorStore({ historyUpdateThrottle: 0 });
+    const store = createEditorStore();
     const tool = new VertexTool(store);
     store.getState().actions.setPolygons([rectangle(2, 2, 2, 2)]);
     store.getState().actions.setGrid({ snap: true, size: 100 });
@@ -898,17 +898,17 @@ describe("Frame tool", () => {
   it.each(FRAME_MODES)(
     "applies %s in one undoable click and keeps preview changes out of history",
     (mode) => {
-      const store = createEditorStore({ historyUpdateThrottle: 0 });
+      const store = createEditorStore();
       const tool = new VertexTool(store);
       store.getState().actions.setPolygons([square]);
-      store.temporal.getState().clear();
+      store.history.clear();
       tool.onActivate("frame");
       store.getState().actions.setToolState<VertexToolState>("vertex", {
         frameMode: mode,
         frameWidthPx: 20,
       });
       tool.adjustFrameWidth(1);
-      expect(store.temporal.getState().pastStates).toHaveLength(0);
+      expect(store.history.state.getState().entries).toHaveLength(0);
       const expected = createFramePolygons(square, 21 * ELMA_PIXEL_SCALE, mode);
       tool.onPointerDown({ button: 0 } as PointerEvent, {
         worldPos: position(5, 5),
@@ -916,16 +916,16 @@ describe("Frame tool", () => {
         screenY: 0,
       });
       expect(store.getState().polygons).toEqual(expected);
-      expect(store.temporal.getState().pastStates).toHaveLength(1);
-      store.temporal.getState().undo();
+      expect(store.history.state.getState().entries).toHaveLength(1);
+      store.history.undo();
       expect(store.getState().polygons).toEqual([square]);
-      store.temporal.getState().redo();
+      store.history.redo();
       expect(store.getState().polygons).toEqual(expected);
     },
   );
 
   it("retains the hovered frame while adjusting controls off canvas", () => {
-    const store = createEditorStore({ historyUpdateThrottle: 0 });
+    const store = createEditorStore();
     const tool = new VertexTool(store);
     store.getState().actions.setPolygons([square]);
     tool.onActivate("frame");
@@ -1163,7 +1163,7 @@ describe("Placement tool grid consistency", () => {
     "matches preview and placement for %s",
     (ToolClass, collection, defaults) => {
       for (const altKey of [false, true]) {
-        const store = createEditorStore({ historyUpdateThrottle: 0 });
+        const store = createEditorStore();
         const tool = new ToolClass(store);
         const actions = store.getState().actions;
         actions.setToolState<Record<string, unknown>>(tool.meta.id, defaults);

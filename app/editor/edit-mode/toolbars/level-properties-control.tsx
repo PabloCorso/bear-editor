@@ -9,7 +9,11 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { IconButton } from "~/components/ui/button";
-import { useEditor, useEditorActions } from "~/editor/use-editor-store";
+import {
+  useEditor,
+  useEditorActions,
+  useEditorHistory,
+} from "~/editor/use-editor-store";
 import {
   FloatingToolbar,
   FloatingToolbarAnchor,
@@ -21,6 +25,7 @@ import { LgrSelect } from "~/components/lgr-select";
 
 export function LevelPropertiesControl() {
   const [open, setOpen] = useState(false);
+  const history = useEditorHistory();
   const { setGround, setLgr, setSky } = useEditorActions();
   const lgrAssets = useLgrAssets();
 
@@ -59,10 +64,10 @@ export function LevelPropertiesControl() {
     const previousGround = groundTexture;
     if (nextSky === previousSky) return;
 
-    if (nextSky === previousGround) {
-      setGround(previousSky);
-    }
-    setSky(nextSky);
+    history.execute({ label: "Change sky texture" }, () => {
+      if (nextSky === previousGround) setGround(previousSky);
+      setSky(nextSky);
+    });
   };
 
   const handleGroundTextureSelect = (nextGround: string) => {
@@ -70,10 +75,10 @@ export function LevelPropertiesControl() {
     const previousGround = groundTexture;
     if (nextGround === previousGround) return;
 
-    if (nextGround === previousSky) {
-      setSky(previousGround);
-    }
-    setGround(nextGround);
+    history.execute({ label: "Change ground texture" }, () => {
+      if (nextGround === previousSky) setSky(previousGround);
+      setGround(nextGround);
+    });
   };
 
   const skySrc = skyTextureSprite?.maskedSrc ?? skyTextureSprite?.src;
