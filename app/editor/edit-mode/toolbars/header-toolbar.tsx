@@ -1,4 +1,3 @@
-import type { HistoryTransaction } from "~/editor/history/transaction-history";
 import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
@@ -785,40 +784,35 @@ function LevelTitleInput({
   isLoading,
   ...props
 }: React.ComponentProps<typeof Input> & { isLoading?: boolean }) {
-  const store = useEditorStore();
   const { setLevelName } = useEditorActions();
-  const editRef = useRef<HistoryTransaction | null>(null);
-  useEffect(
-    () => () => {
-      editRef.current?.commit();
-    },
-    [],
-  );
   const levelName = useLevelName();
+  const [draft, setDraft] = useState({ source: levelName, value: levelName });
+  const cancelled = useRef(false);
+  if (draft.source !== levelName)
+    setDraft({ source: levelName, value: levelName });
   return (
     <Input
       type="text"
       name="level-name"
       maxLength={LEVEL_TITLE_MAX_LENGTH}
-      value={isLoading ? "" : levelName}
+      value={isLoading ? "" : draft.value}
       onFocus={() => {
-        editRef.current = store.history.begin({ label: "Rename level" });
+        cancelled.current = false;
       }}
-      onBlur={() => {
-        editRef.current?.commit();
-        editRef.current = null;
+      onBlur={(event) => {
+        if (!cancelled.current) setLevelName(event.currentTarget.value);
+        else setDraft({ source: levelName, value: levelName });
+        cancelled.current = false;
       }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
-          editRef.current?.cancel();
+          cancelled.current = true;
           event.currentTarget.blur();
         } else if (event.key === "Enter") event.currentTarget.blur();
       }}
-      onChange={(e) => {
-        if (!editRef.current?.active)
-          editRef.current = store.history.begin({ label: "Rename level" });
-        setLevelName(e.target.value);
-      }}
+      onChange={(event) =>
+        setDraft({ source: levelName, value: event.target.value })
+      }
       className={cn(
         "min-w-[12rem] flex-1 px-3",
         { "animate-pulse": isLoading },
