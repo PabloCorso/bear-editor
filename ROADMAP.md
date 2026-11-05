@@ -10,6 +10,7 @@ Planned features and feedback for Bear Editor.
 - AI Assistant
 
 - More vertex tool options or new polygon tools
+  - Continuable pipes: automatically join a new pipe when it starts close enough to an existing pipe. @iCS
   - Image to polygon
     - ofta: Any plans to add image to .lev?
   - Experimental
