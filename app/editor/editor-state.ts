@@ -141,7 +141,10 @@ export type EditorState = EditorHistoryContent & {
     updateReferenceImage: (
       id: string,
       patch: Partial<
-        Pick<ReferenceImage, "position" | "width" | "height" | "rotation">
+        Pick<
+          ReferenceImage,
+          "position" | "width" | "height" | "rotation" | "opacity"
+        >
       >,
     ) => void;
     removeReferenceImage: (id: string) => void;
