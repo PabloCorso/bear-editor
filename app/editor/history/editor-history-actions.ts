@@ -11,6 +11,7 @@ export const editorHistoryActionLabels = {
   "test-start.promote": "Promote test start",
   "reference-image.import": "Import reference image",
   "reference-image.edit": "Edit reference image",
+  "reference-image.opacity": "Change image opacity",
   "reference-image.delete": "Delete reference image",
   "start.move": "Move start",
   "apple.add": "Add apple",

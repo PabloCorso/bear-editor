@@ -1,3 +1,4 @@
+import { ImageOpacityControl } from "./toolbars/image-opacity-control";
 import { ShapeTool } from "./tools/shape-tool";
 import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
 import {
@@ -111,6 +112,7 @@ export function EditorContextMenu() {
   const flowers = useEditor((state) => state.flowers);
   const start = useEditor((state) => state.start);
   const sessionArtifacts = useEditor(getSessionArtifacts);
+  const referenceImages = useEditor((state) => state.referenceImages);
   const polygons = useEditor((state) => state.polygons);
   const pictures = useEditor((state) => state.pictures);
   const autoGrassOptions = useEditor((state) => state.autoGrassOptions);
@@ -234,6 +236,17 @@ export function EditorContextMenu() {
   }
 
   const propertyControlsStartIndex = toolbarSections.length;
+  const selectedImages = referenceImages.filter((image) =>
+    selectToolState.selectedObjects.includes(image.position),
+  );
+  if (selectedImages.length > 0) {
+    toolbarSections.push(
+      <ImageOpacityControl
+        key={selectedImages.map((image) => image.id).join(",")}
+        images={selectedImages}
+      />,
+    );
+  }
   if (selectedApples.length > 0) {
     toolbarSections.push(
       <SelectedApplesMenu
