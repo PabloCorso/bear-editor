@@ -1,9 +1,6 @@
 import { useEffect, useRef } from "react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverTrigger } from "~/components/ui/popover";
+import { SettingsPopoverContent } from "./settings-popover";
 import { ToolbarButton } from "~/components/ui/toolbar";
 import type { HistoryTransaction } from "~/editor/history/transaction-history";
 import {
@@ -43,14 +40,16 @@ export function ImageOpacityControl({ images }: { images: ReferenceImage[] }) {
           {mixed ? "Mixed" : `${percentage}%`}
         </ToolbarButton>
       </PopoverTrigger>
-      <PopoverContent
+      <SettingsPopoverContent
+        title="Image opacity"
+        closeLabel="Close image opacity"
         side="bottom"
         finalFocus={false}
-        className="z-50 w-56 rounded-xl border border-default bg-screen p-3 shadow-sm outline-hidden"
+        className="w-56"
       >
-        <label className="flex flex-col gap-3 text-sm">
+        <label className="flex flex-col gap-2 pr-1 pb-1 text-xs">
           <span className="flex items-center justify-between gap-3">
-            <span>Opacity</span>
+            <span className="font-bold text-secondary">Opacity</span>
             <span className="text-secondary tabular-nums">
               {mixed ? "Mixed" : `${percentage}%`}
             </span>
@@ -85,7 +84,7 @@ export function ImageOpacityControl({ images }: { images: ReferenceImage[] }) {
             onBlur={complete}
           />
         </label>
-      </PopoverContent>
+      </SettingsPopoverContent>
     </Popover>
   );
 }

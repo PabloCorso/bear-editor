@@ -439,7 +439,9 @@ export function EditorContextMenu() {
               separated={
                 index > 0 &&
                 (index === propertyControlsStartIndex ||
-                  index === selectionActionsIndex)
+                  index === selectionActionsIndex ||
+                  (selectedImages.length > 0 &&
+                    index === propertyControlsStartIndex + 1))
               }
             >
               {section}
