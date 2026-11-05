@@ -1,3 +1,8 @@
+import {
+  assertLevelLimits,
+  type LevelSelection,
+} from "~/editor/helpers/level-json";
+import { getClipboardCenter, translateClipboard } from "./selection-clipboard";
 import { findSessionArtifact } from "~/editor/session-artifacts";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
@@ -1698,20 +1703,57 @@ export class SelectTool extends Tool<SelectToolState> {
 
   private async pasteFromSystemClipboard(anchor: Position): Promise<void> {
     const { state } = this.getState();
-    const pasted = await this.clipboard.readForPaste(
-      anchor,
-      state.documentSession.clipboardSessionId,
-    );
-    if (
-      pasted &&
-      this.store.getState().documentSession.clipboardSessionId ===
-        state.documentSession.clipboardSessionId
-    )
-      this.commitPaste(pasted);
+    try {
+      const pasted = await this.clipboard.readForPaste(
+        anchor,
+        state.documentSession.clipboardSessionId,
+      );
+      if (
+        !pasted ||
+        this.store.getState().documentSession.clipboardSessionId !==
+          state.documentSession.clipboardSessionId
+      )
+        return;
+      if ("level" in pasted) {
+        this.edit("selection.paste", () => {
+          this.store.setState({ top10: undefined, ...pasted.level });
+          this.clear();
+        });
+        this.store.getState().actions.triggerFitToView();
+      } else this.commitPaste(pasted);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not paste JSON.");
+    }
+  }
+
+  importJsonSelection(data: LevelSelection, anchor: Position): void {
+    const center = getClipboardCenter(data);
+    if (!center) return;
+    const pasted = translateClipboard(data, {
+      x: anchor.x - center.x,
+      y: anchor.y - center.y,
+    });
+    if (pasted) this.commitPaste(pasted);
   }
 
   private commitPaste(pasted: PastedSelection): boolean {
     const { state, setToolState } = this.getState();
+    try {
+      assertLevelLimits({
+        polygons: [...state.polygons, ...pasted.polygons],
+        apples: [...state.apples, ...pasted.apples],
+        killers: [...state.killers, ...pasted.killers],
+        flowers: [...state.flowers, ...pasted.flowers],
+        pictures: [...state.pictures, ...pasted.pictures],
+      });
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Could not paste this selection.",
+      );
+      return false;
+    }
     this.edit("selection.paste", () => {
       if (pasted.polygons.length > 0) {
         state.actions.setPolygons([...state.polygons, ...pasted.polygons]);

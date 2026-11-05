@@ -7,7 +7,7 @@ import {
 import { downloadLevel, levelToBlob } from "~/editor/helpers/download-level";
 import type { EditorStore } from "~/editor/editor-store";
 import { elmaLevelFromEditorState } from "~/editor/helpers/level-parser";
-import type { ElmaLevel } from "~/editor/elma-types";
+import type { ElmaLevel } from "./elma-binary";
 import { trackEvent } from "~/analytics";
 
 const DB_NAME = "elma-file-session";

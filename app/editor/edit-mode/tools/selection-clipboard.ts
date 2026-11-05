@@ -1,25 +1,15 @@
+import {
+  parseLevelJson,
+  serializeLevelJson,
+  type LevelSelection,
+} from "~/editor/helpers/level-json";
+import type { EditorLevel } from "~/editor/elma-types";
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
 
 import type { SelectToolState } from "./select-tool";
 
-const CLIPBOARD_TYPE = "elma-selection";
-const CLIPBOARD_VERSION = 1;
-
-export type SelectionClipboard = {
-  polygons: Polygon[];
-  apples: Apple[];
-  killers: Position[];
-  flowers: Position[];
-  pictures: Picture[];
-};
-
-type SerializedSelectionClipboard = {
-  type: typeof CLIPBOARD_TYPE;
-  version: typeof CLIPBOARD_VERSION;
-  sourceClipboardSessionId: string;
-  payload: SelectionClipboard;
-};
+export type SelectionClipboard = LevelSelection;
 
 export type PastedSelection = SelectionClipboard & {
   selectedVertices: SelectToolState["selectedVertices"];
@@ -30,6 +20,8 @@ export type PastedSelection = SelectionClipboard & {
 export class SelectionClipboardController {
   private clipboard: SelectionClipboard | null = null;
   private pasteCount = 0;
+  private writtenText: string | null = null;
+  private sourceSessionId: string | null = null;
 
   canCopy(state: EditorState, selection: SelectToolState): boolean {
     return Boolean(buildSelectionClipboard(state, selection));
@@ -57,9 +49,10 @@ export class SelectionClipboardController {
   async copyToSystemClipboard(sourceSessionId: string): Promise<void> {
     if (!this.clipboard || !canAccessSystemClipboard()) return;
     try {
-      await navigator.clipboard.writeText(
-        serializeClipboard(this.clipboard, sourceSessionId),
-      );
+      const text = serializeLevelJson(this.clipboard);
+      await navigator.clipboard.writeText(text);
+      this.writtenText = text;
+      this.sourceSessionId = sourceSessionId;
     } catch {
       // Browser clipboard access can fail if permissions or context are missing.
     }
@@ -68,24 +61,21 @@ export class SelectionClipboardController {
   async readForPaste(
     anchor: Position,
     currentSessionId: string,
-  ): Promise<PastedSelection | null> {
-    if (canAccessSystemClipboard()) {
-      try {
-        const serialized = deserializeClipboard(
-          await navigator.clipboard.readText(),
-        );
-        if (serialized) {
-          this.clipboard = serialized.payload;
-          this.pasteCount = 0;
-          return serialized.sourceClipboardSessionId === currentSessionId
-            ? this.pasteWithMargin()
-            : this.pasteAtAnchor(anchor);
-        }
-      } catch {
-        // Fall back to the in-memory clipboard when system reads fail.
-      }
+  ): Promise<PastedSelection | { level: EditorLevel } | null> {
+    let text: string;
+    try {
+      if (!canAccessSystemClipboard()) return this.pasteWithMargin();
+      text = await navigator.clipboard.readText();
+    } catch {
+      return this.pasteWithMargin();
     }
-    return this.pasteAtAnchor(anchor);
+    const parsed = parseLevelJson(text);
+    if (parsed.kind === "level") return { level: parsed.data };
+    const sameCopy =
+      text === this.writtenText && currentSessionId === this.sourceSessionId;
+    this.clipboard = parsed.data;
+    if (!sameCopy) this.pasteCount = 0;
+    return sameCopy ? this.pasteWithMargin() : this.pasteAtAnchor(anchor);
   }
 
   private pasteWithMargin(): PastedSelection | null {
@@ -245,122 +235,10 @@ export function canAccessSystemClipboard(): boolean {
   );
 }
 
-export function serializeClipboard(
-  clipboard: SelectionClipboard,
-  sourceClipboardSessionId: string,
-): string {
-  const serialized: SerializedSelectionClipboard = {
-    type: CLIPBOARD_TYPE,
-    version: CLIPBOARD_VERSION,
-    sourceClipboardSessionId,
-    payload: clipboard,
-  };
-  return JSON.stringify(serialized);
-}
-
-export function deserializeClipboard(
-  text: string,
-): SerializedSelectionClipboard | null {
-  try {
-    const value = JSON.parse(text) as Partial<SerializedSelectionClipboard>;
-    if (
-      value.type !== CLIPBOARD_TYPE ||
-      value.version !== CLIPBOARD_VERSION ||
-      typeof value.sourceClipboardSessionId !== "string" ||
-      !isSelectionClipboard(value.payload)
-    ) {
-      return null;
-    }
-    return {
-      type: CLIPBOARD_TYPE,
-      version: CLIPBOARD_VERSION,
-      sourceClipboardSessionId: value.sourceClipboardSessionId,
-      payload: value.payload,
-    };
-  } catch {
-    return null;
-  }
-}
-
 function clonePosition(position: Position): Position {
   return { x: position.x, y: position.y };
 }
 
 function translate(position: Position, offset: Position): Position {
   return { x: position.x + offset.x, y: position.y + offset.y };
-}
-
-function isSelectionClipboard(value: unknown): value is SelectionClipboard {
-  return (
-    isRecord(value) &&
-    isPolygonArray(value.polygons) &&
-    isAppleArray(value.apples) &&
-    isPositionArray(value.killers) &&
-    isPositionArray(value.flowers) &&
-    isPictureArray(value.pictures)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isPosition(value: unknown): value is Position {
-  return (
-    isRecord(value) &&
-    typeof value.x === "number" &&
-    Number.isFinite(value.x) &&
-    typeof value.y === "number" &&
-    Number.isFinite(value.y)
-  );
-}
-
-function isPositionArray(value: unknown): value is Position[] {
-  return Array.isArray(value) && value.every(isPosition);
-}
-
-function isPolygon(value: unknown): value is Polygon {
-  return (
-    isRecord(value) &&
-    typeof value.grass === "boolean" &&
-    isPositionArray(value.vertices) &&
-    value.vertices.length >= (value.grass ? 2 : 3)
-  );
-}
-
-function isPolygonArray(value: unknown): value is Polygon[] {
-  return Array.isArray(value) && value.every(isPolygon);
-}
-
-function isApple(value: unknown): value is Apple {
-  return (
-    isRecord(value) &&
-    isPosition(value.position) &&
-    typeof value.animation === "number" &&
-    Number.isInteger(value.animation) &&
-    value.animation >= 1 &&
-    value.animation <= 9 &&
-    typeof value.gravity === "number"
-  );
-}
-
-function isAppleArray(value: unknown): value is Apple[] {
-  return Array.isArray(value) && value.every(isApple);
-}
-
-function isPicture(value: unknown): value is Picture {
-  return (
-    isRecord(value) &&
-    typeof value.name === "string" &&
-    typeof value.texture === "string" &&
-    typeof value.mask === "string" &&
-    isPosition(value.position) &&
-    typeof value.distance === "number" &&
-    Number.isFinite(value.distance) &&
-    typeof value.clip === "number"
-  );
-}
-
-function isPictureArray(value: unknown): value is Picture[] {
-  return Array.isArray(value) && value.every(isPicture);
 }

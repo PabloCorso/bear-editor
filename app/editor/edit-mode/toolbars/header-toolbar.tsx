@@ -1,3 +1,4 @@
+import { useJsonFileActions } from "./json-file-controls";
 import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
@@ -148,6 +149,7 @@ export function HeaderToolbar({
   engineRef,
   ...props
 }: HeaderToolbarProps) {
+  const jsonActions = useJsonFileActions({ disabled: isLoading });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -242,6 +244,7 @@ export function HeaderToolbar({
 
   return (
     <>
+      {jsonActions.input}
       {imageExport && (
         <ExportImageDialog
           snapshot={imageExport.snapshot}
@@ -268,6 +271,7 @@ export function HeaderToolbar({
           />
           <LevelVisibilityControl />
           <LevelOptionsMenu
+            jsonActions={jsonActions}
             isLoading={isLoading}
             onOpenProperties={() => setPropertiesOpen(true)}
           />
@@ -291,6 +295,7 @@ export function HeaderToolbar({
             />
             <LevelVisibilityControl />
             <LevelOptionsMenu
+              jsonActions={jsonActions}
               isLoading={isLoading}
               onOpenProperties={() => setPropertiesOpen(true)}
             />
@@ -347,11 +352,13 @@ export function HeaderToolbar({
 }
 
 function LevelOptionsMenu({
+  jsonActions,
   isLoading,
   onOpenProperties,
 }: {
   isLoading?: boolean;
   onOpenProperties: () => void;
+  jsonActions: ReturnType<typeof useJsonFileActions>;
 }) {
   const { getTool } = useEditorActions();
   const store = useEditorStore();
@@ -404,6 +411,18 @@ function LevelOptionsMenu({
             AutoGrass level
           </DropdownMenuItem>
           <GridMenu />
+          <DropdownMenuItem
+            disabled={isLoading}
+            onClick={jsonActions.importJson}
+          >
+            Import JSON…
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={isLoading}
+            onClick={jsonActions.exportJson}
+          >
+            Export JSON
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             iconBefore={<ImageIcon />}

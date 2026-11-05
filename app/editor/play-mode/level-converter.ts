@@ -1,8 +1,22 @@
 /**
  * Converts an elmajs Level instance to the game engine's LevelData format.
  */
-import type { Level } from "elmajs";
-import { ObjectType, Gravity } from "elmajs";
+import {
+  ObjectType,
+  Gravity,
+  type Polygon,
+  type LevelObject,
+  type Picture,
+} from "../elma-types";
+type Level = {
+  name: string;
+  lgr: string;
+  ground: string;
+  sky: string;
+  polygons: Polygon[];
+  objects: LevelObject[];
+  pictures: Picture[];
+};
 import { Vec2 } from "./engine/core/vec2";
 import type {
   LevelData,

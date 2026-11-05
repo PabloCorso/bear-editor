@@ -1,11 +1,3 @@
-import * as elmajs from "elmajs";
-
-export const ElmaLevel = elmajs.Level;
-export const ElmaLGR = elmajs.LGR;
-
-export type ElmaLevel = InstanceType<typeof elmajs.Level>;
-export type ElmaLGR = InstanceType<typeof elmajs.LGR>;
-
 export enum ObjectType {
   Exit = 1,
   Apple = 2,
@@ -27,9 +19,14 @@ export enum Clip {
   Sky = 2,
 }
 
-export type Position = InstanceType<typeof elmajs.Position>;
-export type Polygon = InstanceType<typeof elmajs.Polygon>;
-export type ElmaPicture = InstanceType<typeof elmajs.Picture>;
+export type Position = { x: number; y: number };
+export type Polygon = { grass: boolean; vertices: Position[] };
+export type LevelObject = {
+  type: ObjectType;
+  position: Position;
+  gravity: Gravity;
+  animation: number;
+};
 
 export type Picture = {
   name: string;
@@ -64,7 +61,8 @@ export type Apple = {
   gravity: Gravity;
 };
 
-export type LevelTop10 = ElmaLevel["top10"];
+export type TimeEntry = { name1: string; name2: string; time: number };
+export type LevelTop10 = { single: TimeEntry[]; multi: TimeEntry[] };
 
 export type EditorLevel = {
   top10?: LevelTop10;

@@ -1,4 +1,4 @@
-import { ElmaLGR } from "../editor/elma-types";
+import { ElmaLGR } from "../editor/helpers/elma-binary";
 import { decodeLgrSpritePixels } from "../editor/helpers/pcx-loader";
 
 type WorkerRequest = {

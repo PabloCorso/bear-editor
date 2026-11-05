@@ -1,4 +1,4 @@
-import type { ElmaLevel } from "../elma-types";
+import type { ElmaLevel } from "./elma-binary";
 import { trackEvent } from "~/analytics";
 
 export function levelToBlob(level: ElmaLevel): Blob {

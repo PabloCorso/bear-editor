@@ -1,6 +1,7 @@
+import { ElmaLGR } from "~/editor/helpers/elma-binary";
 import defaultLgr from "../assets/lgr/Default.lgr?url";
 import { decodeLgrSpritePixels } from "~/editor/helpers/pcx-loader";
-import { Clip, ElmaLGR, Mask, type AppleAnimation } from "~/editor/elma-types";
+import { Clip, Mask, type AppleAnimation } from "~/editor/elma-types";
 import { standardSprites } from "./standard-sprites";
 import type { DecodedLgrSprite, WorkerResponse } from "./lgr-assets.worker";
 

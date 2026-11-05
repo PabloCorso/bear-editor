@@ -1,6 +1,6 @@
+import { ElmaLevel } from "./elma-binary";
 import {
   Clip,
-  ElmaLevel,
   Gravity,
   ObjectType,
   Texture,
@@ -149,12 +149,24 @@ async function editorLevelFromBuffer(data: ArrayBuffer) {
     lgr: elmaLevel.lgr || "default",
     ground: elmaLevel.ground || Texture.Ground,
     sky: elmaLevel.sky || Texture.Sky,
-    polygons: elmaLevel.polygons,
+    polygons: elmaLevel.polygons.map(({ grass, vertices }) => ({
+      grass,
+      vertices: vertices.map(({ x, y }) => ({ x, y })),
+    })),
     apples,
     killers,
     flowers,
     start,
-    pictures: elmaLevel.pictures.map((picture) => ({ ...picture })),
+    pictures: elmaLevel.pictures.map(
+      ({ name, texture, mask, position, distance, clip }) => ({
+        name,
+        texture,
+        mask,
+        position: { x: position.x, y: position.y },
+        distance,
+        clip,
+      }),
+    ),
   };
   return level;
 }
