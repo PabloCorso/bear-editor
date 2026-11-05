@@ -41,8 +41,8 @@ export function ImageOpacityControl({ images }: { images: ReferenceImage[] }) {
         </ToolbarButton>
       </PopoverTrigger>
       <SettingsPopoverContent
-        title="Image opacity"
-        closeLabel="Close image opacity"
+        title="Image properties"
+        closeLabel="Close image properties"
         side="bottom"
         finalFocus={false}
         className="w-56"

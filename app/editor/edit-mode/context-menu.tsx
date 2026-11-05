@@ -239,14 +239,6 @@ export function EditorContextMenu() {
   const selectedImages = referenceImages.filter((image) =>
     selectToolState.selectedObjects.includes(image.position),
   );
-  if (selectedImages.length > 0) {
-    toolbarSections.push(
-      <ImageOpacityControl
-        key={selectedImages.map((image) => image.id).join(",")}
-        images={selectedImages}
-      />,
-    );
-  }
   if (selectedApples.length > 0) {
     toolbarSections.push(
       <SelectedApplesMenu
@@ -333,6 +325,16 @@ export function EditorContextMenu() {
             ),
           );
         }}
+      />,
+    );
+  }
+
+  const imagePropertiesIndex = toolbarSections.length;
+  if (selectedImages.length > 0) {
+    toolbarSections.push(
+      <ImageOpacityControl
+        key={selectedImages.map((image) => image.id).join(",")}
+        images={selectedImages}
       />,
     );
   }
@@ -440,8 +442,7 @@ export function EditorContextMenu() {
                 index > 0 &&
                 (index === propertyControlsStartIndex ||
                   index === selectionActionsIndex ||
-                  (selectedImages.length > 0 &&
-                    index === propertyControlsStartIndex + 1))
+                  (selectedImages.length > 0 && index === imagePropertiesIndex))
               }
             >
               {section}
