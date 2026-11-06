@@ -7,12 +7,8 @@ Planned features and feedback for Bear Editor.
 - @Tarogato i concern that being able to move polys by edge without selection could interfere with grabbing pictures and masks
   - hotkeys to toggle select only poly / only pic / only mask / only fans / grass / object
 
-- AI Assistant
-
 - More vertex tool options or new polygon tools
   - Continuable pipes: automatically join a new pipe when it starts close enough to an existing pipe. @iCS
-  - Image to polygon
-    - ofta: Any plans to add image to .lev?
   - Experimental
     - Text number sequence tool.
     - Roller coaster tool
@@ -34,7 +30,6 @@ Planned features and feedback for Bear Editor.
 - Multi-player level editor
   - Follow a designer's view while editing; explore following them in play mode too.
   - Chain level working areas: let different designers build separate parts, with optional locks to prevent edits by others and optional hiding to keep parts secret until revealed.
-- Version history info
 - Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
 - Import level
 - Replace selection
