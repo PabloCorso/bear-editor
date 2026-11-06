@@ -1,3 +1,12 @@
+import type { PictureToolState } from "../tools/picture-tool";
+import {
+  MAX_PICTURE_DISTANCE,
+  MIN_PICTURE_DISTANCE,
+  PICTURE_DISTANCE_STEP,
+  nextPictureClip,
+  normalizeDistance,
+  pictureClipOptions,
+} from "~/editor/helpers/picture-properties";
 import { ShapeToolInfo } from "./shape-tool-control";
 import {
   isPolygonBooleanTool,
@@ -90,6 +99,26 @@ export function ToolInfo() {
   const activeToolId = useEditor((state) => state.activeToolId);
   const hasPictures = useEditor((state) => state.pictures.length > 0);
   const registeredTools = useEditorRegisteredTools();
+  const placement = useEditorToolState<PictureToolState>(activeToolId);
+  const { activateTool } = useEditorActions();
+  const nextObjectId =
+    activeToolId === "apple"
+      ? "killer"
+      : activeToolId === "killer"
+        ? "flower"
+        : "apple";
+  const objectTip = (
+    <CanvasTipSegment>
+      Next object
+      <CanvasTipKeyButton
+        aria-label="Next object"
+        title="Next object (Space)"
+        onClick={() => activateTool(nextObjectId)}
+      >
+        space
+      </CanvasTipKeyButton>
+    </CanvasTipSegment>
+  );
   const vertex = useEditorToolState<VertexToolState>("vertex");
   const select = useEditorToolState<SelectToolState>("select");
   useEditor((state) => state.mousePosition);
@@ -155,6 +184,7 @@ export function ToolInfo() {
   if (activeToolId === "apple") {
     return (
       <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        {objectTip}
         <CanvasTipSegment>
           Animation
           <CanvasTipKey>1</CanvasTipKey>
@@ -169,13 +199,49 @@ export function ToolInfo() {
     );
   }
 
-  if (["picture", "texture", "color"].includes(activeToolId)) {
+  if (["killer", "flower"].includes(activeToolId)) {
+    return (
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        {objectTip}
+      </CanvasTipGroup>
+    );
+  }
+
+  if (["picture", "texture", "color"].includes(activeToolId) && placement) {
     return (
       <CanvasTipGroup title={toolName} aria-label="Active tool info">
         <CanvasTipSegment>
-          Properties
-          <CanvasTipKey>Right click</CanvasTipKey>
+          Clip:{" "}
+          {
+            pictureClipOptions.find((option) => option.value === placement.clip)
+              ?.label
+          }
+          <CanvasTipKeyButton
+            aria-label="Change clipping"
+            title="Change clipping (Space)"
+            onClick={() =>
+              setToolState(activeToolId, {
+                clip: nextPictureClip(placement.clip),
+              })
+            }
+          >
+            space
+          </CanvasTipKeyButton>
         </CanvasTipSegment>
+        <CanvasTipNumberControl
+          label="Distance"
+          accessibleLabel="distance"
+          value={placement.distance}
+          min={MIN_PICTURE_DISTANCE}
+          max={MAX_PICTURE_DISTANCE}
+          onAdjust={(delta) =>
+            setToolState(activeToolId, {
+              distance: normalizeDistance(
+                placement.distance + delta * PICTURE_DISTANCE_STEP,
+              ),
+            })
+          }
+        />
       </CanvasTipGroup>
     );
   }

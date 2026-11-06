@@ -1,3 +1,9 @@
+import {
+  nextPictureClip,
+  normalizeDistance,
+  PICTURE_DISTANCE_STEP,
+} from "~/editor/helpers/picture-properties";
+import type { PictureToolState } from "../tools/picture-tool";
 import { activeTestStart } from "~/editor/test-starts";
 import { goToTestStart } from "~/editor/helpers/test-start-navigation";
 import {
@@ -56,7 +62,10 @@ import {
   type VertexToolState,
   type VertexToolVariant,
 } from "~/editor/edit-mode/tools/vertex-tool";
-import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
+import {
+  defaultTools,
+  objectToolIds,
+} from "~/editor/edit-mode/tools/default-tools";
 import type { EditorDocumentInput } from "~/editor/editor-state";
 import { buildEditorWorldScene } from "~/editor/edit-mode/scene/editor-scene-builder";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
@@ -1039,6 +1048,54 @@ export class EditorEngine {
       }
       event.preventDefault();
       return;
+    }
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.isComposing
+    ) {
+      if (
+        event.key === " " &&
+        !event.shiftKey &&
+        objectToolIds.includes(state.activeToolId)
+      ) {
+        if (!event.repeat) {
+          const index = objectToolIds.indexOf(state.activeToolId);
+          state.actions.activateTool(
+            objectToolIds[(index + 1) % objectToolIds.length],
+          );
+        }
+        event.preventDefault();
+        return;
+      }
+      if (["picture", "texture", "color"].includes(state.activeToolId)) {
+        const placement = state.actions.getToolState<PictureToolState>(
+          state.activeToolId,
+        );
+        if (
+          placement &&
+          (event.key === " " || ["+", "=", "-"].includes(event.key))
+        ) {
+          if (event.key === " ") {
+            if (!event.repeat && !event.shiftKey) {
+              state.actions.setToolState(state.activeToolId, {
+                clip: nextPictureClip(placement.clip),
+              });
+            }
+          } else {
+            state.actions.setToolState(state.activeToolId, {
+              distance: normalizeDistance(
+                placement.distance +
+                  (event.key === "-" ? -1 : 1) * PICTURE_DISTANCE_STEP,
+              ),
+            });
+          }
+          event.preventDefault();
+          return;
+        }
+      }
     }
 
     // Let active tool handle the key first

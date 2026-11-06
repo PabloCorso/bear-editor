@@ -3,7 +3,6 @@ import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
 import { HandIcon } from "@phosphor-icons/react/dist/ssr";
 import { ShapeToolControl } from "./shape-tool-control";
 import { TextToolControl } from "./text-tool-control";
-import { SpriteIcon } from "~/components/sprite-icon";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
 import {
   defaultToolOrder,
@@ -15,7 +14,7 @@ import {
   ToolbarSeparator,
   type ToolbarProps,
 } from "~/components/ui/toolbar";
-import { useLgrAssets, useLgrSprite } from "~/components/use-lgr-assets";
+import { useLgrAssets } from "~/components/use-lgr-assets";
 import { AppleToolControl } from "./apple-tool-control";
 import { ColorToolControl } from "./color-tool-control";
 import { PictureToolControl } from "./picture-tool-control";
@@ -53,7 +52,10 @@ export function ControlToolbar({ className, ...props }: ControlToolbarProps) {
     (tool) =>
       !navigationTools.some(
         (navigationTool) => navigationTool.id === tool.id,
-      ) && !isPolygonBooleanTool(tool.id),
+      ) &&
+      !isPolygonBooleanTool(tool.id) &&
+      tool.id !== "killer" &&
+      tool.id !== "flower",
   );
 
   return (
@@ -113,12 +115,6 @@ function RegisteredToolControl({
   if (meta.id === defaultTools.apple.id) {
     return <AppleToolControl {...props} />;
   }
-  if (meta.id === defaultTools.killer.id) {
-    return <KillerToolControl {...props} />;
-  }
-  if (meta.id === defaultTools.flower.id) {
-    return <FlowerToolControl {...props} />;
-  }
   if (meta.id === defaultTools.picture.id) {
     return <PictureToolControl {...props} />;
   }
@@ -145,32 +141,6 @@ function HandToolControl(props: ToolControlButtonProps) {
   return (
     <ToolControlButton {...defaultTools.hand} {...props}>
       <HandIcon weight="light" />
-    </ToolControlButton>
-  );
-}
-
-function KillerToolControl(props: ToolControlButtonProps) {
-  const killerSprite = useLgrSprite("qkiller");
-  return (
-    <ToolControlButton
-      isLoading={!killerSprite.src}
-      {...defaultTools.killer}
-      {...props}
-    >
-      <SpriteIcon src={killerSprite.src} />
-    </ToolControlButton>
-  );
-}
-
-function FlowerToolControl(props: ToolControlButtonProps) {
-  const flowerSprite = useLgrSprite("qexit");
-  return (
-    <ToolControlButton
-      isLoading={!flowerSprite.src}
-      {...defaultTools.flower}
-      {...props}
-    >
-      <SpriteIcon src={flowerSprite.src} />
     </ToolControlButton>
   );
 }
