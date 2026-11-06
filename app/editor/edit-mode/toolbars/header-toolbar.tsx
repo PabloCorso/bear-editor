@@ -1,4 +1,3 @@
-import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { getLevelTopology } from "~/editor/helpers/level-topology";
@@ -33,7 +32,6 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
-  DotsThreeVerticalIcon,
   CaretRightIcon,
   CaretLeftIcon,
   CaretDownIcon,
@@ -154,6 +152,7 @@ export function HeaderToolbar({
   const [highlightLevelFolder, setHighlightLevelFolder] = useState(false);
   const topologyOpen = useEditor((state) => state.topologyInspection !== null);
   const { setTopologyInspection } = useEditorActions();
+  const imageInput = useRef<HTMLInputElement>(null);
   const menuActions = useMainMenuActions();
   const { handleNew, handleOpenFile, handleSave } = menuActions;
   const store = useEditorStore();
@@ -242,6 +241,31 @@ export function HeaderToolbar({
 
   return (
     <>
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const canvas = document.querySelector("canvas");
+          if (!canvas) return;
+          try {
+            await importReferenceImage(store, file, {
+              width: canvas.clientWidth,
+              height: canvas.clientHeight,
+            });
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Could not import this image.",
+            );
+          }
+        }}
+      />
       {imageExport && (
         <ExportImageDialog
           snapshot={imageExport.snapshot}
@@ -258,6 +282,8 @@ export function HeaderToolbar({
       >
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
+            onImportImage={() => imageInput.current?.click()}
+            onOpenProperties={() => setPropertiesOpen(true)}
             actions={menuActions}
             onExportImage={handleExportImage}
             isLoading={isLoading}
@@ -267,10 +293,7 @@ export function HeaderToolbar({
             }}
           />
           <LevelVisibilityControl />
-          <LevelOptionsMenu
-            isLoading={isLoading}
-            onOpenProperties={() => setPropertiesOpen(true)}
-          />
+          <AutoGrassLevelButton isLoading={isLoading} />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
           <TopologyCheck isLoading={isLoading} />
@@ -281,6 +304,8 @@ export function HeaderToolbar({
         <div className="hidden grid-cols-[120px_minmax(0,1fr)_120px] gap-4 sm:grid">
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
+              onImportImage={() => imageInput.current?.click()}
+              onOpenProperties={() => setPropertiesOpen(true)}
               actions={menuActions}
               onExportImage={handleExportImage}
               isLoading={isLoading}
@@ -290,10 +315,7 @@ export function HeaderToolbar({
               }}
             />
             <LevelVisibilityControl />
-            <LevelOptionsMenu
-              isLoading={isLoading}
-              onOpenProperties={() => setPropertiesOpen(true)}
-            />
+            <AutoGrassLevelButton isLoading={isLoading} />
           </Toolbar>
 
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
@@ -346,82 +368,18 @@ export function HeaderToolbar({
   );
 }
 
-function LevelOptionsMenu({
-  isLoading,
-  onOpenProperties,
-}: {
-  isLoading?: boolean;
-  onOpenProperties: () => void;
-}) {
+function AutoGrassLevelButton({ isLoading }: { isLoading?: boolean }) {
   const { getTool } = useEditorActions();
-  const store = useEditorStore();
-  const imageInput = useRef<HTMLInputElement>(null);
   const modifier = useModifier();
-
   return (
-    <>
-      <input
-        ref={imageInput}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        hidden
-        onChange={async (event) => {
-          const file = event.currentTarget.files?.[0];
-          event.currentTarget.value = "";
-          if (!file) return;
-          const canvas = document.querySelector("canvas");
-          if (!canvas) return;
-          try {
-            await importReferenceImage(store, file, {
-              width: canvas.clientWidth,
-              height: canvas.clientHeight,
-            });
-          } catch (error) {
-            alert(
-              error instanceof Error
-                ? error.message
-                : "Could not import this image.",
-            );
-          }
-        }}
-      />
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger>
-          <ToolButton name="Level options">
-            <DotsThreeVerticalIcon weight="bold" />
-          </ToolButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="min-w-64"
-          collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
-        >
-          <DropdownMenuItem
-            iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
-            shortcut={getAutoGrassAllShortcut(modifier)}
-            disabled={isLoading}
-            onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
-          >
-            AutoGrass level
-          </DropdownMenuItem>
-          <GridMenu />
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            iconBefore={<ImageIcon />}
-            disabled={isLoading}
-            onClick={() => imageInput.current?.click()}
-          >
-            Import image…
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            iconBefore={<InfoIcon />}
-            onClick={onOpenProperties}
-          >
-            Level properties
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+    <ToolButton
+      name="AutoGrass level"
+      shortcut={getAutoGrassAllShortcut(modifier)}
+      disabled={isLoading}
+      onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
+    >
+      <VertexIcon {...getVertexIconProps("autoGrass")} />
+    </ToolButton>
   );
 }
 
@@ -665,11 +623,15 @@ function useMainMenuActions() {
 }
 
 function MainDropdownMenu({
+  onImportImage,
+  onOpenProperties,
   onOpenSettings,
   actions,
   onExportImage,
   isLoading,
 }: {
+  onImportImage: () => void;
+  onOpenProperties: () => void;
   onOpenSettings: () => void;
   actions: ReturnType<typeof useMainMenuActions>;
   onExportImage: () => void;
@@ -746,6 +708,22 @@ function MainDropdownMenu({
             }}
           >
             Export image…
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<ImageIcon />}
+            disabled={isLoading}
+            onClick={onImportImage}
+          >
+            Import image…
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<InfoIcon />}
+            onClick={onOpenProperties}
+          >
+            Level properties
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

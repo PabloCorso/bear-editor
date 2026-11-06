@@ -56,6 +56,7 @@ export function EditorShell({
         ) : null}
       </div>
       <EditorToolbars
+        canvasRef={canvasRef}
         engineRef={engineRef}
         isLoading={initialDocument.status === "loading"}
       />
@@ -78,9 +79,11 @@ function PlayModeOverlayFallback() {
 }
 
 function EditorToolbars({
+  canvasRef,
   engineRef,
   isLoading,
 }: {
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   engineRef: React.RefObject<EditorEngine | null>;
   isLoading?: boolean;
 }) {
@@ -100,7 +103,7 @@ function EditorToolbars({
         fileNameEntrance={fileNameEntrance}
       />
       <ControlToolbar />
-      <CanvasToolbar engineRef={engineRef} />
+      <CanvasToolbar engineRef={engineRef} canvasRef={canvasRef} />
     </>
   );
 }

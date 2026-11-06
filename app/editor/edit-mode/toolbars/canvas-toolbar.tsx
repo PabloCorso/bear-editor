@@ -1,3 +1,5 @@
+import { CanvasOptionsMenu } from "./canvas-options-menu";
+import { CanvasMinimap } from "./canvas-minimap";
 import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
@@ -25,6 +27,7 @@ import { ToolButton, type ToolButtonProps } from "~/components/tool-button";
 import { cn, useModifier } from "~/utils/misc";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import { useEffect, useState } from "react";
+import { useLocalStorage } from "@mantine/hooks";
 import { ToolbarButton } from "~/components/ui/toolbar";
 import {
   DropdownMenu,
@@ -39,11 +42,13 @@ import { OPEN_KEYBOARD_SHORTCUTS_SHORTCUT } from "./keyboard-shortcuts";
 
 type CanvasToolbarProps = ToolbarProps & {
   engineRef: React.RefObject<EditorEngine | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
 };
 
 export function CanvasToolbar({
   className,
   engineRef,
+  canvasRef,
   ...props
 }: CanvasToolbarProps) {
   const { triggerFitToView } = useEditorActions();
@@ -62,6 +67,10 @@ export function CanvasToolbar({
         vertex?.variant === "brush" ||
         vertex?.previewAutoGrassAll));
   const modifier = useModifier();
+  const [minimapVisible, setMinimapVisible] = useLocalStorage({
+    key: "bear-editor-minimap-visible",
+    defaultValue: false,
+  });
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(function handleKeyboardShortcutsListener() {
@@ -88,29 +97,39 @@ export function CanvasToolbar({
     <>
       <div
         className={cn(
-          "absolute right-4 bottom-4 flex items-center gap-2",
+          "absolute right-4 bottom-4 flex max-w-[calc(100%-2rem)] flex-wrap justify-end gap-2",
           className,
         )}
         {...props}
       >
+        {minimapVisible && (
+          <CanvasMinimap
+            canvasRef={canvasRef}
+            onClose={() => setMinimapVisible(false)}
+          />
+        )}
         <Toolbar className="w-fit gap-2">
           <UndoToolButton />
           <RedoToolButton />
         </Toolbar>
         <Toolbar className="w-fit gap-2">
           <ToolButton
-            name="Zoom In"
-            shortcut={usesSizeShortcuts ? undefined : "+"}
-            onClick={() => engineRef.current?.zoomIn()}
-          >
-            <PlusIcon />
-          </ToolButton>
-          <ToolButton
-            name="Zoom Out"
+            name="Zoom out"
             shortcut={usesSizeShortcuts ? undefined : "-"}
             onClick={() => engineRef.current?.zoomOut()}
           >
             <MinusIcon />
+          </ToolButton>
+          <CanvasOptionsMenu
+            minimapVisible={minimapVisible}
+            onMinimapVisibleChange={setMinimapVisible}
+          />
+          <ToolButton
+            name="Zoom in"
+            shortcut={usesSizeShortcuts ? undefined : "+"}
+            onClick={() => engineRef.current?.zoomIn()}
+          >
+            <PlusIcon />
           </ToolButton>
           <ToolButton
             name="Fit to view"
