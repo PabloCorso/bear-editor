@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-06
+
+- Image to polygon support via AI prompts library @ofta
+
 ## 2026-11-03
 
 - Add a configurable canvas grid and snap to grid under Level options → Grid. Hold Alt for free placement and movement.
