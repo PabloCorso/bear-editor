@@ -1,3 +1,4 @@
+import { AiGuideControl } from "./ai-guide-dialog";
 import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
 import { HandIcon } from "@phosphor-icons/react/dist/ssr";
 import { ShapeToolControl } from "./shape-tool-control";
@@ -87,6 +88,8 @@ export function ControlToolbar({ className, ...props }: ControlToolbarProps) {
             disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
           />
         ))}
+        <ToolbarSeparator />
+        <AiGuideControl />
       </Toolbar>
     </div>
   );
