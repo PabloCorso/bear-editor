@@ -1,6 +1,9 @@
+import { createRequire } from "node:module";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+
+const require = createRequire(import.meta.url);
 
 const isStorybook = process.env.npm_lifecycle_event?.includes("storybook");
 
@@ -38,5 +41,16 @@ export default defineConfig(async ({ mode }) => {
 
   return {
     plugins,
+    resolve: {
+      // elmajs ships ESM without a module/exports entry in package.json.
+      alias: [
+        {
+          find: /^elmajs$/,
+          replacement: require.resolve("elmajs/lib-esm/index.js"),
+        },
+      ],
+    },
+    // Its extensionless directory imports require Vite resolution, including SSR.
+    ssr: { noExternal: ["elmajs"] },
   };
 });

@@ -22,7 +22,6 @@ Planned features and feedback for Bear Editor.
 
 - Faster loads
   - Investigate the initial HTML response delay, then evaluate a static or prerendered editor shell or HTML caching.
-  - Use the existing `elmajs` ESM build to enable tree shaking, with browser and SSR validation.
 
 ## Known issues
 
