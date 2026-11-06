@@ -715,6 +715,19 @@ function SelectionActionsMenu({
       ),
     );
   });
+  const singleStartSelected = useEditor((state) => {
+    const selection = state.actions.getToolState<SelectToolState>("select");
+    return Boolean(
+      selection &&
+      selection.selectedVertices.length === 0 &&
+      selection.selectedPictures.length === 0 &&
+      selection.selectedObjects.length === 1 &&
+      (selection.selectedObjects[0] === state.start ||
+        state.testStarts.items.some(
+          (item) => item.position === selection.selectedObjects[0],
+        )),
+    );
+  });
   const onlyTestStartActions =
     !canTransform &&
     !canDuplicate &&
@@ -847,14 +860,15 @@ function SelectionActionsMenu({
             </DropdownMenuGroup>
           </>
         )}
-        {onlyTestStartActions ? (
-          <TestStartMenuItems />
-        ) : (
-          <>
-            <DropdownMenuSeparator />
-            <TestStartSubmenu />
-          </>
-        )}
+        {singleStartSelected &&
+          (onlyTestStartActions ? (
+            <TestStartMenuItems />
+          ) : (
+            <>
+              <DropdownMenuSeparator />
+              <TestStartSubmenu />
+            </>
+          ))}
       </DropdownMenuContent>
     </MenuRoot>
   );

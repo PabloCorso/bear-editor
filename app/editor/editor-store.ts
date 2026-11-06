@@ -1,3 +1,4 @@
+import { objectToolIds } from "./edit-mode/tools/default-tools";
 import { defaultGridSettings, normalizeGridSettings } from "./grid";
 import {
   defaultPictureSelectionSettings,
@@ -515,7 +516,10 @@ export function createEditorStore({
           // Update store with new tool
           set({
             activeToolId: toolId,
-            openToolMenuId: null,
+            openToolMenuId:
+              state.openToolMenuId === "apple" && objectToolIds.includes(toolId)
+                ? "apple"
+                : null,
           });
           const tool = state.toolsMap.get(toolId);
           tool?.onActivate?.(variant);

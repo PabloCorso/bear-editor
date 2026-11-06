@@ -565,6 +565,10 @@ function getShortcutGroups(
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.appleSprite} />,
           subItems: [
             {
+              shortcut: "Space",
+              label: "Next object: Apple → Killer → Flower",
+            },
+            {
               shortcut: "1-9",
               label: "Change apple animation",
             },
@@ -582,11 +586,13 @@ function getShortcutGroups(
           shortcut: defaultTools.killer.shortcut,
           label: defaultTools.killer.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.killerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Flower" }],
         },
         {
           shortcut: defaultTools.flower.shortcut,
           label: defaultTools.flower.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.flowerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Apple" }],
         },
         {
           shortcut: defaultTools.picture.shortcut,
@@ -634,7 +640,7 @@ function getShortcutGroups(
         {
           shortcut: "Enter",
           label:
-            "Accept the focused choice or keep the current choice and close the panel",
+            "Accept the focused choice; close the panel when the canvas is focused",
         },
         {
           shortcut: "Esc",
@@ -645,6 +651,14 @@ function getShortcutGroups(
     {
       title: "Picture, texture, and color placement",
       items: [
+        {
+          shortcut: "Space",
+          label: "Cycle clipping: Sky → Ground → Unclipped",
+        },
+        {
+          shortcut: ["-", "+ / ="],
+          label: "Decrease / increase distance by 10",
+        },
         {
           shortcut: "Right click",
           label: "Open placement properties at the cursor",
