@@ -148,11 +148,13 @@ export class WebGLPolygonDrawer {
     gl.disable(gl.STENCIL_TEST);
   }
 
-  drawDraftGroundPolygons(
+  drawDraftGroundSkyPolygons(
     scene: WorldRenderScene,
-    textureName: string,
+    groundTextureName: string,
+    skyTextureName: string,
     lgrAssets: LgrAssets | null,
-    fallbackColor: string,
+    groundFallbackColor: string,
+    skyFallbackColor: string,
   ) {
     const draftsByOpacity = new Map<
       number,
@@ -182,13 +184,34 @@ export class WebGLPolygonDrawer {
 
       gl.colorMask(true, true, true, true);
       gl.stencilMask(0x00);
+      // Draft polygons invert the committed ground/sky topology. Render the
+      // resulting ground where both the committed sky bit and draft coverage
+      // bit are set, then render sky where only draft coverage is set.
+      gl.stencilFunc(
+        gl.EQUAL,
+        0x01 | DRAFT_COVERAGE_STENCIL_BIT,
+        0x01 | DRAFT_COVERAGE_STENCIL_BIT,
+      );
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+      this.drawWorldFill(
+        scene,
+        groundTextureName,
+        lgrAssets,
+        groundFallbackColor,
+        opacity,
+      );
       gl.stencilFunc(
         gl.EQUAL,
         DRAFT_COVERAGE_STENCIL_BIT,
-        DRAFT_COVERAGE_STENCIL_BIT,
+        0x01 | DRAFT_COVERAGE_STENCIL_BIT,
       );
-      gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
-      this.drawWorldFill(scene, textureName, lgrAssets, fallbackColor, opacity);
+      this.drawWorldFill(
+        scene,
+        skyTextureName,
+        lgrAssets,
+        skyFallbackColor,
+        opacity,
+      );
     }
 
     gl.stencilMask(DRAFT_COVERAGE_STENCIL_BIT);

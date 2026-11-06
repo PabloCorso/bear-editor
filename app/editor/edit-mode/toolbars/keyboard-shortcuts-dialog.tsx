@@ -40,6 +40,7 @@ import {
   getNewLevelShortcut,
   formatShortcutCode,
   GO_TO_PLAY_START_SHORTCUT,
+  OPEN_AI_PROMPT_LIBRARY_SHORTCUT,
   OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
 } from "./keyboard-shortcuts";
 
@@ -752,6 +753,10 @@ function getShortcutGroups(
         {
           shortcut: `${modifier} + ,`,
           label: "Settings",
+        },
+        {
+          shortcut: OPEN_AI_PROMPT_LIBRARY_SHORTCUT,
+          label: "Open AI Prompt Library",
         },
         {
           shortcut: OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,

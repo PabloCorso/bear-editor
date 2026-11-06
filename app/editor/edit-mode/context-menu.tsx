@@ -401,7 +401,15 @@ export function EditorContextMenu() {
     />,
   );
 
-  if (!hasSelection) return null;
+  if (!hasSelection)
+    return (
+      <CanvasPasteMenu
+        key={`${anchorPosition.x},${anchorPosition.y}`}
+        anchor={anchor}
+        selectTool={selectTool}
+        worldPosition={selectToolState.contextMenuWorldPosition}
+      />
+    );
   if (directMenu) return toolbarSections[selectionActionsIndex];
 
   return (
@@ -1148,4 +1156,62 @@ function createRectAnchor(
       });
     },
   };
+}
+
+function CanvasPasteMenu({
+  anchor,
+  selectTool,
+  worldPosition,
+}: {
+  anchor: PointAnchor;
+  selectTool: SelectTool | undefined;
+  worldPosition?: Position;
+}) {
+  const modifier = useModifier();
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function paste() {
+    if (!worldPosition || !selectTool) return;
+    setBusy(true);
+    try {
+      const pasted = await selectTool.pasteFromSystemClipboard(worldPosition);
+      if (pasted) selectTool.closeContextMenu();
+      else setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <ContextMenu.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) selectTool?.closeContextMenu();
+      }}
+    >
+      <DropdownMenuContent
+        anchor={anchor}
+        positionMethod="fixed"
+        finalFocus={false}
+        sideOffset={0}
+      >
+        <DropdownMenuItem
+          shortcut={`${modifier} + V`}
+          closeOnClick={false}
+          disabled={busy}
+          onClick={() => void paste()}
+        >
+          Paste
+        </DropdownMenuItem>
+        {failed && (
+          <p
+            role="status"
+            className="max-w-56 px-2 py-1 text-xs text-secondary"
+          >
+            No readable Bear Editor JSON. Copy valid JSON, or use {modifier} + V
+            if clipboard access is blocked.
+          </p>
+        )}
+      </DropdownMenuContent>
+    </ContextMenu.Root>
+  );
 }
