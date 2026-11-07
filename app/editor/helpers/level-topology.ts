@@ -48,7 +48,6 @@ export type TopologyRepair = {
 export type TopologyIssue = {
   id: string;
   type: TopologyIssueType;
-  severity: "error" | "warning";
   message: string;
   details: string;
   locations: Position[];
@@ -59,11 +58,9 @@ export type TopologyIssue = {
 };
 export type TopologyCheck = {
   id: string;
-  label: string;
-  failureLabel?: string;
-  status: "passed" | "failed" | "incomplete";
+  message: string;
+  status: "passed" | "failed";
   issueIds: string[];
-  showWhenPassed?: boolean;
 };
 export type TopologyCheckResult = {
   issues: TopologyIssue[];
@@ -71,7 +68,6 @@ export type TopologyCheckResult = {
   width: number;
   height: number;
   bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
-  truncated: boolean;
 };
 export type TopologyInspection = {
   activeIssueId: string | null;
@@ -127,9 +123,7 @@ export function getLevelTopology(
   ];
   if (cached && inputs.every((input, index) => input === cached!.inputs[index]))
     return cached.result;
-  const result = validateLevelTopology(level, assets, {
-    includePlacementDiagnostics: true,
-  });
+  const result = validateLevelTopology(level, assets);
   cached = { inputs, result };
   return result;
 }
@@ -137,10 +131,8 @@ export function getLevelTopology(
 export function validateLevelTopology(
   level: LevelInput,
   assets?: TopologyAssets | null,
-  options: { includePlacementDiagnostics?: boolean } = {},
 ): TopologyCheckResult {
   const issues: TopologyIssue[] = [];
-  let truncated = false;
   function add(
     type: TopologyIssueType,
     key: string,
@@ -150,16 +142,11 @@ export function validateLevelTopology(
       Omit<TopologyIssue, "id" | "type" | "message" | "details">
     > = {},
   ) {
-    if (issues.length >= MAX_FINDINGS) {
-      truncated = true;
-      return;
-    }
     issues.push({
       id: `${type}:${key}`,
       type,
       message,
       details,
-      severity: "error",
       locations: [],
       vertices: [],
       objects: [],
@@ -193,7 +180,7 @@ export function validateLevelTopology(
     add(
       "missing-polygon",
       "level",
-      "No polygons",
+      "The level needs a polygon",
       "Add at least one polygon before exporting the level.",
     );
   if (!level.flowers?.length)
@@ -226,6 +213,7 @@ export function validateLevelTopology(
   const pictures = level.pictures ?? [];
   const countChecks = [
     [
+      "polygon-count",
       "polygons",
       "Polygons",
       level.polygons.length,
@@ -233,6 +221,7 @@ export function validateLevelTopology(
       "Ground and grass polygons both count.",
     ],
     [
+      "vertex-count",
       "vertices",
       "Vertices",
       allVertices.length,
@@ -240,6 +229,7 @@ export function validateLevelTopology(
       "Ground and grass vertices both count.",
     ],
     [
+      "object-count",
       "objects",
       "Objects",
       objects.length,
@@ -247,6 +237,7 @@ export function validateLevelTopology(
       "The start, apples, flowers and killers all count.",
     ],
     [
+      "graphic-count",
       "pictures and textures",
       "Pictures and textures",
       pictures.length,
@@ -254,7 +245,7 @@ export function validateLevelTopology(
       "Pictures and masked textures share this limit.",
     ],
   ] as const;
-  for (const [name, label, count, maximum, note] of countChecks) {
+  for (const [, name, label, count, maximum, note] of countChecks) {
     if (count <= maximum) continue;
     add(
       "limit",
@@ -297,21 +288,22 @@ export function validateLevelTopology(
   for (const polygon of level.polygons) {
     const key = String(identity(polygon));
     const vertices = polygon.vertices;
-    if (!vertices.every(finite)) {
+    const finiteVertices = vertices.filter(finite);
+    const validCoordinates = finiteVertices.length === vertices.length;
+    if (!validCoordinates) {
       add(
         "invalid-position",
         key,
         "Polygon has a vertex coordinate that is not finite",
         "A vertex coordinate is NaN or infinite. Move or remove the affected vertices.",
-        { vertices, locations: vertices.filter(finite) },
+        { vertices, locations: finiteVertices },
       );
-      continue;
     }
     if (vertices.length < 3) {
       // Bear's open grass lines are useful in the editor, but EOL's file reader
       // requires at least three vertices even for grass. Repeat the last point.
       const replacement =
-        polygon.grass && vertices.length === 2
+        polygon.grass && vertices.length === 2 && validCoordinates
           ? { ...polygon, vertices: [...vertices, { ...vertices[1] }] }
           : undefined;
       add(
@@ -325,7 +317,7 @@ export function validateLevelTopology(
           : "Add vertices or remove this incomplete polygon.",
         {
           vertices,
-          locations: vertices,
+          locations: finiteVertices,
           repair: replacement
             ? { label: "Fix grass", polygon, replacement }
             : undefined,
@@ -339,9 +331,9 @@ export function validateLevelTopology(
         key,
         `Vertices in polygon: ${vertices.length.toLocaleString()} / ${limits.verticesPerPolygon.toLocaleString()}`,
         `SLE supports up to ${limits.verticesPerPolygon.toLocaleString()} vertices in one polygon. Simplify or split this polygon.`,
-        { vertices, locations: vertices },
+        { vertices, locations: finiteVertices },
       );
-    if (polygon.grass) continue;
+    if (polygon.grass || !validCoordinates) continue;
     const area = polygonArea(vertices);
     for (let index = 0; index < vertices.length; index++) {
       const start = vertices[index],
@@ -409,6 +401,7 @@ export function validateLevelTopology(
   edges.sort((a, b) => a.minX - b.minX);
   const intersections = new Map<string, TopologyIssue>();
   let comparisons = 0;
+  let intersectionScanIncomplete = false;
   intersectionScan: for (let i = 0; i < edges.length; i++) {
     const a = edges[i];
     for (
@@ -418,9 +411,9 @@ export function validateLevelTopology(
     ) {
       if (
         ++comparisons > MAX_EDGE_COMPARISONS ||
-        issues.length + intersections.size >= MAX_FINDINGS
+        intersections.size >= MAX_FINDINGS
       ) {
-        truncated = true;
+        intersectionScanIncomplete = true;
         break intersectionScan;
       }
       const b = edges[j];
@@ -450,7 +443,6 @@ export function validateLevelTopology(
         issue = {
           id: `${self ? "self-intersection" : "polygon-intersection"}:${key}`,
           type: self ? "self-intersection" : "polygon-intersection",
-          severity: "error",
           message: self
             ? "Polygon has a self-intersection"
             : "There are intersections in the level",
@@ -492,11 +484,11 @@ export function validateLevelTopology(
       );
     return distance;
   }
-  // Keep direct validation compatible with main's geometry-focused API.
-  // The editor's cached check opts into placement warnings for the full panel.
-  for (const { position, name, kind } of options.includePlacementDiagnostics
-    ? objects
-    : []) {
+  const canCheckGround =
+    !invalidGeometry &&
+    groundPolygons.length > 0 &&
+    !intersectionScanIncomplete;
+  for (const { position, name, kind } of objects) {
     const key = String(identity(position));
     const target = {
       objects: [position],
@@ -526,7 +518,7 @@ export function validateLevelTopology(
         "EOL allows object centres up to one unit beyond the level borders. Move this object closer to the level.",
         target,
       );
-    if (invalidGeometry || !groundPolygons.length || truncated) continue;
+    if (!canCheckGround) continue;
     if (
       (kind === "apple" || kind === "flower") &&
       isInGround(position, groundPolygons) &&
@@ -611,27 +603,31 @@ export function validateLevelTopology(
       "same-texture",
       "Ground and sky use the same texture",
       "The game warns that identical foreground and background textures can load incorrectly. Choose different textures.",
-      { severity: "warning" },
     );
-  if (assets?.isReady()) {
-    if (
-      level.lgr &&
-      level.lgr.toLowerCase().replace(/\.lgr$/, "") !==
-        assets.levelName.toLowerCase().replace(/\.lgr$/, "")
-    )
+  const loadedAssets = assets?.isReady() ? assets : null;
+  const normalizeLgr = (name: string) =>
+    name.toLowerCase().replace(/\.lgr$/, "") || "default";
+  const levelLgrLoaded =
+    loadedAssets !== null &&
+    normalizeLgr(level.lgr ?? "default") ===
+      normalizeLgr(loadedAssets.levelName);
+  if (loadedAssets) {
+    if (!levelLgrLoaded)
       add(
         "lgr",
         "unloaded",
         "Level LGR is not loaded",
-        `Load ${level.lgr} to check its graphics. The current preview uses ${assets.levelName}.`,
-        { severity: "warning" },
+        `Load ${level.lgr || "default"} to check its graphics. The current preview uses ${loadedAssets.levelName}.`,
       );
     else {
       const missing = new Map<string, Position[]>();
       for (const picture of pictures)
         for (const name of [picture.name, picture.texture, picture.mask])
-          if (name && !assets.getSprite(name))
-            missing.set(name, [...(missing.get(name) ?? []), picture.position]);
+          if (name && !loadedAssets.getSprite(name)) {
+            const positions = missing.get(name);
+            if (positions) positions.push(picture.position);
+            else missing.set(name, [picture.position]);
+          }
       for (const [name, positions] of missing)
         add(
           "lgr",
@@ -639,7 +635,6 @@ export function validateLevelTopology(
           `Missing graphic “${name}”`,
           "This picture, texture or mask is absent from the loaded LGR. Replace it or load the correct graphics file.",
           {
-            severity: "warning",
             pictures: positions,
             locations: positions.filter(finite),
           },
@@ -648,302 +643,202 @@ export function validateLevelTopology(
         ["Ground", level.ground],
         ["Sky", level.sky],
       ] as const)
-        if (name && !assets.getSprite(name))
+        if (name && !loadedAssets.getSprite(name))
           add(
             "lgr",
             kind,
             `${kind} texture is missing`,
             `“${name}” is absent from the loaded LGR. Choose an available texture in level properties.`,
-            { severity: "warning" },
           );
     }
   }
+  const visibleIssues: TopologyIssue[] = [];
   function check(
     id: string,
-    label: string,
+    successMessage: string,
+    errorMessage: string | ((issues: TopologyIssue[]) => string),
     matches: (issue: TopologyIssue) => boolean,
-    showWhenPassed = true,
-    getFailureLabel?: (matchingIssues: TopologyIssue[]) => string,
+    blockedMessage?: string,
   ): TopologyCheck {
     const matchingIssues = issues.filter(matches);
-    const issueIds = matchingIssues.map((issue) => issue.id);
+    // Limit navigation and overlays per check without hiding errors in later checks.
+    const findings = matchingIssues.slice(0, MAX_FINDINGS);
+    visibleIssues.push(...findings);
+    const failed = matchingIssues.length > 0 || blockedMessage !== undefined;
     return {
       id,
-      label,
-      failureLabel: matchingIssues.length
-        ? getFailureLabel?.(matchingIssues)
-        : undefined,
-      status: issueIds.length ? "failed" : "passed",
-      issueIds,
-      showWhenPassed,
+      status: failed ? "failed" : "passed",
+      message: failed
+        ? (blockedMessage ??
+          (typeof errorMessage === "string"
+            ? errorMessage
+            : errorMessage(matchingIssues)))
+        : successMessage,
+      issueIds: findings.map((issue) => issue.id),
     };
   }
-  function groupedFailureLabel(
-    matchingIssues: TopologyIssue[],
-    pluralLabel: string,
-  ) {
-    return matchingIssues.length === 1
-      ? matchingIssues[0].message
-      : `${matchingIssues.length.toLocaleString()} ${pluralLabel}`;
+
+  function singleOrMany(message: string) {
+    return (matchingIssues: TopologyIssue[]) =>
+      matchingIssues.length === 1 ? matchingIssues[0].message : message;
   }
-  const checks: TopologyCheck[] = [
+
+  const applesOrFlowers = objects.filter(
+    ({ kind }) => kind === "apple" || kind === "flower",
+  );
+  const startCheckBlocked =
+    !level.start || !canCheckGround || !finite(level.start);
+  const checks = [
     check(
       "has-polygon",
       "The level has a polygon",
+      "The level needs a polygon",
       (issue) => issue.type === "missing-polygon",
-      false,
     ),
     check(
       "has-flower",
       "The level has a flower",
+      "The level needs a flower",
       (issue) => issue.type === "missing-flower",
     ),
-    check(
-      "polygon-count",
-      `Polygons: ${level.polygons.length.toLocaleString()} / ${limits.polygons.toLocaleString()}`,
-      (issue) => issue.id === "limit:polygons",
-    ),
-    check(
-      "vertex-count",
-      `Vertices: ${allVertices.length.toLocaleString()} / ${limits.vertices.toLocaleString()}`,
-      (issue) => issue.id === "limit:vertices",
-    ),
-    check(
-      "object-count",
-      `Objects: ${objects.length.toLocaleString()} / ${limits.objects.toLocaleString()}`,
-      (issue) => issue.id === "limit:objects",
-    ),
-    check(
-      "graphic-count",
-      `Pictures and textures: ${pictures.length.toLocaleString()} / ${limits.pictures.toLocaleString()}`,
-      (issue) => issue.id === "limit:pictures and textures",
-    ),
-    check(
-      "level-width",
-      `Width: ${formatDimension(width)} / ${limits.dimension}`,
-      (issue) => issue.id === "bounds:width",
-    ),
-    check(
-      "level-height",
-      `Height: ${formatDimension(height)} / ${limits.dimension}`,
-      (issue) => issue.id === "bounds:height",
-    ),
+    ...countChecks.map(([id, name, label, count, maximum]) => {
+      const usage = `${label}: ${count.toLocaleString()} / ${maximum.toLocaleString()}`;
+      return check(
+        id,
+        usage,
+        `${usage} (over limit)`,
+        (issue) => issue.id === `limit:${name}`,
+      );
+    }),
+    ...(["width", "height"] as const).map((axis) => {
+      const label = axis === "width" ? "Width" : "Height";
+      const size = axis === "width" ? width : height;
+      const usage = `${label}: ${formatDimension(size)} / ${limits.dimension}`;
+      return check(
+        `level-${axis}`,
+        usage,
+        `${usage} (over limit)`,
+        (issue) => issue.id === `bounds:${axis}`,
+      );
+    }),
     check(
       "vertex-coordinates",
       "Every vertex coordinate is finite",
+      "Some vertex coordinates are not finite",
       (issue) => issue.type === "invalid-position" && issue.vertices.length > 0,
-      false,
-      (matchingIssues) =>
-        groupedFailureLabel(
-          matchingIssues,
-          "polygons have vertex coordinates that are not finite",
-        ),
     ),
     check(
       "polygon-vertex-minimum",
       "Every polygon has at least 3 file vertices",
-      (issue) =>
-        issue.type === "invalid-polygon" &&
-        (issue.message === "Grass needs 3 file vertices" ||
-          issue.message === "Polygon needs 3 vertices"),
-      false,
-      (matchingIssues) =>
-        groupedFailureLabel(
-          matchingIssues,
-          "polygons have fewer than 3 file vertices",
-        ),
+      singleOrMany("Some polygons have fewer than 3 file vertices"),
+      (issue) => issue.type === "invalid-polygon",
     ),
     check(
       "polygon-vertex-maximum",
       `Every polygon has at most ${limits.verticesPerPolygon.toLocaleString()} vertices`,
+      `Some polygons have more than ${limits.verticesPerPolygon.toLocaleString()} vertices`,
       (issue) =>
         issue.type === "limit" &&
-        ![
-          "limit:polygons",
-          "limit:vertices",
-          "limit:objects",
-          "limit:pictures and textures",
-        ].includes(issue.id),
-      true,
-      (matchingIssues) =>
-        groupedFailureLabel(
-          matchingIssues,
-          `polygons have more than ${limits.verticesPerPolygon.toLocaleString()} vertices`,
-        ),
+        !countChecks.some(([, name]) => issue.id === `limit:${name}`),
     ),
     check(
       "edge-length",
       "Polygon edges are not too short",
+      singleOrMany("Some polygon edges are too short"),
       (issue) =>
         issue.type === "duplicate-vertex" || issue.type === "nearby-vertex",
-      true,
-      (matchingIssues) =>
-        matchingIssues.length === 1
-          ? "Polygon edge is too short"
-          : `${matchingIssues.length.toLocaleString()} issues: Polygon edges are too short`,
     ),
     check(
       "corner-angle",
       "Polygon edges do not double back at vertices",
+      "Some polygon edges double back at vertices",
       (issue) => issue.type === "narrow-angle",
-      false,
-      (matchingIssues) =>
-        groupedFailureLabel(
-          matchingIssues,
-          "polygon vertices have edges that double back",
-        ),
     ),
     check(
       "polygon-intersection",
       "There are no intersections in the level",
+      singleOrMany("There are intersections in the level"),
       (issue) =>
         issue.type === "self-intersection" ||
         issue.type === "polygon-intersection",
-      true,
-      (matchingIssues) =>
-        groupedFailureLabel(
-          matchingIssues,
-          "polygon intersection issues were found",
-        ),
+      intersectionScanIncomplete
+        ? "The intersection scan could not finish"
+        : undefined,
     ),
-    ...(options.includePlacementDiagnostics
-      ? [
-          check(
-            "object-coordinates",
-            "Every object coordinate is finite",
-            (issue) =>
-              issue.type === "invalid-position" && issue.objects.length > 0,
-            false,
-            (matchingIssues) =>
-              groupedFailureLabel(
-                matchingIssues,
-                "objects have coordinates that are not finite",
-              ),
-          ),
-          check(
-            "object-bounds",
-            "Objects are within the level borders",
-            (issue) => issue.type === "object-outside",
-            false,
-            (matchingIssues) =>
-              groupedFailureLabel(
-                matchingIssues,
-                "objects are outside the level borders",
-              ),
-          ),
-          ...(!invalidGeometry && groundPolygons.length && !truncated
-            ? [
-                check(
-                  "object-inside-ground",
-                  "Apples and flowers are not inside ground",
-                  (issue) => issue.type === "object-inside-ground",
-                  true,
-                  (matchingIssues) => {
-                    if (matchingIssues.length === 1)
-                      return matchingIssues[0].message;
-                    const apples = matchingIssues.filter((issue) =>
-                      issue.message.startsWith("Apple "),
-                    ).length;
-                    const flowers = matchingIssues.length - apples;
-                    const objects = [
-                      apples
-                        ? `${apples} apple${apples === 1 ? "" : "s"}`
-                        : null,
-                      flowers
-                        ? `${flowers} flower${flowers === 1 ? "" : "s"}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" and ");
-                    return `${objects} ${matchingIssues.length === 1 ? "is" : "are"} inside ground`;
-                  },
-                ),
-                ...(level.start
-                  ? [
-                      check(
-                        "start-head",
-                        "The driver's head is not touching ground",
-                        (issue) => issue.type === "start-head",
-                      ),
-                      check(
-                        "start-wheel",
-                        "The driver's wheels are not lying on an edge",
-                        (issue) => issue.type === "start-wheel",
-                      ),
-                    ]
-                  : []),
-              ]
-            : []),
-        ]
-      : []),
+    check(
+      "object-coordinates",
+      "Every object coordinate is finite",
+      "Some object coordinates are not finite",
+      (issue) => issue.type === "invalid-position" && issue.objects.length > 0,
+    ),
+    check(
+      "object-bounds",
+      "Objects are within the level borders",
+      singleOrMany("Some objects are outside the level borders"),
+      (issue) => issue.type === "object-outside",
+    ),
+    check(
+      "object-inside-ground",
+      "No apples or flowers are fully inside ground",
+      singleOrMany("Some apples or flowers are fully inside ground"),
+      (issue) => issue.type === "object-inside-ground",
+      applesOrFlowers.length > 0 &&
+        (!canCheckGround ||
+          applesOrFlowers.some(({ position }) => !finite(position)))
+        ? "Apple and flower placement could not be checked"
+        : undefined,
+    ),
+    check(
+      "start-head",
+      "The driver's head is clear of ground",
+      "The driver's head is touching ground",
+      (issue) => issue.type === "start-head",
+      startCheckBlocked ? "Head clearance could not be checked" : undefined,
+    ),
+    check(
+      "start-wheel",
+      "The driver's wheels are clear of polygon edges",
+      "A driver's wheel is lying on an edge",
+      (issue) => issue.type === "start-wheel",
+      startCheckBlocked ? "Wheel placement could not be checked" : undefined,
+    ),
     check(
       "graphic-coordinates",
       "Every graphic coordinate is finite",
+      "Some graphic coordinates are not finite",
       (issue) => issue.type === "invalid-position" && issue.pictures.length > 0,
-      false,
-      (matchingIssues) =>
-        groupedFailureLabel(
-          matchingIssues,
-          "graphics have coordinates that are not finite",
-        ),
     ),
     check(
       "texture-bounds",
       "Textures are not too far outside the level polygons",
+      "Some textures are too far outside the level polygons",
       (issue) => issue.type === "texture-outside",
-      true,
-      (matchingIssues) =>
-        groupedFailureLabel(
-          matchingIssues,
-          "textures are too far outside the level polygons",
-        ),
     ),
     check(
       "ground-sky-textures",
       "Ground and sky use different textures",
+      "Ground and sky use the same texture",
       (issue) => issue.id === "lgr:same-texture",
-      false,
     ),
-    ...(assets?.isReady()
-      ? [
-          check(
-            "level-lgr",
-            "The level LGR is loaded",
-            (issue) => issue.id === "lgr:unloaded",
-            false,
-          ),
-          ...(!issues.some((issue) => issue.id === "lgr:unloaded")
-            ? [
-                check(
-                  "lgr-graphics",
-                  "Every graphic exists in the loaded LGR",
-                  (issue) =>
-                    issue.type === "lgr" &&
-                    issue.id !== "lgr:same-texture" &&
-                    issue.id !== "lgr:unloaded",
-                  false,
-                  (matchingIssues) =>
-                    groupedFailureLabel(
-                      matchingIssues,
-                      "graphics are missing from the loaded LGR",
-                    ),
-                ),
-              ]
-            : []),
-        ]
-      : []),
-    ...(truncated
-      ? [
-          {
-            id: "complete-scan",
-            label: "The topology check could not finish",
-            status: "incomplete" as const,
-            issueIds: [],
-          },
-        ]
-      : []),
+    check(
+      "level-lgr",
+      "The level LGR is loaded",
+      "Level LGR is not loaded",
+      (issue) => issue.id === "lgr:unloaded",
+      !levelLgrLoaded ? "Level LGR is not loaded" : undefined,
+    ),
+    check(
+      "lgr-graphics",
+      "Every graphic exists in the loaded LGR",
+      singleOrMany("Some graphics are missing from the loaded LGR"),
+      (issue) =>
+        issue.type === "lgr" &&
+        issue.id !== "lgr:same-texture" &&
+        issue.id !== "lgr:unloaded",
+      levelLgrLoaded ? undefined : "Load the level LGR to check its graphics",
+    ),
   ];
-  return { issues, checks, width, height, bounds, truncated };
+  return { issues: visibleIssues, checks, width, height, bounds };
 }
 
 export function getTopologySelection(
@@ -968,15 +863,11 @@ export function getTopologyRepairPolygons(
 }
 
 export function formatTopologyCheckResult(result: TopologyCheckResult) {
-  const errors = result.issues.filter((i) => i.severity === "error").length;
-  const warnings = result.issues.length - errors;
+  const errors = result.checks.filter((check) => check.status === "failed");
   return [
-    `${errors} errors, ${warnings} warnings.`,
+    `${errors.length} failed check${errors.length === 1 ? "" : "s"}.`,
     `Bounds: ${formatDimension(result.width)} x ${formatDimension(result.height)}.`,
-    ...result.issues.map((i) => i.message),
-    ...(result.truncated
-      ? ["Check incomplete. Fix these issues and check again."]
-      : []),
+    ...errors.map((check) => check.message),
   ].join("\n");
 }
 

@@ -24,7 +24,7 @@ export function getTopologyOverlays(
   ]);
   for (const issue of result.issues) {
     const active = activeIssueIds.has(issue.id);
-    const color = issue.severity === "error" ? "#f87171" : "#fbbf24";
+    const color = "#f87171";
     // All locations stay visible while checking. Highlight the active check.
     for (const position of issue.locations.slice(0, 200)) {
       const size = (active ? 18 : 12) / state.zoom;
