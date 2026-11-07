@@ -267,17 +267,39 @@ function generateGrassForEdgeRun(
     distance += edge.length;
   }
 
-  return {
-    grass: true,
-    grassDepth: options.depth,
-    vertices:
-      options.endInset <= 0
-        ? visibleVertices
-        : [
-            ...visibleVertices,
-            { ...visibleVertices[visibleVertices.length - 1]! } as Position,
-          ],
-  } as Polygon;
+  const first = visibleVertices[0];
+  const last = visibleVertices[visibleVertices.length - 1];
+  if (!first || !last) return null;
+
+  const span = Math.hypot(last.x - first.x, last.y - first.y);
+  if (span <= GEOMETRY_EPSILON) return null;
+  const normal = getDownwardSurfaceNormal({
+    from: first,
+    to: last,
+    length: span,
+  });
+  const straight = visibleVertices.every(
+    (vertex) =>
+      Math.abs(
+        (vertex.x - first.x) * normal.x + (vertex.y - first.y) * normal.y,
+      ) <= GEOMETRY_EPSILON,
+  );
+  // Give straight runs a narrow triangle. The closing edge remains the longest
+  // so the renderer skips it and follows the surface.
+  const offset = Math.min(ELMA_PIXEL_SCALE, span / 4);
+  const vertices = straight
+    ? [
+        first,
+        {
+          x: first.x + (last.x - first.x) / 2 + normal.x * offset,
+          y: first.y + (last.y - first.y) / 2 + normal.y * offset,
+        },
+        last,
+      ]
+    : visibleVertices;
+
+  const grass = { grass: true, grassDepth: options.depth, vertices };
+  return grass;
 }
 
 function pointAlongEdge(edge: GrassableEdge, distance: number): Position {

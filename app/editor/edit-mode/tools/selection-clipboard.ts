@@ -123,9 +123,7 @@ export function buildSelectionClipboard(
       const vertices = polygon.vertices
         .filter((vertex) => selected.has(vertex))
         .map(clonePosition);
-      return vertices.length >= (polygon.grass ? 2 : 3)
-        ? { ...polygon, vertices }
-        : null;
+      return vertices.length >= 3 ? { ...polygon, vertices } : null;
     })
     .filter((polygon): polygon is Polygon => polygon !== null);
   const apples = selection.selectedObjects
@@ -302,7 +300,7 @@ export function deserializeClipboard(text: string): SelectionClipboard | null {
           throw new Error();
         const grass = polygon.grass === true;
         const vertices = parseArray(polygon.vertices, parsePosition, false);
-        if (vertices.length < (grass ? 2 : 3)) throw new Error();
+        if (vertices.length < 3) throw new Error();
         return { grass, vertices };
       }),
       apples: parseArray(root.apples, (value): Apple => {

@@ -6,7 +6,7 @@ import {
   CaretRightIcon,
   CheckIcon,
   ChecksIcon,
-  WarningIcon,
+  MinusIcon,
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -68,25 +68,24 @@ export function TopologyResultPanel() {
   const inspection = useEditor((state) => state.topologyInspection);
   const [showAllChecks, setShowAllChecks] = useState(false);
   if (!result || !inspection) return null;
-  const errors = result.issues.filter(
-    (issue) => issue.severity === "error",
-  ).length;
-  const warnings = result.issues.length - errors;
-  const issueSummary = [
-    errors ? `${errors} error${errors === 1 ? "" : "s"}` : null,
-    warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const summary = result.truncated
-    ? ["Check incomplete", issueSummary].filter(Boolean).join(" · ")
-    : issueSummary || "All checks passed";
-  const issuesById = new Map(result.issues.map((issue) => [issue.id, issue]));
-  const rows = result.checks.filter(
-    (check) =>
-      check.status !== "passed" ||
-      (showAllChecks && check.showWhenPassed !== false),
+  const failedChecks = result.checks.filter(
+    (check) => check.status === "failed",
   );
+  const errors = failedChecks.length;
+  const failureSummary = errors
+    ? `${errors} failed check${errors === 1 ? "" : "s"}`
+    : null;
+  const summary =
+    [
+      failureSummary,
+      result.intersectionScanIncomplete
+        ? "Intersection check incomplete"
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "All checks passed";
+  const issuesById = new Map(result.issues.map((issue) => [issue.id, issue]));
+  const rows = showAllChecks ? result.checks : failedChecks;
 
   function setPreview(issue: TopologyIssue | null) {
     const state = store.getState();
@@ -197,9 +196,7 @@ export function TopologyResultPanel() {
               className={cn(
                 errors
                   ? "text-red-400"
-                  : warnings || result.truncated
-                    ? "text-amber-300"
-                    : "text-green-400",
+                  : !result.intersectionScanIncomplete && "text-green-400",
               )}
               aria-label={
                 showAllChecks ? "Hide passed checks" : "Show all checks"
@@ -209,8 +206,8 @@ export function TopologyResultPanel() {
             >
               {errors ? (
                 <XCircleIcon />
-              ) : warnings || result.truncated ? (
-                <WarningIcon />
+              ) : result.intersectionScanIncomplete ? (
+                <MinusIcon />
               ) : (
                 <ChecksIcon />
               )}
@@ -300,18 +297,6 @@ export function TopologyResultPanel() {
               .filter((issue): issue is TopologyIssue => Boolean(issue));
             const firstIssue = issues[0];
             const repair = issues.length === 1 ? firstIssue?.repair : undefined;
-            const incomplete = check.status === "incomplete";
-            const severity = issues.some((issue) => issue.severity === "error")
-              ? "error"
-              : "warning";
-            const label =
-              check.status === "passed"
-                ? check.label
-                : (check.failureLabel ??
-                  (issues.length === 1
-                    ? firstIssue?.message
-                    : `${issues.length} issues: ${check.label}`) ??
-                  check.label);
             const canShow = issues.some(
               (issue) =>
                 issue.locations.length ||
@@ -330,15 +315,10 @@ export function TopologyResultPanel() {
                       aria-label="Passed"
                       className="ml-1 size-4 shrink-0 text-green-400"
                     />
-                  ) : incomplete ? (
-                    <XIcon
+                  ) : check.status === "incomplete" ? (
+                    <MinusIcon
                       aria-label="Incomplete"
-                      className="ml-1 size-4 shrink-0 text-red-400"
-                    />
-                  ) : severity === "warning" ? (
-                    <WarningIcon
-                      aria-label="Warning"
-                      className="ml-1 size-4 shrink-0 text-amber-300"
+                      className="ml-1 size-4 shrink-0"
                     />
                   ) : (
                     <XIcon
@@ -346,7 +326,9 @@ export function TopologyResultPanel() {
                       className="ml-1 size-4 shrink-0 text-red-400"
                     />
                   )}
-                  <span className="min-w-0 flex-1 text-sm">{label}</span>
+                  <span className="min-w-0 flex-1 text-sm">
+                    {check.message}
+                  </span>
                   {repair && firstIssue && (
                     <Button
                       size="sm"
