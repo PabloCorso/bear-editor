@@ -5,8 +5,6 @@ import { Button, type ButtonProps } from "~/components/ui/button";
 const keyClassName =
   "inline-flex h-5 shrink-0 items-center justify-center rounded border border-separator px-1.5 py-0 font-sans text-[11px] font-bold text-secondary";
 
-// Shared placement keeps tool hints together and clears the canvas toolbar on
-// small screens. Individual hints only provide content and interactions.
 export function CanvasTips({
   className,
   ...props
@@ -14,7 +12,7 @@ export function CanvasTips({
   return (
     <div
       className={cn(
-        "pointer-events-none absolute right-4 bottom-16 left-4 z-10 flex flex-col items-start gap-2 sm:right-auto sm:bottom-4",
+        "flex min-w-0 flex-col items-start gap-2 overflow-x-auto",
         className,
       )}
       {...props}

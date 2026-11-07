@@ -115,11 +115,7 @@ export function ToolInfo() {
 
   if (activeToolId === "select" && select?.transformMode) {
     return (
-      <CanvasTipGroup
-        title="Resize & Rotate"
-        aria-label="Active tool info"
-        className="flex-nowrap"
-      >
+      <CanvasTipGroup title="Resize & Rotate" aria-label="Active tool info">
         <CanvasTipSegment>
           Resize proportionally
           <CanvasTipKey>{modifier}</CanvasTipKey>
