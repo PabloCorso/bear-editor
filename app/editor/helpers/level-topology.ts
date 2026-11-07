@@ -534,50 +534,49 @@ export function validateLevelTopology(
   const loadedAssets = assets?.isReady() ? assets : null;
   const normalizeLgr = (name: string) =>
     name.toLowerCase().replace(/\.lgr$/, "") || "default";
+  const levelLgrName = level.lgr || "default";
   const levelLgrLoaded =
     loadedAssets !== null &&
-    normalizeLgr(level.lgr ?? "default") ===
-      normalizeLgr(loadedAssets.levelName);
-  if (loadedAssets) {
-    if (!levelLgrLoaded)
+    normalizeLgr(levelLgrName) === normalizeLgr(loadedAssets.levelName);
+  const levelLgrFile = `${levelLgrName.replace(/\.lgr$/i, "")}.lgr`;
+  if (!levelLgrLoaded) {
+    add(
+      "lgr",
+      "unloaded",
+      `Load ${levelLgrFile} to check its graphics`,
+      "The preview may use a different LGR while the level’s graphics are unavailable.",
+    );
+  } else {
+    const missing = new Map<string, Position[]>();
+    for (const picture of pictures)
+      for (const name of [picture.name, picture.texture, picture.mask])
+        if (name && !loadedAssets.getSprite(name)) {
+          const positions = missing.get(name);
+          if (positions) positions.push(picture.position);
+          else missing.set(name, [picture.position]);
+        }
+    for (const [name, positions] of missing)
       add(
         "lgr",
-        "unloaded",
-        "Level LGR is not loaded",
-        `Load ${level.lgr || "default"} to check its graphics. The current preview uses ${loadedAssets.levelName}.`,
+        `graphic:${name}`,
+        `Missing graphic “${name}”`,
+        "This picture, texture, or mask is unavailable in the level’s LGR. It may appear for players using a different LGR.",
+        {
+          pictures: positions,
+          locations: positions.filter(finite),
+        },
       );
-    else {
-      const missing = new Map<string, Position[]>();
-      for (const picture of pictures)
-        for (const name of [picture.name, picture.texture, picture.mask])
-          if (name && !loadedAssets.getSprite(name)) {
-            const positions = missing.get(name);
-            if (positions) positions.push(picture.position);
-            else missing.set(name, [picture.position]);
-          }
-      for (const [name, positions] of missing)
+    for (const [kind, name] of [
+      ["Ground", level.ground],
+      ["Sky", level.sky],
+    ] as const)
+      if (name && !loadedAssets.getSprite(name))
         add(
           "lgr",
-          `graphic:${name}`,
-          `Missing graphic “${name}”`,
-          "This picture, texture or mask is absent from the loaded LGR. Replace it or load the correct graphics file.",
-          {
-            pictures: positions,
-            locations: positions.filter(finite),
-          },
+          kind,
+          `${kind} texture “${name}” is missing`,
+          `“${name}” is absent from the loaded LGR. Choose an available texture in level properties.`,
         );
-      for (const [kind, name] of [
-        ["Ground", level.ground],
-        ["Sky", level.sky],
-      ] as const)
-        if (name && !loadedAssets.getSprite(name))
-          add(
-            "lgr",
-            kind,
-            `${kind} texture is missing`,
-            `“${name}” is absent from the loaded LGR. Choose an available texture in level properties.`,
-          );
-    }
   }
   const visibleIssues: TopologyIssue[] = [];
   function check(
@@ -762,28 +761,28 @@ export function validateLevelTopology(
       "Ground and sky use different textures",
       "Ground and sky use the same texture",
       (issue) => issue.id === "lgr:same-texture",
+      { findingStatus: "warning" },
     ),
     check(
       "level-lgr",
       "The level LGR is loaded",
-      "Level LGR is not loaded",
+      `Load ${levelLgrFile} to check its graphics`,
       (issue) => issue.id === "lgr:unloaded",
-      {
-        blockedMessage: !levelLgrLoaded ? "Level LGR is not loaded" : undefined,
-      },
+      { findingStatus: "warning" },
     ),
     check(
       "lgr-graphics",
-      "Every graphic exists in the loaded LGR",
-      singleOrMany("Some graphics are missing from the loaded LGR"),
+      "All referenced graphics are available",
+      singleOrMany("Some graphics are missing from the level’s LGR"),
       (issue) =>
         issue.type === "lgr" &&
         issue.id !== "lgr:same-texture" &&
         issue.id !== "lgr:unloaded",
       {
-        blockedMessage: levelLgrLoaded
+        findingStatus: "warning",
+        incompleteMessage: levelLgrLoaded
           ? undefined
-          : "Load the level LGR to check its graphics",
+          : "Graphics could not be checked",
       },
     ),
   ];
