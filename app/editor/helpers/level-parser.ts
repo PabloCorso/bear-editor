@@ -114,6 +114,9 @@ export async function getBuiltinLevel(filename: string) {
 
 async function editorLevelFromBuffer(data: ArrayBuffer) {
   const elmaLevel = ElmaLevel.from(data);
+  if (elmaLevel.polygons.some((polygon) => polygon.vertices.length < 3)) {
+    throw new Error("The level contains a polygon with fewer than 3 vertices.");
+  }
 
   const apples: Apple[] = [];
   const killers: Position[] = [];
@@ -172,6 +175,10 @@ export function elmaLevelFromEditorState(state: EditorState) {
     throw new Error(
       "No polygons found in level. Please add some geometry before downloading.",
     );
+  }
+
+  if (state.polygons.some((polygon) => polygon.vertices.length < 3)) {
+    throw new Error("Every polygon needs at least 3 vertices.");
   }
 
   const level = new ElmaLevel();

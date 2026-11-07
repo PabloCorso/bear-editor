@@ -275,7 +275,7 @@ export class SelectionMutations {
       const vertices = polygon.vertices.filter(
         (vertex) => !removed.includes(vertex),
       );
-      if (vertices.length < (polygon.grass ? 2 : 3)) polygons.splice(index, 1);
+      if (vertices.length < 3) polygons.splice(index, 1);
       else polygons[index] = { ...polygon, vertices };
     }
     if (verticesByPolygon.size) state.actions.setPolygons(polygons);

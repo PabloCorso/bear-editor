@@ -1,16 +1,24 @@
 import { applyTopologyRepair } from "~/editor/helpers/topology-repair";
 import { useRef, useState } from "react";
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import {
   BoundingBoxIcon,
   CaretLeftIcon,
   CaretRightIcon,
   CheckIcon,
   ChecksIcon,
+  InfoIcon,
+  QuestionIcon,
   WarningIcon,
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, IconButton } from "~/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { ToolbarButton } from "~/components/ui/toolbar";
 import {
   Tooltip,
@@ -68,25 +76,25 @@ export function TopologyResultPanel() {
   const inspection = useEditor((state) => state.topologyInspection);
   const [showAllChecks, setShowAllChecks] = useState(false);
   if (!result || !inspection) return null;
-  const errors = result.issues.filter(
-    (issue) => issue.severity === "error",
+  const findings = result.checks.filter((check) => check.status !== "passed");
+  const errors = findings.filter((check) => check.status === "failed").length;
+  const warnings = findings.filter(
+    (check) => check.status === "warning",
   ).length;
-  const warnings = result.issues.length - errors;
-  const issueSummary = [
-    errors ? `${errors} error${errors === 1 ? "" : "s"}` : null,
-    warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const summary = result.truncated
-    ? ["Check incomplete", issueSummary].filter(Boolean).join(" · ")
-    : issueSummary || "All checks passed";
+  const incomplete = findings.length - errors - warnings;
+  const summary =
+    [
+      errors ? `${errors} failed check${errors === 1 ? "" : "s"}` : null,
+      warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : null,
+      incomplete ? `${incomplete} incomplete` : null,
+      result.intersectionScanIncomplete
+        ? "Intersection scan stopped early"
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "All checks passed";
   const issuesById = new Map(result.issues.map((issue) => [issue.id, issue]));
-  const rows = result.checks.filter(
-    (check) =>
-      check.status !== "passed" ||
-      (showAllChecks && check.showWhenPassed !== false),
-  );
+  const rows = showAllChecks ? result.checks : findings;
 
   function setPreview(issue: TopologyIssue | null) {
     const state = store.getState();
@@ -197,9 +205,9 @@ export function TopologyResultPanel() {
               className={cn(
                 errors
                   ? "text-red-400"
-                  : warnings || result.truncated
-                    ? "text-amber-300"
-                    : "text-green-400",
+                  : warnings
+                    ? "text-amber-400"
+                    : !incomplete && "text-green-400",
               )}
               aria-label={
                 showAllChecks ? "Hide passed checks" : "Show all checks"
@@ -209,8 +217,10 @@ export function TopologyResultPanel() {
             >
               {errors ? (
                 <XCircleIcon />
-              ) : warnings || result.truncated ? (
+              ) : warnings ? (
                 <WarningIcon />
+              ) : incomplete ? (
+                <QuestionIcon />
               ) : (
                 <ChecksIcon />
               )}
@@ -300,18 +310,6 @@ export function TopologyResultPanel() {
               .filter((issue): issue is TopologyIssue => Boolean(issue));
             const firstIssue = issues[0];
             const repair = issues.length === 1 ? firstIssue?.repair : undefined;
-            const incomplete = check.status === "incomplete";
-            const severity = issues.some((issue) => issue.severity === "error")
-              ? "error"
-              : "warning";
-            const label =
-              check.status === "passed"
-                ? check.label
-                : (check.failureLabel ??
-                  (issues.length === 1
-                    ? firstIssue?.message
-                    : `${issues.length} issues: ${check.label}`) ??
-                  check.label);
             const canShow = issues.some(
               (issue) =>
                 issue.locations.length ||
@@ -330,15 +328,15 @@ export function TopologyResultPanel() {
                       aria-label="Passed"
                       className="ml-1 size-4 shrink-0 text-green-400"
                     />
-                  ) : incomplete ? (
-                    <XIcon
-                      aria-label="Incomplete"
-                      className="ml-1 size-4 shrink-0 text-red-400"
-                    />
-                  ) : severity === "warning" ? (
+                  ) : check.status === "warning" ? (
                     <WarningIcon
                       aria-label="Warning"
-                      className="ml-1 size-4 shrink-0 text-amber-300"
+                      className="ml-1 size-4 shrink-0 text-amber-400"
+                    />
+                  ) : check.status === "incomplete" ? (
+                    <QuestionIcon
+                      aria-label="Incomplete"
+                      className="ml-1 size-4 shrink-0"
                     />
                   ) : (
                     <XIcon
@@ -346,7 +344,9 @@ export function TopologyResultPanel() {
                       className="ml-1 size-4 shrink-0 text-red-400"
                     />
                   )}
-                  <span className="min-w-0 flex-1 text-sm">{label}</span>
+                  <span className="min-w-0 flex-1 text-sm">
+                    {check.message}
+                  </span>
                   {repair && firstIssue && (
                     <Button
                       size="sm"
@@ -367,14 +367,41 @@ export function TopologyResultPanel() {
                       {repair.label}
                     </Button>
                   )}
-                  {canShow && (
-                    <Button
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => viewCheck(check)}
-                    >
-                      Show
-                    </Button>
+                  {check.status === "incomplete" ? (
+                    <Popover>
+                      <PopoverTrigger>
+                        <IconButton
+                          size="sm"
+                          className="size-7 shrink-0"
+                          aria-label={`Why this check is incomplete. ${check.message}`}
+                        >
+                          <InfoIcon />
+                        </IconButton>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="bottom"
+                        align="end"
+                        sideOffset={4}
+                        className="w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-default bg-screen p-2 text-xs shadow-sm"
+                      >
+                        <PopoverPrimitive.Title className="sr-only">
+                          {check.message}
+                        </PopoverPrimitive.Title>
+                        <PopoverPrimitive.Description>
+                          {check.explanation}
+                        </PopoverPrimitive.Description>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    canShow && (
+                      <Button
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => viewCheck(check)}
+                      >
+                        Show
+                      </Button>
+                    )
                   )}
                 </div>
               </li>
