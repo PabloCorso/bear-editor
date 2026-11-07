@@ -57,41 +57,36 @@ export function ControlToolbar({ className, ...props }: ControlToolbarProps) {
   );
 
   return (
-    <div
-      className={cn("absolute inset-y-0 left-4 grid", className)}
-      style={{
-        gridTemplateRows:
-          "minmax(var(--toolbar-space), 1fr) auto minmax(var(--toolbar-space), 1fr)",
-      }}
+    <Toolbar
+      orientation="vertical"
+      className={cn(
+        "pointer-events-auto max-h-full gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:thin]",
+        className,
+      )}
+      {...props}
     >
-      <Toolbar
-        orientation="vertical"
-        className="row-start-2 flex h-fit max-h-full flex-col gap-2 self-center overflow-auto"
-        {...props}
-      >
-        {navigationTools.map((tool) => (
-          <RegisteredToolControl
-            key={tool.id}
-            meta={tool}
-            tooltipSide="right"
-            disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
-          />
-        ))}
+      {navigationTools.map((tool) => (
+        <RegisteredToolControl
+          key={tool.id}
+          meta={tool}
+          tooltipSide="right"
+          disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
+        />
+      ))}
 
-        {drawingTools.length > 0 && <ToolbarSeparator />}
+      {drawingTools.length > 0 && <ToolbarSeparator />}
 
-        {drawingTools.map((tool) => (
-          <RegisteredToolControl
-            key={tool.id}
-            meta={tool}
-            tooltipSide="right"
-            disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
-          />
-        ))}
-        <ToolbarSeparator />
-        <AiGuideControl />
-      </Toolbar>
-    </div>
+      {drawingTools.map((tool) => (
+        <RegisteredToolControl
+          key={tool.id}
+          meta={tool}
+          tooltipSide="right"
+          disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
+        />
+      ))}
+      <ToolbarSeparator />
+      <AiGuideControl />
+    </Toolbar>
   );
 }
 

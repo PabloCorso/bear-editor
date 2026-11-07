@@ -88,16 +88,16 @@ export function CanvasToolbar({
     <>
       <div
         className={cn(
-          "absolute right-4 bottom-4 flex items-center gap-2",
+          "flex max-w-full items-center gap-2 overflow-x-auto",
           className,
         )}
         {...props}
       >
-        <Toolbar className="w-fit gap-2">
+        <Toolbar className="pointer-events-auto shrink-0 gap-1 sm:gap-2">
           <UndoToolButton />
           <RedoToolButton />
         </Toolbar>
-        <Toolbar className="w-fit gap-2">
+        <Toolbar className="pointer-events-auto shrink-0 gap-1 sm:gap-2">
           <ToolButton
             name="Zoom In"
             shortcut={usesSizeShortcuts ? undefined : "+"}
