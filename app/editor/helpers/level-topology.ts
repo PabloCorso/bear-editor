@@ -33,7 +33,6 @@ export type TopologyIssueType =
   | "missing-flower"
   | "bounds"
   | "limit"
-  | "invalid-position"
   | "object-outside"
   | "object-inside-ground"
   | "start-head"
@@ -290,15 +289,6 @@ export function validateLevelTopology(
     const vertices = polygon.vertices;
     const finiteVertices = vertices.filter(finite);
     const validCoordinates = finiteVertices.length === vertices.length;
-    if (!validCoordinates) {
-      add(
-        "invalid-position",
-        key,
-        "Polygon has a vertex coordinate that is not finite",
-        "A vertex coordinate is NaN or infinite. Move or remove the affected vertices.",
-        { vertices, locations: finiteVertices },
-      );
-    }
     if (vertices.length < 3) {
       // Bear's open grass lines are useful in the editor, but EOL's file reader
       // requires at least three vertices even for grass. Repeat the last point.
@@ -467,14 +457,13 @@ export function validateLevelTopology(
   }
   issues.push(...intersections.values());
 
-  const invalidGeometry = issues.some((i) =>
-    [
-      "invalid-position",
-      "invalid-polygon",
-      "self-intersection",
-      "polygon-intersection",
-    ].includes(i.type),
-  );
+  const invalidGeometry =
+    validVertices.length !== allVertices.length ||
+    issues.some((i) =>
+      ["invalid-polygon", "self-intersection", "polygon-intersection"].includes(
+        i.type,
+      ),
+    );
   function distanceToGroundEdge(p: Position) {
     let distance = Infinity;
     for (const edge of edges)
@@ -489,21 +478,9 @@ export function validateLevelTopology(
     groundPolygons.length > 0 &&
     !intersectionScanIncomplete;
   for (const { position, name, kind } of objects) {
+    if (!finite(position)) continue;
     const key = String(identity(position));
-    const target = {
-      objects: [position],
-      locations: finite(position) ? [position] : [],
-    };
-    if (!finite(position)) {
-      add(
-        "invalid-position",
-        key,
-        `${name} has a coordinate that is not finite`,
-        "A coordinate is NaN or infinite. Move or remove this object before exporting.",
-        target,
-      );
-      continue;
-    }
+    const target = { objects: [position], locations: [position] };
     if (
       bounds &&
       (position.x < bounds.minX - limits.objectBorder ||
@@ -566,15 +543,8 @@ export function validateLevelTopology(
     }
   }
   for (const picture of pictures) {
-    if (!finite(picture.position))
-      add(
-        "invalid-position",
-        String(identity(picture)),
-        "Graphic has a coordinate that is not finite",
-        "A coordinate is NaN or infinite. Move or remove this picture or texture.",
-        { pictures: [picture.position] },
-      );
-    else if (
+    if (!finite(picture.position)) continue;
+    if (
       picture.texture &&
       bounds &&
       (picture.position.x < bounds.minX - 11.898 ||
@@ -722,12 +692,6 @@ export function validateLevelTopology(
       );
     }),
     check(
-      "vertex-coordinates",
-      "Every vertex coordinate is finite",
-      "Some vertex coordinates are not finite",
-      (issue) => issue.type === "invalid-position" && issue.vertices.length > 0,
-    ),
-    check(
       "polygon-vertex-minimum",
       "Every polygon has at least 3 file vertices",
       singleOrMany("Some polygons have fewer than 3 file vertices"),
@@ -766,12 +730,6 @@ export function validateLevelTopology(
         : undefined,
     ),
     check(
-      "object-coordinates",
-      "Every object coordinate is finite",
-      "Some object coordinates are not finite",
-      (issue) => issue.type === "invalid-position" && issue.objects.length > 0,
-    ),
-    check(
       "object-bounds",
       "Objects are within the level borders",
       singleOrMany("Some objects are outside the level borders"),
@@ -801,12 +759,6 @@ export function validateLevelTopology(
       "A driver's wheel is lying on an edge",
       (issue) => issue.type === "start-wheel",
       startCheckBlocked ? "Wheel placement could not be checked" : undefined,
-    ),
-    check(
-      "graphic-coordinates",
-      "Every graphic coordinate is finite",
-      "Some graphic coordinates are not finite",
-      (issue) => issue.type === "invalid-position" && issue.pictures.length > 0,
     ),
     check(
       "texture-bounds",
