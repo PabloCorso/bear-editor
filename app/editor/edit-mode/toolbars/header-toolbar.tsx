@@ -1,3 +1,4 @@
+import { DesktopDownloadDialog } from "./desktop-download-dialog";
 import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
@@ -33,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
+  DownloadSimpleIcon,
   DotsThreeVerticalIcon,
   CaretRightIcon,
   CaretLeftIcon,
@@ -148,6 +150,9 @@ export function HeaderToolbar({
   engineRef,
   ...props
 }: HeaderToolbarProps) {
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => setIsDesktop(Boolean(window.bearDesktop)), []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -259,6 +264,9 @@ export function HeaderToolbar({
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
             actions={menuActions}
+            onDownloadDesktop={
+              isDesktop ? undefined : () => setDownloadOpen(true)
+            }
             onExportImage={handleExportImage}
             isLoading={isLoading}
             onOpenSettings={() => {
@@ -282,6 +290,9 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
               actions={menuActions}
+              onDownloadDesktop={
+                isDesktop ? undefined : () => setDownloadOpen(true)
+              }
               onExportImage={handleExportImage}
               isLoading={isLoading}
               onOpenSettings={() => {
@@ -329,6 +340,10 @@ export function HeaderToolbar({
         />
         <ToolInfo />
       </CanvasTips>
+      <DesktopDownloadDialog
+        open={downloadOpen}
+        onOpenChange={setDownloadOpen}
+      />
       <LevelPropertiesDialog
         open={propertiesOpen}
         onOpenChange={setPropertiesOpen}
@@ -665,11 +680,13 @@ function useMainMenuActions() {
 }
 
 function MainDropdownMenu({
+  onDownloadDesktop,
   onOpenSettings,
   actions,
   onExportImage,
   isLoading,
 }: {
+  onDownloadDesktop?: () => void;
   onOpenSettings: () => void;
   actions: ReturnType<typeof useMainMenuActions>;
   onExportImage: () => void;
@@ -757,6 +774,14 @@ function MainDropdownMenu({
           >
             Settings
           </DropdownMenuItem>
+          {onDownloadDesktop && (
+            <DropdownMenuItem
+              iconBefore={<DownloadSimpleIcon />}
+              onClick={onDownloadDesktop}
+            >
+              Download desktop app…
+            </DropdownMenuItem>
+          )}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
