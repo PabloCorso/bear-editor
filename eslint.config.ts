@@ -9,6 +9,9 @@ export default defineConfig([
   {
     ignores: [
       "build/**",
+      "desktop/build/**",
+      "desktop/dist/**",
+      "desktop/node_modules/**",
       "dist/**",
       ".react-router/**",
       ".agents/**",
@@ -21,6 +24,10 @@ export default defineConfig([
     plugins: { js },
     extends: ["js/recommended"],
     languageOptions: { globals: globals.browser },
+  },
+  {
+    files: ["desktop/**/*.{mjs,cjs}"],
+    languageOptions: { globals: globals.node },
   },
   tseslint.configs.recommended,
   pluginReact.configs.flat.recommended,

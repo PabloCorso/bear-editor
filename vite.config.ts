@@ -29,11 +29,12 @@ export default defineConfig(async ({ mode }) => {
 
   // Only load React Router + Netlify when actually needed
   if (!isStorybook && mode !== "test") {
-    const [{ reactRouter }, netlifyPlugin] = await Promise.all([
-      import("@react-router/dev/vite"),
-      import("@netlify/vite-plugin-react-router"), // Note: this plugin is ESM-only
-    ]);
-    plugins.push(reactRouter(), netlifyPlugin.default());
+    const { reactRouter } = await import("@react-router/dev/vite");
+    plugins.push(reactRouter());
+    if (process.env.BEAR_DESKTOP !== "1") {
+      const netlify = await import("@netlify/vite-plugin-react-router");
+      plugins.push(netlify.default());
+    }
   }
 
   return {

@@ -1,3 +1,4 @@
+import { DesktopUpdate } from "./desktop-update";
 import { TestStartContextMenu } from "~/editor/edit-mode/test-start-controls";
 import { lazy, Suspense } from "react";
 import { useHotkeys } from "@mantine/hooks";
@@ -62,6 +63,7 @@ export function EditorShell({
       <EditorContextMenu />
       <PlacementPropertiesMenu />
       <TestStartContextMenu />
+      <DesktopUpdate />
     </>
   );
 }
