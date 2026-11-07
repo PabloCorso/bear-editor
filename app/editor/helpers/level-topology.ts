@@ -290,28 +290,12 @@ export function validateLevelTopology(
     const finiteVertices = vertices.filter(finite);
     const validCoordinates = finiteVertices.length === vertices.length;
     if (vertices.length < 3) {
-      // Bear's open grass lines are useful in the editor, but EOL's file reader
-      // requires at least three vertices even for grass. Repeat the last point.
-      const replacement =
-        polygon.grass && vertices.length === 2 && validCoordinates
-          ? { ...polygon, vertices: [...vertices, { ...vertices[1] }] }
-          : undefined;
       add(
         "invalid-polygon",
         key,
-        polygon.grass
-          ? "Grass needs 3 file vertices"
-          : "Polygon needs 3 vertices",
-        polygon.grass
-          ? "EOL requires at least three stored vertices. Repeating the last endpoint preserves this open grass line's appearance."
-          : "Add vertices or remove this incomplete polygon.",
-        {
-          vertices,
-          locations: finiteVertices,
-          repair: replacement
-            ? { label: "Fix grass", polygon, replacement }
-            : undefined,
-        },
+        "Polygon needs at least 3 vertices",
+        "Add vertices or remove this incomplete polygon.",
+        { vertices, locations: finiteVertices },
       );
       continue;
     }
@@ -693,8 +677,8 @@ export function validateLevelTopology(
     }),
     check(
       "polygon-vertex-minimum",
-      "Every polygon has at least 3 file vertices",
-      singleOrMany("Some polygons have fewer than 3 file vertices"),
+      "Every polygon has at least 3 vertices",
+      singleOrMany("Some polygons have fewer than 3 vertices"),
       (issue) => issue.type === "invalid-polygon",
     ),
     check(
