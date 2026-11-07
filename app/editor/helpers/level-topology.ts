@@ -11,7 +11,7 @@ import {
 } from "../play-mode/engine/core/constants";
 
 export const VERTEX_OVERLAP_EPSILON = 0.0000002;
-const VERTEX_EPSILON = VERTEX_OVERLAP_EPSILON;
+const MIN_SOLID_EDGE_LENGTH = 1e-8;
 const POSITION_EPSILON = 1e-10;
 const MAX_FINDINGS = 200;
 const MAX_EDGE_COMPARISONS = 2_000_000;
@@ -25,10 +25,8 @@ export type TopologyAssets = {
 export type TopologyIssueType =
   | "duplicate-vertex"
   | "nearby-vertex"
-  | "narrow-angle"
   | "polygon-intersection"
   | "self-intersection"
-  | "invalid-polygon"
   | "missing-polygon"
   | "missing-flower"
   | "bounds"
@@ -58,12 +56,13 @@ export type TopologyIssue = {
 export type TopologyCheck = {
   id: string;
   message: string;
-  status: "passed" | "failed";
+  status: "passed" | "failed" | "incomplete";
   issueIds: string[];
 };
 export type TopologyCheckResult = {
   issues: TopologyIssue[];
   checks: TopologyCheck[];
+  intersectionScanIncomplete: boolean;
   width: number;
   height: number;
   bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
@@ -289,16 +288,7 @@ export function validateLevelTopology(
     const vertices = polygon.vertices;
     const finiteVertices = vertices.filter(finite);
     const validCoordinates = finiteVertices.length === vertices.length;
-    if (vertices.length < 3) {
-      add(
-        "invalid-polygon",
-        key,
-        "Polygon needs at least 3 vertices",
-        "Add vertices or remove this incomplete polygon.",
-        { vertices, locations: finiteVertices },
-      );
-      continue;
-    }
+    if (vertices.length < 3) continue;
     if (vertices.length > limits.verticesPerPolygon)
       add(
         "limit",
@@ -322,9 +312,13 @@ export function validateLevelTopology(
         minY: Math.min(start.y, end.y),
         maxY: Math.max(start.y, end.y),
       });
-      if (samePoint(start, end, VERTEX_EPSILON)) {
+      if (
+        Math.hypot(end.x - start.x, end.y - start.y) < MIN_SOLID_EDGE_LENGTH
+      ) {
         const exact = start.x === end.x && start.y === end.y;
-        const replacementVertices = vertices.filter((_, i) => i !== index);
+        const replacementVertices = exact
+          ? vertices.filter((_, i) => i !== index)
+          : vertices;
         const replacement = { ...polygon, vertices: replacementVertices };
         // Only offer removal of a consecutive redundant point, preserving at
         // least a triangle and the signed area. No random save-time nudging.
@@ -339,7 +333,7 @@ export function validateLevelTopology(
           exact
             ? "Two consecutive polygon vertices overlap"
             : "Polygon edge is too short",
-          "These consecutive polygon vertices are less than 0.0000002 units apart on both axes. Remove the redundant vertex or move it away. Any offered repair is previewed and can be undone.",
+          "This edge is shorter than 0.00000001 units. Remove the redundant vertex or move it away. Any offered repair is previewed and can be undone.",
           {
             vertices: [start, end],
             locations: [start],
@@ -348,24 +342,6 @@ export function validateLevelTopology(
               : undefined,
           },
         );
-      } else {
-        const previous =
-          vertices[(index + vertices.length - 1) % vertices.length];
-        const a = { x: previous.x - start.x, y: previous.y - start.y };
-        const b = { x: end.x - start.x, y: end.y - start.y };
-        if (
-          Math.hypot(a.x, a.y) > VERTEX_EPSILON &&
-          Math.abs(Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y)) <
-            VERTEX_EPSILON
-        ) {
-          add(
-            "narrow-angle",
-            `${key}:${index}`,
-            "Edges double back at a polygon vertex",
-            "The two edges leave this vertex in almost the same direction (angle below 0.0000002 radians). Move the vertex slightly. The game's own checker nudges such vertices.",
-            { vertices: [previous, start, end], locations: [start] },
-          );
-        }
       }
     }
   }
@@ -373,7 +349,8 @@ export function validateLevelTopology(
   // Sweep along X and reject disjoint edge bounds before exact intersection
   // tests. Do not compare every pair of vertices in a 20,000-vertex level.
   edges.sort((a, b) => a.minX - b.minX);
-  const intersections = new Map<string, TopologyIssue>();
+  const selfIntersections = new Map<string, TopologyIssue>();
+  const polygonIntersections = new Map<string, TopologyIssue>();
   let comparisons = 0;
   let intersectionScanIncomplete = false;
   intersectionScan: for (let i = 0; i < edges.length; i++) {
@@ -383,10 +360,7 @@ export function validateLevelTopology(
       j < edges.length && edges[j].minX <= a.maxX + POSITION_EPSILON;
       j++
     ) {
-      if (
-        ++comparisons > MAX_EDGE_COMPARISONS ||
-        intersections.size >= MAX_FINDINGS
-      ) {
+      if (++comparisons > MAX_EDGE_COMPARISONS) {
         intersectionScanIncomplete = true;
         break intersectionScan;
       }
@@ -408,20 +382,24 @@ export function validateLevelTopology(
       )
         continue;
       const self = a.polygon === b.polygon;
+      const intersections = self ? selfIntersections : polygonIntersections;
       const ids = [identity(a.polygon), identity(b.polygon)].sort(
         (x, y) => x - y,
       );
       const key = `${ids[0]}:${ids[1]}`;
       let issue = intersections.get(key);
       if (!issue) {
+        // Keep scanning after the marker budget is reached so either check can fail.
+        if (intersections.size >= MAX_FINDINGS) continue;
         issue = {
           id: `${self ? "self-intersection" : "polygon-intersection"}:${key}`,
           type: self ? "self-intersection" : "polygon-intersection",
           message: self
-            ? "Polygon has a self-intersection"
-            : "There are intersections in the level",
-          details:
-            "Polygon edges intersect. Move the marked vertices, or use a polygon operation to combine the intended shapes. Grass intersections are allowed.",
+            ? "Polygon crosses itself"
+            : "Edges of different polygons intersect",
+          details: self
+            ? "Move the marked vertices so the polygon no longer crosses itself."
+            : "Move the marked vertices or combine the polygons if they should form one shape.",
           vertices: [],
           locations: [],
           objects: [],
@@ -439,15 +417,13 @@ export function validateLevelTopology(
           issue.locations.push(p);
     }
   }
-  issues.push(...intersections.values());
+  issues.push(...selfIntersections.values(), ...polygonIntersections.values());
 
   const invalidGeometry =
     validVertices.length !== allVertices.length ||
-    issues.some((i) =>
-      ["invalid-polygon", "self-intersection", "polygon-intersection"].includes(
-        i.type,
-      ),
-    );
+    level.polygons.some((polygon) => polygon.vertices.length < 3) ||
+    selfIntersections.size > 0 ||
+    polygonIntersections.size > 0;
   function distanceToGroundEdge(p: Position) {
     let distance = Infinity;
     for (const edge of edges)
@@ -457,10 +433,8 @@ export function validateLevelTopology(
       );
     return distance;
   }
-  const canCheckGround =
-    !invalidGeometry &&
-    groundPolygons.length > 0 &&
-    !intersectionScanIncomplete;
+  const groundGeometryValid = !invalidGeometry && groundPolygons.length > 0;
+  const canCheckGround = groundGeometryValid && !intersectionScanIncomplete;
   for (const { position, name, kind } of objects) {
     if (!finite(position)) continue;
     const key = String(identity(position));
@@ -613,6 +587,7 @@ export function validateLevelTopology(
     errorMessage: string | ((issues: TopologyIssue[]) => string),
     matches: (issue: TopologyIssue) => boolean,
     blockedMessage?: string,
+    incompleteMessage?: string,
   ): TopologyCheck {
     const matchingIssues = issues.filter(matches);
     // Limit navigation and overlays per check without hiding errors in later checks.
@@ -621,13 +596,13 @@ export function validateLevelTopology(
     const failed = matchingIssues.length > 0 || blockedMessage !== undefined;
     return {
       id,
-      status: failed ? "failed" : "passed",
+      status: failed ? "failed" : incompleteMessage ? "incomplete" : "passed",
       message: failed
         ? (blockedMessage ??
           (typeof errorMessage === "string"
             ? errorMessage
             : errorMessage(matchingIssues)))
-        : successMessage,
+        : (incompleteMessage ?? successMessage),
       issueIds: findings.map((issue) => issue.id),
     };
   }
@@ -641,7 +616,11 @@ export function validateLevelTopology(
     ({ kind }) => kind === "apple" || kind === "flower",
   );
   const startCheckBlocked =
-    !level.start || !canCheckGround || !finite(level.start);
+    !level.start || !groundGeometryValid || !finite(level.start);
+  const appleFlowerCheckBlocked =
+    applesOrFlowers.length > 0 &&
+    (!groundGeometryValid ||
+      applesOrFlowers.some(({ position }) => !finite(position)));
   const checks = [
     check(
       "has-polygon",
@@ -676,12 +655,6 @@ export function validateLevelTopology(
       );
     }),
     check(
-      "polygon-vertex-minimum",
-      "Every polygon has at least 3 vertices",
-      singleOrMany("Some polygons have fewer than 3 vertices"),
-      (issue) => issue.type === "invalid-polygon",
-    ),
-    check(
       "polygon-vertex-maximum",
       `Every polygon has at most ${limits.verticesPerPolygon.toLocaleString()} vertices`,
       `Some polygons have more than ${limits.verticesPerPolygon.toLocaleString()} vertices`,
@@ -697,20 +670,23 @@ export function validateLevelTopology(
         issue.type === "duplicate-vertex" || issue.type === "nearby-vertex",
     ),
     check(
-      "corner-angle",
-      "Polygon edges do not double back at vertices",
-      "Some polygon edges double back at vertices",
-      (issue) => issue.type === "narrow-angle",
+      "self-intersection",
+      "No polygons cross themselves",
+      singleOrMany("Some polygons cross themselves"),
+      (issue) => issue.type === "self-intersection",
+      undefined,
+      intersectionScanIncomplete
+        ? "Self-intersections could not be ruled out"
+        : undefined,
     ),
     check(
       "polygon-intersection",
-      "There are no intersections in the level",
-      singleOrMany("There are intersections in the level"),
-      (issue) =>
-        issue.type === "self-intersection" ||
-        issue.type === "polygon-intersection",
+      "Edges of different polygons do not intersect",
+      "Edges of different polygons intersect",
+      (issue) => issue.type === "polygon-intersection",
+      undefined,
       intersectionScanIncomplete
-        ? "The intersection scan could not finish"
+        ? "Intersections between polygons could not be ruled out"
         : undefined,
     ),
     check(
@@ -724,9 +700,10 @@ export function validateLevelTopology(
       "No apples or flowers are fully inside ground",
       singleOrMany("Some apples or flowers are fully inside ground"),
       (issue) => issue.type === "object-inside-ground",
-      applesOrFlowers.length > 0 &&
-        (!canCheckGround ||
-          applesOrFlowers.some(({ position }) => !finite(position)))
+      appleFlowerCheckBlocked
+        ? "Apple and flower placement could not be checked"
+        : undefined,
+      intersectionScanIncomplete && applesOrFlowers.length > 0
         ? "Apple and flower placement could not be checked"
         : undefined,
     ),
@@ -736,6 +713,9 @@ export function validateLevelTopology(
       "The driver's head is touching ground",
       (issue) => issue.type === "start-head",
       startCheckBlocked ? "Head clearance could not be checked" : undefined,
+      intersectionScanIncomplete
+        ? "Head clearance could not be checked"
+        : undefined,
     ),
     check(
       "start-wheel",
@@ -743,6 +723,9 @@ export function validateLevelTopology(
       "A driver's wheel is lying on an edge",
       (issue) => issue.type === "start-wheel",
       startCheckBlocked ? "Wheel placement could not be checked" : undefined,
+      intersectionScanIncomplete
+        ? "Wheel placement could not be checked"
+        : undefined,
     ),
     check(
       "texture-bounds",
@@ -774,7 +757,14 @@ export function validateLevelTopology(
       levelLgrLoaded ? undefined : "Load the level LGR to check its graphics",
     ),
   ];
-  return { issues: visibleIssues, checks, width, height, bounds };
+  return {
+    issues: visibleIssues,
+    checks,
+    intersectionScanIncomplete,
+    width,
+    height,
+    bounds,
+  };
 }
 
 export function getTopologySelection(
@@ -803,6 +793,9 @@ export function formatTopologyCheckResult(result: TopologyCheckResult) {
   return [
     `${errors.length} failed check${errors.length === 1 ? "" : "s"}.`,
     `Bounds: ${formatDimension(result.width)} x ${formatDimension(result.height)}.`,
+    ...(result.intersectionScanIncomplete
+      ? ["Intersection check incomplete."]
+      : []),
     ...errors.map((check) => check.message),
   ].join("\n");
 }

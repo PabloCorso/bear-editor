@@ -6,6 +6,7 @@ import {
   CaretRightIcon,
   CheckIcon,
   ChecksIcon,
+  MinusIcon,
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -71,9 +72,18 @@ export function TopologyResultPanel() {
     (check) => check.status === "failed",
   );
   const errors = failedChecks.length;
-  const summary = errors
+  const failureSummary = errors
     ? `${errors} failed check${errors === 1 ? "" : "s"}`
-    : "All checks passed";
+    : null;
+  const summary =
+    [
+      failureSummary,
+      result.intersectionScanIncomplete
+        ? "Intersection check incomplete"
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "All checks passed";
   const issuesById = new Map(result.issues.map((issue) => [issue.id, issue]));
   const rows = showAllChecks ? result.checks : failedChecks;
 
@@ -183,14 +193,24 @@ export function TopologyResultPanel() {
           <TooltipTrigger>
             <IconButton
               size="sm"
-              className={cn(errors ? "text-red-400" : "text-green-400")}
+              className={cn(
+                errors
+                  ? "text-red-400"
+                  : !result.intersectionScanIncomplete && "text-green-400",
+              )}
               aria-label={
                 showAllChecks ? "Hide passed checks" : "Show all checks"
               }
               aria-pressed={showAllChecks}
               onClick={() => setShowAllChecks((show) => !show)}
             >
-              {errors ? <XCircleIcon /> : <ChecksIcon />}
+              {errors ? (
+                <XCircleIcon />
+              ) : result.intersectionScanIncomplete ? (
+                <MinusIcon />
+              ) : (
+                <ChecksIcon />
+              )}
             </IconButton>
           </TooltipTrigger>
           <TooltipContent side="bottom">
@@ -294,6 +314,11 @@ export function TopologyResultPanel() {
                     <CheckIcon
                       aria-label="Passed"
                       className="ml-1 size-4 shrink-0 text-green-400"
+                    />
+                  ) : check.status === "incomplete" ? (
+                    <MinusIcon
+                      aria-label="Incomplete"
+                      className="ml-1 size-4 shrink-0"
                     />
                   ) : (
                     <XIcon

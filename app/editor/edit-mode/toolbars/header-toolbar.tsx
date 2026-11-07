@@ -556,7 +556,7 @@ function useMainMenuActions() {
     // reported save failure. Inspection never mutates the document.
     try {
       const result = getLevelTopology(state, lgr);
-      if (result.checks.some((check) => check.status === "failed")) {
+      if (result.checks.some((check) => check.status !== "passed")) {
         state.actions.setTopologyInspection(
           state.topologyInspection ?? {
             activeIssueId: null,
