@@ -364,7 +364,7 @@ function TestStartActions({
       {id !== null && "ride" in item && item.ride && (
         <DropdownMenuItem
           onClick={() =>
-            run(() => store.getState().actions.moveTestStart(id, item.position))
+            run(() => store.getState().actions.clearTestStartRide(id))
           }
         >
           Use position only
