@@ -56,7 +56,7 @@ export type TopologyIssue = {
 export type TopologyCheck = {
   id: string;
   message: string;
-  status: "passed" | "failed" | "incomplete";
+  status: "passed" | "failed" | "warning" | "incomplete";
   issueIds: string[];
 };
 export type TopologyCheckResult = {
@@ -462,8 +462,8 @@ export function validateLevelTopology(
       add(
         "object-inside-ground",
         key,
-        `${name} is inside ground`,
-        "Its entire interaction circle is inside ground. Move it toward a surface so it can be reached. Nested polygons are checked as alternating sky and ground regions.",
+        `${name} is fully inside ground`,
+        "This object may be hard to reach. If it is needed to finish the level, verify it in play mode.",
         target,
       );
     if (kind === "start") {
@@ -471,14 +471,11 @@ export function validateLevelTopology(
         x: position.x + BODY_INIT_X - 0.09 - LEFT_WHEEL_INIT_X,
         y: position.y - (BODY_INIT_Y + 0.63 - LEFT_WHEEL_INIT_Y),
       };
-      if (
-        isInGround(head, groundPolygons) ||
-        distanceToGroundEdge(head) < HEAD_RADIUS
-      )
+      if (distanceToGroundEdge(head) <= HEAD_RADIUS)
         add(
           "start-head",
           key,
-          "The driver's head is touching ground",
+          "The rider’s head hits ground at the start",
           "Move the start to give the driver's head clearance.",
           { ...target, locations: [head] },
         );
@@ -489,12 +486,14 @@ export function validateLevelTopology(
           y: position.y,
         },
       ];
-      const badWheels = wheels.filter((p) => distanceToGroundEdge(p) < 1e-6);
+      // Elma can push overlapping wheels out of ground. Its collision normal
+      // is undefined only when the wheel center and contact point coincide.
+      const badWheels = wheels.filter((p) => distanceToGroundEdge(p) === 0);
       if (badWheels.length)
         add(
           "start-wheel",
           key,
-          "The driver's wheel is lying on an edge",
+          "A wheel center starts on a polygon edge",
           "Move the start slightly so neither wheel centre lies exactly on a polygon edge.",
           { ...target, locations: badWheels },
         );
@@ -586,18 +585,31 @@ export function validateLevelTopology(
     successMessage: string,
     errorMessage: string | ((issues: TopologyIssue[]) => string),
     matches: (issue: TopologyIssue) => boolean,
-    blockedMessage?: string,
-    incompleteMessage?: string,
+    options: {
+      blockedMessage?: string;
+      incompleteMessage?: string;
+      findingStatus?: "failed" | "warning";
+    } = {},
   ): TopologyCheck {
+    const {
+      blockedMessage,
+      incompleteMessage,
+      findingStatus = "failed",
+    } = options;
     const matchingIssues = issues.filter(matches);
     // Limit navigation and overlays per check without hiding errors in later checks.
     const findings = matchingIssues.slice(0, MAX_FINDINGS);
     visibleIssues.push(...findings);
-    const failed = matchingIssues.length > 0 || blockedMessage !== undefined;
+    const hasFinding =
+      matchingIssues.length > 0 || blockedMessage !== undefined;
     return {
       id,
-      status: failed ? "failed" : incompleteMessage ? "incomplete" : "passed",
-      message: failed
+      status: hasFinding
+        ? findingStatus
+        : incompleteMessage
+          ? "incomplete"
+          : "passed",
+      message: hasFinding
         ? (blockedMessage ??
           (typeof errorMessage === "string"
             ? errorMessage
@@ -674,20 +686,22 @@ export function validateLevelTopology(
       "No polygons cross themselves",
       singleOrMany("Some polygons cross themselves"),
       (issue) => issue.type === "self-intersection",
-      undefined,
-      intersectionScanIncomplete
-        ? "Self-intersections could not be ruled out"
-        : undefined,
+      {
+        incompleteMessage: intersectionScanIncomplete
+          ? "Self-intersections could not be ruled out"
+          : undefined,
+      },
     ),
     check(
       "polygon-intersection",
       "Edges of different polygons do not intersect",
       "Edges of different polygons intersect",
       (issue) => issue.type === "polygon-intersection",
-      undefined,
-      intersectionScanIncomplete
-        ? "Intersections between polygons could not be ruled out"
-        : undefined,
+      {
+        incompleteMessage: intersectionScanIncomplete
+          ? "Intersections between polygons could not be ruled out"
+          : undefined,
+      },
     ),
     check(
       "object-bounds",
@@ -700,32 +714,42 @@ export function validateLevelTopology(
       "No apples or flowers are fully inside ground",
       singleOrMany("Some apples or flowers are fully inside ground"),
       (issue) => issue.type === "object-inside-ground",
-      appleFlowerCheckBlocked
-        ? "Apple and flower placement could not be checked"
-        : undefined,
-      intersectionScanIncomplete && applesOrFlowers.length > 0
-        ? "Apple and flower placement could not be checked"
-        : undefined,
+      {
+        findingStatus: "warning",
+        incompleteMessage:
+          appleFlowerCheckBlocked ||
+          (intersectionScanIncomplete && applesOrFlowers.length > 0)
+            ? "Apple and flower placement could not be checked"
+            : undefined,
+      },
     ),
     check(
       "start-head",
       "The driver's head is clear of ground",
-      "The driver's head is touching ground",
+      "The rider’s head hits ground at the start",
       (issue) => issue.type === "start-head",
-      startCheckBlocked ? "Head clearance could not be checked" : undefined,
-      intersectionScanIncomplete
-        ? "Head clearance could not be checked"
-        : undefined,
+      {
+        blockedMessage: startCheckBlocked
+          ? "Head clearance could not be checked"
+          : undefined,
+        incompleteMessage: intersectionScanIncomplete
+          ? "Head clearance could not be checked"
+          : undefined,
+      },
     ),
     check(
       "start-wheel",
-      "The driver's wheels are clear of polygon edges",
-      "A driver's wheel is lying on an edge",
+      "Neither wheel center starts on a polygon edge",
+      "A wheel center starts on a polygon edge",
       (issue) => issue.type === "start-wheel",
-      startCheckBlocked ? "Wheel placement could not be checked" : undefined,
-      intersectionScanIncomplete
-        ? "Wheel placement could not be checked"
-        : undefined,
+      {
+        blockedMessage: startCheckBlocked
+          ? "Wheel placement could not be checked"
+          : undefined,
+        incompleteMessage: intersectionScanIncomplete
+          ? "Wheel placement could not be checked"
+          : undefined,
+      },
     ),
     check(
       "texture-bounds",
@@ -744,7 +768,9 @@ export function validateLevelTopology(
       "The level LGR is loaded",
       "Level LGR is not loaded",
       (issue) => issue.id === "lgr:unloaded",
-      !levelLgrLoaded ? "Level LGR is not loaded" : undefined,
+      {
+        blockedMessage: !levelLgrLoaded ? "Level LGR is not loaded" : undefined,
+      },
     ),
     check(
       "lgr-graphics",
@@ -754,7 +780,11 @@ export function validateLevelTopology(
         issue.type === "lgr" &&
         issue.id !== "lgr:same-texture" &&
         issue.id !== "lgr:unloaded",
-      levelLgrLoaded ? undefined : "Load the level LGR to check its graphics",
+      {
+        blockedMessage: levelLgrLoaded
+          ? undefined
+          : "Load the level LGR to check its graphics",
+      },
     ),
   ];
   return {
@@ -790,6 +820,7 @@ export function getTopologyRepairPolygons(
 
 export function formatTopologyCheckResult(result: TopologyCheckResult) {
   const errors = result.checks.filter((check) => check.status === "failed");
+  const warnings = result.checks.filter((check) => check.status === "warning");
   return [
     `${errors.length} failed check${errors.length === 1 ? "" : "s"}.`,
     `Bounds: ${formatDimension(result.width)} x ${formatDimension(result.height)}.`,
@@ -797,6 +828,7 @@ export function formatTopologyCheckResult(result: TopologyCheckResult) {
       ? ["Intersection check incomplete."]
       : []),
     ...errors.map((check) => check.message),
+    ...warnings.map((check) => `Warning: ${check.message}`),
   ].join("\n");
 }
 

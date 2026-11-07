@@ -7,6 +7,7 @@ import {
   CheckIcon,
   ChecksIcon,
   MinusIcon,
+  WarningIcon,
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -68,16 +69,18 @@ export function TopologyResultPanel() {
   const inspection = useEditor((state) => state.topologyInspection);
   const [showAllChecks, setShowAllChecks] = useState(false);
   if (!result || !inspection) return null;
-  const failedChecks = result.checks.filter(
-    (check) => check.status === "failed",
+  const findings = result.checks.filter(
+    (check) => check.status === "failed" || check.status === "warning",
   );
-  const errors = failedChecks.length;
+  const errors = findings.filter((check) => check.status === "failed").length;
+  const warnings = findings.length - errors;
   const failureSummary = errors
     ? `${errors} failed check${errors === 1 ? "" : "s"}`
     : null;
   const summary =
     [
       failureSummary,
+      warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : null,
       result.intersectionScanIncomplete
         ? "Intersection check incomplete"
         : null,
@@ -85,7 +88,7 @@ export function TopologyResultPanel() {
       .filter(Boolean)
       .join(" · ") || "All checks passed";
   const issuesById = new Map(result.issues.map((issue) => [issue.id, issue]));
-  const rows = showAllChecks ? result.checks : failedChecks;
+  const rows = showAllChecks ? result.checks : findings;
 
   function setPreview(issue: TopologyIssue | null) {
     const state = store.getState();
@@ -196,16 +199,22 @@ export function TopologyResultPanel() {
               className={cn(
                 errors
                   ? "text-red-400"
-                  : !result.intersectionScanIncomplete && "text-green-400",
+                  : warnings
+                    ? "text-amber-400"
+                    : !result.intersectionScanIncomplete && "text-green-400",
               )}
               aria-label={
-                showAllChecks ? "Hide passed checks" : "Show all checks"
+                showAllChecks
+                  ? "Show errors and warnings only"
+                  : "Show all checks"
               }
               aria-pressed={showAllChecks}
               onClick={() => setShowAllChecks((show) => !show)}
             >
               {errors ? (
                 <XCircleIcon />
+              ) : warnings ? (
+                <WarningIcon />
               ) : result.intersectionScanIncomplete ? (
                 <MinusIcon />
               ) : (
@@ -214,7 +223,9 @@ export function TopologyResultPanel() {
             </IconButton>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {showAllChecks ? "Hide passed checks" : "Show all checks"}
+            {showAllChecks
+              ? "Show errors and warnings only"
+              : "Show all checks"}
           </TooltipContent>
         </Tooltip>
         <p
@@ -314,6 +325,11 @@ export function TopologyResultPanel() {
                     <CheckIcon
                       aria-label="Passed"
                       className="ml-1 size-4 shrink-0 text-green-400"
+                    />
+                  ) : check.status === "warning" ? (
+                    <WarningIcon
+                      aria-label="Warning"
+                      className="ml-1 size-4 shrink-0 text-amber-400"
                     />
                   ) : check.status === "incomplete" ? (
                     <MinusIcon

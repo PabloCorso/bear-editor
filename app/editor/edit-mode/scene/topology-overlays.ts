@@ -22,9 +22,14 @@ export function getTopologyOverlays(
     ...(inspection.activeIssueId ? [inspection.activeIssueId] : []),
     ...(activeCheck?.issueIds ?? []),
   ]);
+  const warningIssueIds = new Set(
+    result.checks
+      .filter((check) => check.status === "warning")
+      .flatMap((check) => check.issueIds),
+  );
   for (const issue of result.issues) {
     const active = activeIssueIds.has(issue.id);
-    const color = "#f87171";
+    const color = warningIssueIds.has(issue.id) ? "#fbbf24" : "#f87171";
     // All locations stay visible while checking. Highlight the active check.
     for (const position of issue.locations.slice(0, 200)) {
       const size = (active ? 18 : 12) / state.zoom;
