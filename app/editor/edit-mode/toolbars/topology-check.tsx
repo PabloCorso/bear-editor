@@ -1,17 +1,24 @@
 import { applyTopologyRepair } from "~/editor/helpers/topology-repair";
 import { useRef, useState } from "react";
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import {
   BoundingBoxIcon,
   CaretLeftIcon,
   CaretRightIcon,
   CheckIcon,
   ChecksIcon,
-  MinusIcon,
+  InfoIcon,
+  QuestionIcon,
   WarningIcon,
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, IconButton } from "~/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { ToolbarButton } from "~/components/ui/toolbar";
 import {
   Tooltip,
@@ -69,20 +76,19 @@ export function TopologyResultPanel() {
   const inspection = useEditor((state) => state.topologyInspection);
   const [showAllChecks, setShowAllChecks] = useState(false);
   if (!result || !inspection) return null;
-  const findings = result.checks.filter(
-    (check) => check.status === "failed" || check.status === "warning",
-  );
+  const findings = result.checks.filter((check) => check.status !== "passed");
   const errors = findings.filter((check) => check.status === "failed").length;
-  const warnings = findings.length - errors;
-  const failureSummary = errors
-    ? `${errors} failed check${errors === 1 ? "" : "s"}`
-    : null;
+  const warnings = findings.filter(
+    (check) => check.status === "warning",
+  ).length;
+  const incomplete = findings.length - errors - warnings;
   const summary =
     [
-      failureSummary,
+      errors ? `${errors} failed check${errors === 1 ? "" : "s"}` : null,
       warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : null,
+      incomplete ? `${incomplete} incomplete` : null,
       result.intersectionScanIncomplete
-        ? "Intersection check incomplete"
+        ? "Intersection scan stopped early"
         : null,
     ]
       .filter(Boolean)
@@ -201,12 +207,10 @@ export function TopologyResultPanel() {
                   ? "text-red-400"
                   : warnings
                     ? "text-amber-400"
-                    : !result.intersectionScanIncomplete && "text-green-400",
+                    : !incomplete && "text-green-400",
               )}
               aria-label={
-                showAllChecks
-                  ? "Show errors and warnings only"
-                  : "Show all checks"
+                showAllChecks ? "Hide passed checks" : "Show all checks"
               }
               aria-pressed={showAllChecks}
               onClick={() => setShowAllChecks((show) => !show)}
@@ -215,17 +219,15 @@ export function TopologyResultPanel() {
                 <XCircleIcon />
               ) : warnings ? (
                 <WarningIcon />
-              ) : result.intersectionScanIncomplete ? (
-                <MinusIcon />
+              ) : incomplete ? (
+                <QuestionIcon />
               ) : (
                 <ChecksIcon />
               )}
             </IconButton>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {showAllChecks
-              ? "Show errors and warnings only"
-              : "Show all checks"}
+            {showAllChecks ? "Hide passed checks" : "Show all checks"}
           </TooltipContent>
         </Tooltip>
         <p
@@ -332,7 +334,7 @@ export function TopologyResultPanel() {
                       className="ml-1 size-4 shrink-0 text-amber-400"
                     />
                   ) : check.status === "incomplete" ? (
-                    <MinusIcon
+                    <QuestionIcon
                       aria-label="Incomplete"
                       className="ml-1 size-4 shrink-0"
                     />
@@ -365,14 +367,41 @@ export function TopologyResultPanel() {
                       {repair.label}
                     </Button>
                   )}
-                  {canShow && (
-                    <Button
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => viewCheck(check)}
-                    >
-                      Show
-                    </Button>
+                  {check.status === "incomplete" ? (
+                    <Popover>
+                      <PopoverTrigger>
+                        <IconButton
+                          size="sm"
+                          className="size-7 shrink-0"
+                          aria-label={`Why this check is incomplete. ${check.message}`}
+                        >
+                          <InfoIcon />
+                        </IconButton>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="bottom"
+                        align="end"
+                        sideOffset={4}
+                        className="w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-default bg-screen p-2 text-xs shadow-sm"
+                      >
+                        <PopoverPrimitive.Title className="sr-only">
+                          {check.message}
+                        </PopoverPrimitive.Title>
+                        <PopoverPrimitive.Description>
+                          {check.explanation}
+                        </PopoverPrimitive.Description>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    canShow && (
+                      <Button
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => viewCheck(check)}
+                      >
+                        Show
+                      </Button>
+                    )
                   )}
                 </div>
               </li>

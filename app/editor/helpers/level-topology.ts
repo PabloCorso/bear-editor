@@ -56,9 +56,11 @@ export type TopologyIssue = {
 export type TopologyCheck = {
   id: string;
   message: string;
-  status: "passed" | "failed" | "warning" | "incomplete";
   issueIds: string[];
-};
+} & (
+  | { status: "passed" | "failed" | "warning" }
+  | { status: "incomplete"; explanation: string }
+);
 export type TopologyCheckResult = {
   issues: TopologyIssue[];
   checks: TopologyCheck[];
@@ -279,8 +281,9 @@ export function validateLevelTopology(
     );
   }
 
-  const groundPolygons = level.polygons.filter(
-    (p) => !p.grass && p.vertices.length >= 3 && p.vertices.every(finite),
+  const solidPolygons = level.polygons.filter((polygon) => !polygon.grass);
+  const groundPolygons = solidPolygons.filter(
+    (polygon) => polygon.vertices.length >= 3 && polygon.vertices.every(finite),
   );
   const edges: EdgeRef[] = [];
   for (const polygon of level.polygons) {
@@ -419,11 +422,25 @@ export function validateLevelTopology(
   }
   issues.push(...selfIntersections.values(), ...polygonIntersections.values());
 
-  const invalidGeometry =
-    validVertices.length !== allVertices.length ||
-    level.polygons.some((polygon) => polygon.vertices.length < 3) ||
-    selfIntersections.size > 0 ||
-    polygonIntersections.size > 0;
+  const scanExplanation =
+    "There are too many edges to compare. Simplify the polygons and check again.";
+  const polygonExplanation =
+    "Some ground polygons are invalid. Fix the polygon issues first.";
+  const groundEdgeExplanation =
+    solidPolygons.length === 0
+      ? "Add a ground polygon to check placement."
+      : groundPolygons.length !== solidPolygons.length
+        ? "Some ground polygons have missing or invalid vertices. Fix or redraw those polygons first."
+        : undefined;
+  // Burial requires an unambiguous ground region. Start checks only look for
+  // contact with individual edges, which are still known when polygons cross.
+  const groundRegionExplanation =
+    groundEdgeExplanation ??
+    (selfIntersections.size || polygonIntersections.size
+      ? polygonExplanation
+      : intersectionScanIncomplete
+        ? scanExplanation
+        : undefined);
   function distanceToGroundEdge(p: Position) {
     let distance = Infinity;
     for (const edge of edges)
@@ -433,8 +450,6 @@ export function validateLevelTopology(
       );
     return distance;
   }
-  const groundGeometryValid = !invalidGeometry && groundPolygons.length > 0;
-  const canCheckGround = groundGeometryValid && !intersectionScanIncomplete;
   for (const { position, name, kind } of objects) {
     if (!finite(position)) continue;
     const key = String(identity(position));
@@ -453,8 +468,8 @@ export function validateLevelTopology(
         "EOL allows object centres up to one unit beyond the level borders. Move this object closer to the level.",
         target,
       );
-    if (!canCheckGround) continue;
     if (
+      !groundRegionExplanation &&
       (kind === "apple" || kind === "flower") &&
       isInGround(position, groundPolygons) &&
       distanceToGroundEdge(position) >= OBJECT_DIAMETER / 2
@@ -585,37 +600,29 @@ export function validateLevelTopology(
     errorMessage: string | ((issues: TopologyIssue[]) => string),
     matches: (issue: TopologyIssue) => boolean,
     options: {
-      blockedMessage?: string;
-      incompleteMessage?: string;
+      incomplete?: { message: string; explanation: string };
       findingStatus?: "failed" | "warning";
     } = {},
   ): TopologyCheck {
-    const {
-      blockedMessage,
-      incompleteMessage,
-      findingStatus = "failed",
-    } = options;
+    const { incomplete, findingStatus = "failed" } = options;
     const matchingIssues = issues.filter(matches);
     // Limit navigation and overlays per check without hiding errors in later checks.
     const findings = matchingIssues.slice(0, MAX_FINDINGS);
     visibleIssues.push(...findings);
-    const hasFinding =
-      matchingIssues.length > 0 || blockedMessage !== undefined;
-    return {
-      id,
-      status: hasFinding
-        ? findingStatus
-        : incompleteMessage
-          ? "incomplete"
-          : "passed",
-      message: hasFinding
-        ? (blockedMessage ??
-          (typeof errorMessage === "string"
+    const issueIds = findings.map((issue) => issue.id);
+    if (findings.length)
+      return {
+        id,
+        issueIds,
+        status: findingStatus,
+        message:
+          typeof errorMessage === "string"
             ? errorMessage
-            : errorMessage(matchingIssues)))
-        : (incompleteMessage ?? successMessage),
-      issueIds: findings.map((issue) => issue.id),
-    };
+            : errorMessage(matchingIssues),
+      };
+    if (incomplete)
+      return { id, issueIds, status: "incomplete", ...incomplete };
+    return { id, issueIds, status: "passed", message: successMessage };
   }
 
   function singleOrMany(message: string) {
@@ -626,12 +633,17 @@ export function validateLevelTopology(
   const applesOrFlowers = objects.filter(
     ({ kind }) => kind === "apple" || kind === "flower",
   );
-  const startCheckBlocked =
-    !level.start || !groundGeometryValid || !finite(level.start);
-  const appleFlowerCheckBlocked =
-    applesOrFlowers.length > 0 &&
-    (!groundGeometryValid ||
-      applesOrFlowers.some(({ position }) => !finite(position)));
+  const startExplanation = !level.start
+    ? "Add a start to the level to check the rider’s position."
+    : !finite(level.start)
+      ? "The start has an invalid position. Move it to a new spot."
+      : groundEdgeExplanation;
+  const appleFlowerExplanation = applesOrFlowers.length
+    ? (groundRegionExplanation ??
+      (applesOrFlowers.some(({ position }) => !finite(position))
+        ? "An apple or flower has an invalid position. Move it to a new spot."
+        : undefined))
+    : undefined;
   const checks = [
     check(
       "has-polygon",
@@ -686,8 +698,11 @@ export function validateLevelTopology(
       singleOrMany("Some polygons cross themselves"),
       (issue) => issue.type === "self-intersection",
       {
-        incompleteMessage: intersectionScanIncomplete
-          ? "Self-intersections could not be ruled out"
+        incomplete: intersectionScanIncomplete
+          ? {
+              message: "Self-intersections could not be ruled out",
+              explanation: scanExplanation,
+            }
           : undefined,
       },
     ),
@@ -697,8 +712,11 @@ export function validateLevelTopology(
       "Edges of different polygons intersect",
       (issue) => issue.type === "polygon-intersection",
       {
-        incompleteMessage: intersectionScanIncomplete
-          ? "Intersections between polygons could not be ruled out"
+        incomplete: intersectionScanIncomplete
+          ? {
+              message: "Intersections between polygons could not be ruled out",
+              explanation: scanExplanation,
+            }
           : undefined,
       },
     ),
@@ -715,11 +733,12 @@ export function validateLevelTopology(
       (issue) => issue.type === "object-inside-ground",
       {
         findingStatus: "warning",
-        incompleteMessage:
-          appleFlowerCheckBlocked ||
-          (intersectionScanIncomplete && applesOrFlowers.length > 0)
-            ? "Apple and flower placement could not be checked"
-            : undefined,
+        incomplete: appleFlowerExplanation
+          ? {
+              message: "Apple and flower placement could not be checked",
+              explanation: appleFlowerExplanation,
+            }
+          : undefined,
       },
     ),
     check(
@@ -728,11 +747,11 @@ export function validateLevelTopology(
       "The rider’s head hits ground at the start",
       (issue) => issue.type === "start-head",
       {
-        blockedMessage: startCheckBlocked
-          ? "Head clearance could not be checked"
-          : undefined,
-        incompleteMessage: intersectionScanIncomplete
-          ? "Head clearance could not be checked"
+        incomplete: startExplanation
+          ? {
+              message: "Head clearance could not be checked",
+              explanation: startExplanation,
+            }
           : undefined,
       },
     ),
@@ -742,11 +761,11 @@ export function validateLevelTopology(
       "A wheel center starts on a polygon edge",
       (issue) => issue.type === "start-wheel",
       {
-        blockedMessage: startCheckBlocked
-          ? "Wheel placement could not be checked"
-          : undefined,
-        incompleteMessage: intersectionScanIncomplete
-          ? "Wheel placement could not be checked"
+        incomplete: startExplanation
+          ? {
+              message: "Wheel placement could not be checked",
+              explanation: startExplanation,
+            }
           : undefined,
       },
     ),
@@ -780,9 +799,12 @@ export function validateLevelTopology(
         issue.id !== "lgr:unloaded",
       {
         findingStatus: "warning",
-        incompleteMessage: levelLgrLoaded
+        incomplete: levelLgrLoaded
           ? undefined
-          : "Graphics could not be checked",
+          : {
+              message: "Graphics could not be checked",
+              explanation: `Load ${levelLgrFile} to check the level’s graphics.`,
+            },
       },
     ),
   ];
@@ -828,6 +850,11 @@ export function formatTopologyCheckResult(result: TopologyCheckResult) {
       : []),
     ...errors.map((check) => check.message),
     ...warnings.map((check) => `Warning: ${check.message}`),
+    ...result.checks.flatMap((check) =>
+      check.status === "incomplete"
+        ? [`${check.message}. ${check.explanation}`]
+        : [],
+    ),
   ].join("\n");
 }
 
