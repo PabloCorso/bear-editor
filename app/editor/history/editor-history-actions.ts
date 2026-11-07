@@ -5,6 +5,7 @@ export const editorHistoryActionLabels = {
   "texture.change-sky": "Change sky texture",
   "test-start.add": "Add test start",
   "test-start.move": "Move test start",
+  "test-start.clear-ride": "Use test start position only",
   "test-start.rename": "Rename test start",
   "test-start.activate": "Activate test start",
   "test-start.delete": "Delete test start",
