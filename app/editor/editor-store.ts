@@ -307,7 +307,18 @@ export function createEditorStore({
             testStarts: {
               ...state.testStarts,
               items: state.testStarts.items.map((item) =>
-                item.id === id ? { ...item, position, ride: undefined } : item,
+                item.id === id
+                  ? { ...item, position, ride: item.ride?.moveTo(position) }
+                  : item,
+              ),
+            },
+          })),
+        clearTestStartRide: (id) =>
+          set((state) => ({
+            testStarts: {
+              ...state.testStarts,
+              items: state.testStarts.items.map((item) =>
+                item.id === id ? { ...item, ride: undefined } : item,
               ),
             },
           })),
@@ -621,6 +632,15 @@ export function createEditorStore({
           set((state) => ({ isPlayMode: !state.isPlayMode })),
 
         replaceDocument: (document) => {
+          if (get().collaboration) {
+            set({
+              collaboration: {
+                ...get().collaboration!,
+                message: "Leave the session before opening another level.",
+              },
+            });
+            return;
+          }
           (store as EditorStore).history.cancelActive();
           get().actions.getActiveTool()?.clear?.();
           const defaultLevelTitle =
@@ -704,6 +724,7 @@ export function createEditorStore({
     setSky: "texture.change-sky",
     addTestStart: "test-start.add",
     moveTestStart: "test-start.move",
+    clearTestStartRide: "test-start.clear-ride",
     renameTestStart: "test-start.rename",
     activateTestStart: "test-start.activate",
     deleteTestStart: "test-start.delete",

@@ -1,3 +1,4 @@
+import { preserveRoomId } from "~/editor/collaboration/identity";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorState } from "~/editor/editor-state";
@@ -1599,7 +1600,9 @@ export class VertexTool extends Tool<VertexToolState> {
 
     state.actions.setPolygons(
       state.polygons.map((polygon, index) =>
-        index === polygonIndex ? nextPolygon : polygon,
+        index === polygonIndex
+          ? preserveRoomId(previousPolygon, nextPolygon)
+          : polygon,
       ),
     );
   }

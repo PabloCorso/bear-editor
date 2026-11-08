@@ -1,3 +1,4 @@
+import { ShareButton } from "~/editor/collaboration/controls";
 import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
@@ -249,13 +250,7 @@ export function HeaderToolbar({
           onClose={() => setImageExport(null)}
         />
       )}
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-4 top-4 z-10",
-          className,
-        )}
-        {...props}
-      >
+      <div className={cn("relative z-10 col-span-full", className)} {...props}>
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
             actions={menuActions}
@@ -276,9 +271,10 @@ export function HeaderToolbar({
           <TopologyCheck isLoading={isLoading} />
           <TestStartPicker mobile />
           <PlayModeControl />
+          <ShareButton />
         </Toolbar>
 
-        <div className="hidden grid-cols-[120px_minmax(0,1fr)_120px] gap-4 sm:grid">
+        <div className="hidden grid-cols-[auto_minmax(0,1fr)_auto] gap-4 sm:grid">
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
               actions={menuActions}
@@ -305,6 +301,7 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto w-fit gap-2 justify-self-end">
             <TestStartPicker />
             <PlayModeControl />
+            <ShareButton />
           </Toolbar>
         </div>
 
@@ -315,11 +312,11 @@ export function HeaderToolbar({
           entrance={fileNameEntrance}
         />
 
-        <div className="pointer-events-none mt-2 flex justify-center">
+        <div className="absolute inset-x-0 top-full mt-2 flex justify-center">
           <TopologyResultPanel />
         </div>
       </div>
-      <CanvasTips>
+      <CanvasTips className="row-start-3 self-end">
         <LevelFolderTip
           onOpenSettings={() => {
             setSettingsTab("general");
@@ -473,6 +470,10 @@ function useMainMenuActions() {
   );
 
   const handleOpenFile = useCallback(async () => {
+    if (store.getState().collaboration) {
+      alert("Leave the session before opening another level.");
+      return;
+    }
     if (store.getState().documentSession.saveState === "saving") return;
     await runWithPickerGuard(async () => {
       const shouldContinue = await confirmDiscardChanges();
@@ -516,6 +517,10 @@ function useMainMenuActions() {
   ]);
 
   const handleNew = useCallback(async () => {
+    if (store.getState().collaboration) {
+      alert("Leave the session before creating another level.");
+      return;
+    }
     if (store.getState().documentSession.saveState === "saving") return;
     const shouldContinue = await confirmDiscardChanges();
     if (!shouldContinue) return;
@@ -562,7 +567,7 @@ function useMainMenuActions() {
     // reported save failure. Inspection never mutates the document.
     try {
       const result = getLevelTopology(state, lgr);
-      if (result.issues.length || result.truncated) {
+      if (result.checks.some((check) => check.status !== "passed")) {
         state.actions.setTopologyInspection(
           state.topologyInspection ?? {
             activeIssueId: null,
@@ -888,6 +893,10 @@ function LevelFileName({
     isLoading || isNavigating || documentSession.saveState === "saving";
 
   async function navigateToLevel(name: string) {
+    if (store.getState().collaboration) {
+      alert("Leave the session before opening another level.");
+      return;
+    }
     if (navigatingRef.current || navigationDisabled) return;
     navigatingRef.current = true;
     setIsNavigating(true);

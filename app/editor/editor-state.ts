@@ -72,6 +72,7 @@ export type EditorDocumentInput = {
 };
 
 export type EditorState = EditorHistoryContent & {
+  collaboration?: import("./collaboration/types").CollaborationState;
   testStartRename: {
     id: string | null;
     name: string;
@@ -133,6 +134,7 @@ export type EditorState = EditorHistoryContent & {
       options?: { select?: boolean },
     ) => void;
     moveTestStart: (id: string, position: Position) => void;
+    clearTestStartRide: (id: string) => void;
     renameTestStart: (id: string | null, name: string) => void;
     activateTestStart: (id: string | null) => void;
     deleteTestStart: (id: string) => void;

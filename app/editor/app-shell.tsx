@@ -1,3 +1,4 @@
+import { CollaborationControls } from "./collaboration/controls";
 import { TestStartContextMenu } from "~/editor/edit-mode/test-start-controls";
 import { lazy, Suspense } from "react";
 import { useHotkeys } from "@mantine/hooks";
@@ -45,7 +46,10 @@ export function EditorShell({
   const isPlayMode = useEditorIsPlayMode();
 
   return (
-    <>
+    <CollaborationControls
+      canvasRef={canvasRef}
+      ready={initialDocument.status !== "loading"}
+    >
       <div className="relative flex-1">
         <EditorView ref={canvasRef} />
         <TextEditorOverlay />
@@ -62,7 +66,7 @@ export function EditorShell({
       <EditorContextMenu />
       <PlacementPropertiesMenu />
       <TestStartContextMenu />
-    </>
+    </CollaborationControls>
   );
 }
 
@@ -93,14 +97,19 @@ function EditorToolbars({
 
   if (!isUIVisible || isPlayMode) return null;
   return (
-    <>
+    <div className="pointer-events-none absolute inset-4 grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:grid-rows-[auto_minmax(0,1fr)_auto] sm:gap-x-4">
       <HeaderToolbar
         engineRef={engineRef}
         isLoading={isLoading}
         fileNameEntrance={fileNameEntrance}
       />
-      <ControlToolbar />
-      <CanvasToolbar engineRef={engineRef} />
-    </>
+      <div className="relative col-span-full row-start-2 flex min-h-0 items-center">
+        <ControlToolbar />
+      </div>
+      <CanvasToolbar
+        className="row-start-4 self-end justify-self-end sm:col-start-2 sm:row-start-3"
+        engineRef={engineRef}
+      />
+    </div>
   );
 }

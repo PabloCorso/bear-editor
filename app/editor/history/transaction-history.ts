@@ -42,6 +42,7 @@ export function createTransactionHistory<
   prepareRestore?: () => void;
   retain?: (snapshots: readonly T[]) => void;
   limit?: number;
+  onCommit?: (before: T, after: T) => void;
 }) {
   const limit = Math.max(1, options.limit ?? 200);
   const state = createStore<HistoryState<T, TKind>>(() => ({
@@ -148,6 +149,7 @@ export function createTransactionHistory<
           },
         ].slice(-limit);
         publish(next, next.length);
+        options.onCommit?.(before, after);
       },
       cancel: () => {
         if (!transaction.active) return;
