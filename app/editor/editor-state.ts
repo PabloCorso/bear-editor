@@ -72,6 +72,7 @@ export type EditorDocumentInput = {
 };
 
 export type EditorState = EditorHistoryContent & {
+  collaboration?: import("./collaboration/types").CollaborationState;
   testStartRename: {
     id: string | null;
     name: string;

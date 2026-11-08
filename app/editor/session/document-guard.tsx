@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useEditorDocumentSession } from "~/editor/use-editor-store";
+import { useEditor, useEditorDocumentSession } from "~/editor/use-editor-store";
 import {
   Dialog,
   DialogBody,
@@ -36,7 +36,8 @@ export function EditorDocumentGuardProvider({
   children: React.ReactNode;
 }) {
   const documentSession = useEditorDocumentSession();
-  const isDirty = documentSession.dirty;
+  const inSession = useEditor((state) => !!state.collaboration);
+  const isDirty = documentSession.dirty || inSession;
   const blocker = useBlocker(isDirty);
   const [pendingActionConfirmation, setPendingActionConfirmation] =
     useState<PendingConfirmation | null>(null);

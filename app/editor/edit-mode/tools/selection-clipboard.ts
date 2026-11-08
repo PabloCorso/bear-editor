@@ -123,13 +123,17 @@ export function buildSelectionClipboard(
       const vertices = polygon.vertices
         .filter((vertex) => selected.has(vertex))
         .map(clonePosition);
-      return vertices.length >= 3 ? { ...polygon, vertices } : null;
+      return vertices.length >= 3 ? { grass: polygon.grass, vertices } : null;
     })
     .filter((polygon): polygon is Polygon => polygon !== null);
   const apples = selection.selectedObjects
     .map((object) => state.apples.find((apple) => apple.position === object))
     .filter((apple): apple is Apple => apple !== undefined)
-    .map((apple) => ({ ...apple, position: clonePosition(apple.position) }));
+    .map((apple) => ({
+      animation: apple.animation,
+      gravity: apple.gravity,
+      position: clonePosition(apple.position),
+    }));
   const killers = selection.selectedObjects
     .filter((object) => state.killers.includes(object))
     .map(clonePosition);
@@ -142,7 +146,11 @@ export function buildSelectionClipboard(
     )
     .filter((picture): picture is Picture => picture !== undefined)
     .map((picture) => ({
-      ...picture,
+      name: picture.name,
+      texture: picture.texture,
+      mask: picture.mask,
+      distance: picture.distance,
+      clip: picture.clip,
       position: clonePosition(picture.position),
     }));
 

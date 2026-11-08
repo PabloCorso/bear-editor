@@ -182,11 +182,12 @@ function CanvasHelpMenu({ onOpenShortcuts }: { onOpenShortcuts: () => void }) {
 function UndoToolButton(props: ToolButtonProps) {
   const { undo } = useEditorHistory();
   const canUndo = useEditorCanUndo();
+  const inSession = useEditor((state) => !!state.collaboration);
   const modifier = useModifier();
   return (
     <ToolButton
       id="undo"
-      name="Undo"
+      name={inSession ? "Undo (solo mode only)" : "Undo"}
       shortcut={`${modifier} + Z`}
       onClick={undo}
       disabled={!canUndo}
@@ -200,11 +201,12 @@ function UndoToolButton(props: ToolButtonProps) {
 function RedoToolButton(props: ToolButtonProps) {
   const { redo } = useEditorHistory();
   const canRedo = useEditorCanRedo();
+  const inSession = useEditor((state) => !!state.collaboration);
   const modifier = useModifier();
   return (
     <ToolButton
       id="redo"
-      name="Redo"
+      name={inSession ? "Redo (solo mode only)" : "Redo"}
       shortcut={`${modifier} + Y`}
       onClick={redo}
       disabled={!canRedo}

@@ -632,6 +632,15 @@ export function createEditorStore({
           set((state) => ({ isPlayMode: !state.isPlayMode })),
 
         replaceDocument: (document) => {
+          if (get().collaboration) {
+            set({
+              collaboration: {
+                ...get().collaboration!,
+                message: "Leave the session before opening another level.",
+              },
+            });
+            return;
+          }
           (store as EditorStore).history.cancelActive();
           get().actions.getActiveTool()?.clear?.();
           const defaultLevelTitle =
