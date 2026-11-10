@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
-  DownloadSimpleIcon,
+  LaptopIcon,
   DotsThreeVerticalIcon,
   CaretRightIcon,
   CaretLeftIcon,
@@ -87,7 +87,7 @@ import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
 import { LevelPropertiesDialog } from "./level-properties-dialog";
 import { LevelFolderTip } from "./level-folder-tip";
 import { ToolInfo } from "./tool-info";
-import { CanvasTips } from "./canvas-tip";
+import { CanvasTipSections, CanvasTips } from "./canvas-tip";
 import "./level-file-name.css";
 import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import { ExportImageDialog } from "./export-image-dialog";
@@ -99,6 +99,7 @@ import {
   getVertexIconProps,
 } from "./vertex-tool-control";
 import type { VertexTool } from "../tools/vertex-tool";
+import { DesktopUpdate } from "~/editor/desktop-update";
 
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
@@ -331,13 +332,16 @@ export function HeaderToolbar({
         </div>
       </div>
       <CanvasTips>
-        <LevelFolderTip
-          onOpenSettings={() => {
-            setSettingsTab("general");
-            setHighlightLevelFolder(true);
-            setSettingsOpen(true);
-          }}
-        />
+        <CanvasTipSections>
+          <DesktopUpdate />
+          <LevelFolderTip
+            onOpenSettings={() => {
+              setSettingsTab("general");
+              setHighlightLevelFolder(true);
+              setSettingsOpen(true);
+            }}
+          />
+        </CanvasTipSections>
         <ToolInfo />
       </CanvasTips>
       <DesktopDownloadDialog
@@ -767,6 +771,14 @@ function MainDropdownMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          {onDownloadDesktop && (
+            <DropdownMenuItem
+              iconBefore={<LaptopIcon />}
+              onClick={onDownloadDesktop}
+            >
+              Download desktop app…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             iconBefore={<GearIcon />}
             shortcut={`${modifier} + ,`}
@@ -774,14 +786,6 @@ function MainDropdownMenu({
           >
             Settings
           </DropdownMenuItem>
-          {onDownloadDesktop && (
-            <DropdownMenuItem
-              iconBefore={<DownloadSimpleIcon />}
-              onClick={onDownloadDesktop}
-            >
-              Download desktop app…
-            </DropdownMenuItem>
-          )}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

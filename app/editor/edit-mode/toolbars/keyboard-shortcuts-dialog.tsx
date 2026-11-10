@@ -88,6 +88,7 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
       textureSprite,
       playKeyBindings: playSettings.keyBindings,
       showVertexInternalEdgeClickHint: vertexEdgeClickBehavior === "internal",
+      showDesktopDevelopmentShortcuts: window.bearDesktop?.development ?? false,
     },
   );
 
@@ -246,6 +247,7 @@ function getShortcutGroups(
     textureSprite?: string;
     playKeyBindings: ReturnType<typeof usePlaySettings>["keyBindings"];
     showVertexInternalEdgeClickHint?: boolean;
+    showDesktopDevelopmentShortcuts: boolean;
   },
 ): ShortcutGroup[] {
   return [
@@ -762,6 +764,14 @@ function getShortcutGroups(
           shortcut: OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
           label: "Open keyboard shortcuts",
         },
+        ...(toolIcons.showDesktopDevelopmentShortcuts
+          ? [
+              {
+                shortcut: modifier === "⌘" ? "⌘ + ⌥ + I" : "Ctrl + Shift + I",
+                label: "Toggle developer tools",
+              },
+            ]
+          : []),
       ],
     },
     {

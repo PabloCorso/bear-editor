@@ -242,6 +242,10 @@ function GeneralSettingsPanel({
   const levelFolderName = useEditorLevelFolderName();
   const lgrAssets = useLgrAssets();
   const forceUpdate = useForceUpdate();
+  const [desktopVersion, setDesktopVersion] = useState<string | null>(null);
+  useEffect(() => {
+    void window.bearDesktop?.appVersion().then(setDesktopVersion);
+  }, []);
   const canPickFolder =
     supportsFilePickers() && "showDirectoryPicker" in window;
 
@@ -385,6 +389,7 @@ function GeneralSettingsPanel({
       <footer className="-mr-2.5 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
         <p className="flex items-center gap-1.5 text-sm whitespace-nowrap text-secondary">
           <span className="font-medium text-primary">Bear Level Editor</span>
+          {desktopVersion && <span>{desktopVersion}</span>}
           <span>by Pab</span>
           <img src={datGif} alt="" className="h-3 w-auto shrink-0 rounded-sm" />
         </p>

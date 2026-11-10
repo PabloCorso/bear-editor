@@ -3,12 +3,11 @@ import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   type DialogProps,
 } from "~/components/ui/dialog";
-import { cn } from "~/utils/misc";
+import { Button } from "~/components/ui/button";
 
 const RELEASES_URL = "https://github.com/PabloCorso/bear-editor/releases";
 const PLATFORMS = [
@@ -49,7 +48,7 @@ export function DesktopDownloadDialog(props: DialogProps) {
         );
         if (controller.signal.aborted) return;
         if (response.status === 404) {
-          setStatus("Desktop downloads are not available yet.");
+          setStatus("Downloads aren’t available yet.");
           return;
         }
         if (!response.ok) throw new Error("Release request failed");
@@ -62,23 +61,26 @@ export function DesktopDownloadDialog(props: DialogProps) {
         setStatus("");
       } catch {
         if (!controller.signal.aborted)
-          setStatus("Could not load downloads. Check GitHub Releases below.");
+          setStatus("Downloads couldn’t be loaded.");
       }
     }
     void load();
     return () => controller.abort();
   }, [props.open]);
 
+  const visiblePlatforms = platform
+    ? PLATFORMS.filter(({ name }) => name === platform)
+    : PLATFORMS;
+  const downloads = visiblePlatforms.flatMap(({ name, extension }) => {
+    const installer = installers.find((asset) => extension.test(asset.name));
+    return installer ? [{ name, installer }] : [];
+  });
+
   return (
     <Dialog {...props}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader showCloseButton>
-          <div>
-            <DialogTitle>Download desktop app</DialogTitle>
-            <DialogDescription className="mt-1 text-secondary">
-              Use Bear Editor offline with native file access.
-            </DialogDescription>
-          </div>
+          <DialogTitle>Bear Editor for desktop</DialogTitle>
         </DialogHeader>
         <DialogBody className="gap-3 pb-6">
           {status && (
@@ -86,55 +88,36 @@ export function DesktopDownloadDialog(props: DialogProps) {
               {status}
             </p>
           )}
-          {PLATFORMS.map(({ name, extension }) => {
-            const assets = installers.filter((asset) =>
-              extension.test(asset.name),
-            );
-            return (
-              <section
-                key={name}
-                className={cn(
-                  "rounded-md border border-default p-3",
-                  platform === name && "bg-primary",
-                )}
-              >
-                <h3 className="text-sm font-bold">
-                  {name}
-                  {platform === name && (
-                    <span className="ml-2 font-normal text-secondary">
-                      Your OS
-                    </span>
-                  )}
-                </h3>
-                {assets.length ? (
-                  assets.map((asset) => (
-                    <a
-                      key={asset.name}
-                      href={asset.browser_download_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 block text-sm break-all underline underline-offset-4"
-                    >
-                      {asset.name}
-                    </a>
-                  ))
-                ) : (
-                  <p className="mt-1 text-xs text-secondary">
-                    {status === "Loading downloads…"
-                      ? "Loading…"
-                      : "No installer available"}
+          {!status && downloads.length === 0 && (
+            <p role="status" className="text-sm text-secondary">
+              Downloads aren’t available yet.
+            </p>
+          )}
+          {!status &&
+            downloads.map(({ name, installer }) => (
+              <div key={name}>
+                <Button
+                  as="a"
+                  href={installer.browser_download_url}
+                  variant="accent"
+                  className="w-full"
+                >
+                  Download for {name}
+                </Button>
+                {name === "macOS" && (
+                  <p className="mt-2 text-xs text-secondary">
+                    First time: Control-click the app and choose Open.
                   </p>
                 )}
-              </section>
-            );
-          })}
+              </div>
+            ))}
           <a
             href={RELEASES_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm underline underline-offset-4"
           >
-            All releases on GitHub
+            Other platforms and versions
           </a>
         </DialogBody>
       </DialogContent>

@@ -14,7 +14,10 @@
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "lint:fix": "eslint . --fix --cache --cache-location node_modules/.cache/eslint/",
     "validate": "run-p lint typecheck test",
-    "desktop:build": "node desktop/build-renderer.mjs"
+    "desktop:build": "node desktop/build-renderer.mjs",
+    "desktop:dev": "node desktop/dev.mjs",
+    "desktop:test-update": "node desktop/dev.mjs --test-update",
+    "desktop:release": "npm --prefix desktop version"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
