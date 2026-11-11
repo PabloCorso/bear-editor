@@ -1,7 +1,8 @@
 import type { Config } from "@react-router/dev/config";
 
+const desktop = process.env.BEAR_DESKTOP === "1";
+
 export default {
-  // Config options...
-  // Server-side render by default, to enable SPA mode set this to `false`
-  ssr: true,
+  ssr: !desktop,
+  buildDirectory: desktop ? "desktop/build" : "build",
 } satisfies Config;

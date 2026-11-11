@@ -14,10 +14,21 @@ export function isAiPromptLibraryShortcut(event: KeyboardEvent) {
 }
 
 export function getNewLevelShortcut(isMac: boolean) {
+  if (typeof window !== "undefined" && window.bearDesktop)
+    return isMac ? "⌘ + N" : "Ctrl + N";
   return isMac ? "Ctrl + N" : "Ctrl + Alt + N";
 }
 
 export function isNewLevelShortcut(event: KeyboardEvent, isMac: boolean) {
+  if (typeof window !== "undefined" && window.bearDesktop) {
+    return (
+      event.key.toLowerCase() === "n" &&
+      !event.shiftKey &&
+      !event.altKey &&
+      event.metaKey === isMac &&
+      event.ctrlKey === !isMac
+    );
+  }
   return (
     event.key.toLowerCase() === "n" &&
     event.ctrlKey &&

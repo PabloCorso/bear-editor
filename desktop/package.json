@@ -1,0 +1,61 @@
+{
+  "name": "bear-editor-desktop",
+  "productName": "Bear Editor",
+  "desktopName": "bear-editor.desktop",
+  "version": "0.1.0",
+  "description": "Offline Elasto Mania level editor",
+  "author": "Pablo Corso",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.beareditor.desktop",
+    "files": [
+      "main.mjs",
+      "preload.cjs",
+      "build/client/**/*"
+    ],
+    "directories": {
+      "buildResources": "resources"
+    },
+    "mac": {
+      "identity": "-",
+      "hardenedRuntime": false,
+      "icon": "../app/assets/bear-helmet.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "../app/assets/bear-helmet.png",
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Graphics",
+      "icon": "../app/assets/bear-helmet.png",
+      "syncDesktopName": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "PabloCorso",
+      "repo": "bear-editor"
+    }
+  }
+}

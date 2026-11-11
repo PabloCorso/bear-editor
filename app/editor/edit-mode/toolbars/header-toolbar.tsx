@@ -1,3 +1,4 @@
+import { DesktopDownloadDialog } from "./desktop-download-dialog";
 import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
@@ -33,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
+  LaptopIcon,
   DotsThreeVerticalIcon,
   CaretRightIcon,
   CaretLeftIcon,
@@ -85,7 +87,7 @@ import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
 import { LevelPropertiesDialog } from "./level-properties-dialog";
 import { LevelFolderTip } from "./level-folder-tip";
 import { ToolInfo } from "./tool-info";
-import { CanvasTips } from "./canvas-tip";
+import { CanvasTipSections, CanvasTips } from "./canvas-tip";
 import "./level-file-name.css";
 import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import { ExportImageDialog } from "./export-image-dialog";
@@ -97,6 +99,7 @@ import {
   getVertexIconProps,
 } from "./vertex-tool-control";
 import type { VertexTool } from "../tools/vertex-tool";
+import { DesktopUpdate } from "~/editor/desktop-update";
 
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
@@ -148,6 +151,9 @@ export function HeaderToolbar({
   engineRef,
   ...props
 }: HeaderToolbarProps) {
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => setIsDesktop(Boolean(window.bearDesktop)), []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -253,6 +259,9 @@ export function HeaderToolbar({
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
             actions={menuActions}
+            onDownloadDesktop={
+              isDesktop ? undefined : () => setDownloadOpen(true)
+            }
             onExportImage={handleExportImage}
             isLoading={isLoading}
             onOpenSettings={() => {
@@ -276,6 +285,9 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
               actions={menuActions}
+              onDownloadDesktop={
+                isDesktop ? undefined : () => setDownloadOpen(true)
+              }
               onExportImage={handleExportImage}
               isLoading={isLoading}
               onOpenSettings={() => {
@@ -314,15 +326,22 @@ export function HeaderToolbar({
         </div>
       </div>
       <CanvasTips className="row-start-3 self-end">
-        <LevelFolderTip
-          onOpenSettings={() => {
-            setSettingsTab("general");
-            setHighlightLevelFolder(true);
-            setSettingsOpen(true);
-          }}
-        />
+        <CanvasTipSections>
+          <DesktopUpdate />
+          <LevelFolderTip
+            onOpenSettings={() => {
+              setSettingsTab("general");
+              setHighlightLevelFolder(true);
+              setSettingsOpen(true);
+            }}
+          />
+        </CanvasTipSections>
         <ToolInfo />
       </CanvasTips>
+      <DesktopDownloadDialog
+        open={downloadOpen}
+        onOpenChange={setDownloadOpen}
+      />
       <LevelPropertiesDialog
         open={propertiesOpen}
         onOpenChange={setPropertiesOpen}
@@ -659,11 +678,13 @@ function useMainMenuActions() {
 }
 
 function MainDropdownMenu({
+  onDownloadDesktop,
   onOpenSettings,
   actions,
   onExportImage,
   isLoading,
 }: {
+  onDownloadDesktop?: () => void;
   onOpenSettings: () => void;
   actions: ReturnType<typeof useMainMenuActions>;
   onExportImage: () => void;
@@ -744,6 +765,14 @@ function MainDropdownMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          {onDownloadDesktop && (
+            <DropdownMenuItem
+              iconBefore={<LaptopIcon />}
+              onClick={onDownloadDesktop}
+            >
+              Download desktop app…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             iconBefore={<GearIcon />}
             shortcut={`${modifier} + ,`}
