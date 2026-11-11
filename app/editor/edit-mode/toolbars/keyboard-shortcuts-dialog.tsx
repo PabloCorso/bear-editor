@@ -624,66 +624,6 @@ function getShortcutGroups(
       ],
     },
     {
-      title: "Tool menus",
-      items: [
-        {
-          shortcut: ["A", "P", "T", "C", "Shift + T"],
-          label: "Activate and open options; press again to close",
-        },
-        {
-          shortcut: ["V", "G", "…"],
-          label: "Select the tool without opening the Vertex menu",
-        },
-        {
-          shortcut: "Enter",
-          label:
-            "Accept the focused choice; close the panel when the canvas is focused",
-        },
-        {
-          shortcut: "Esc",
-          label: "Close the panel and keep the tool active",
-        },
-      ],
-    },
-    {
-      title: "Picture, texture, and color placement",
-      items: [
-        {
-          shortcut: "Space",
-          label: "Cycle clipping: Sky → Ground → Unclipped",
-        },
-        {
-          shortcut: ["-", "+ / ="],
-          label: "Decrease / increase distance by 10",
-        },
-        {
-          shortcut: "Right click",
-          label: "Open placement properties at the cursor",
-        },
-        {
-          shortcut: "Esc",
-          label: "Close placement properties and resume placement",
-        },
-      ],
-    },
-    {
-      title: "Picture distance field",
-      items: [
-        {
-          shortcut: ["↑", "↓"],
-          label: "Increase / decrease distance by 1 while focused",
-        },
-        {
-          shortcut: ["Home", "End"],
-          label: "Set distance to 0 / 999 while focused",
-        },
-        {
-          shortcut: "Enter",
-          label: "Commit distance and leave the field",
-        },
-      ],
-    },
-    {
       title: "Play mode",
       items: [
         {
