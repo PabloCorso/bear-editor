@@ -564,10 +564,7 @@ function getShortcutGroups(
           label: defaultTools.apple.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.appleSprite} />,
           subItems: [
-            {
-              shortcut: "Space",
-              label: "Next object: Apple → Killer → Flower",
-            },
+            { shortcut: "Space", label: "Switch to Killer" },
             {
               shortcut: "1-9",
               label: "Change apple animation",
