@@ -569,6 +569,7 @@ function getShortcutGroups(
           label: defaultTools.apple.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.appleSprite} />,
           subItems: [
+            { shortcut: "Space", label: "Switch to Killer" },
             {
               shortcut: "1-9",
               label: "Change apple animation",
@@ -578,7 +579,7 @@ function getShortcutGroups(
               label: "Set no gravity",
             },
             {
-              shortcut: ["Shift + ↑", "Shift + ↓", "Shift + ←", "Shift + →"],
+              shortcut: "Shift + arrows",
               label: "Set directional gravity",
             },
           ],
@@ -587,11 +588,13 @@ function getShortcutGroups(
           shortcut: defaultTools.killer.shortcut,
           label: defaultTools.killer.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.killerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Flower" }],
         },
         {
           shortcut: defaultTools.flower.shortcut,
           label: defaultTools.flower.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.flowerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Apple" }],
         },
         {
           shortcut: defaultTools.picture.shortcut,
@@ -622,58 +625,6 @@ function getShortcutGroups(
           shortcut: defaultTools.text.shortcut,
           label: defaultTools.text.name,
           icon: <TextTIcon className="h-5 w-5" />,
-        },
-      ],
-    },
-    {
-      title: "Tool menus",
-      items: [
-        {
-          shortcut: ["A", "P", "T", "C", "Shift + T"],
-          label: "Activate and open options; press again to close",
-        },
-        {
-          shortcut: ["V", "G", "…"],
-          label: "Select the tool without opening the Vertex menu",
-        },
-        {
-          shortcut: "Enter",
-          label:
-            "Accept the focused choice or keep the current choice and close the panel",
-        },
-        {
-          shortcut: "Esc",
-          label: "Close the panel and keep the tool active",
-        },
-      ],
-    },
-    {
-      title: "Picture, texture, and color placement",
-      items: [
-        {
-          shortcut: "Right click",
-          label: "Open placement properties at the cursor",
-        },
-        {
-          shortcut: "Esc",
-          label: "Close placement properties and resume placement",
-        },
-      ],
-    },
-    {
-      title: "Picture distance field",
-      items: [
-        {
-          shortcut: ["↑", "↓"],
-          label: "Increase / decrease distance by 1 while focused",
-        },
-        {
-          shortcut: ["Home", "End"],
-          label: "Set distance to 0 / 999 while focused",
-        },
-        {
-          shortcut: "Enter",
-          label: "Commit distance and leave the field",
         },
       ],
     },

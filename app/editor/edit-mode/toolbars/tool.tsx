@@ -85,12 +85,14 @@ type ToolControlMenuProps = {
   id: string;
   button: React.ReactNode;
   children: React.ReactNode;
+  closeOnSelect?: boolean;
 };
 
 export function ToolControlMenu({
   id,
   button,
   children,
+  closeOnSelect = true,
 }: ToolControlMenuProps) {
   const isOpen = useEditor((state) => state.openToolMenuId === id);
   const { setToolMenuOpen } = useEditorActions();
@@ -101,7 +103,9 @@ export function ToolControlMenu({
         {button}
       </ToolSelectionContext.Provider>
       {isOpen && (
-        <ToolSelectionContext.Provider value={() => setToolMenuOpen(false)}>
+        <ToolSelectionContext.Provider
+          value={() => setToolMenuOpen(!closeOnSelect, id)}
+        >
           <ToolMenu
             onKeyDown={(event) => {
               // Let Enter click the focused choice, without reaching canvas shortcuts.
