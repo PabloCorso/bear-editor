@@ -17,6 +17,7 @@ import { KillerTool } from "~/editor/edit-mode/tools/killer-tool";
 import { FlowerTool } from "~/editor/edit-mode/tools/flower-tool";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import {
+  editorLevelFromBuffer,
   editorLevelFromFile,
   getBuiltinLevel,
   getDefaultLevel,
@@ -188,8 +189,24 @@ type InitialDocument = {
   status: "loading" | "done" | "error";
 };
 
+export type InitialLevelSource =
+  | {
+      kind: "builtin";
+      name: string;
+      displayName: string;
+    }
+  | {
+      kind: "elma-online";
+      id: number;
+    };
+
 // TODO: should this move to FileSession or EditorStore?
-export function useInitialLevel(levelName?: string): InitialDocument {
+export function useInitialLevel(source?: InitialLevelSource): InitialDocument {
+  const sourceKind = source?.kind;
+  const sourceId = source?.kind === "elma-online" ? source.id : undefined;
+  const sourceName = source?.kind === "builtin" ? source.name : undefined;
+  const sourceDisplayName =
+    source?.kind === "builtin" ? source.displayName : undefined;
   const [data, setData] = useState<EditorLevel | undefined>(undefined);
   const [fileName, setFileName] = useState<string | undefined>(undefined);
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
@@ -210,13 +227,30 @@ export function useInitialLevel(levelName?: string): InitialDocument {
 
       async function loadInitialLevelDocument() {
         try {
-          if (levelName) {
-            const level = await getBuiltinLevel(`${levelName}.lev`);
+          if (sourceKind === "builtin" && sourceName && sourceDisplayName) {
+            const level = await getBuiltinLevel(`${sourceName}.lev`);
             if (isCanceled) return;
 
             setData(level ?? undefined);
-            setFileName(undefined);
+            setFileName(sourceDisplayName);
             setStatus(level ? "done" : "error");
+            return;
+          }
+
+          if (sourceKind === "elma-online" && sourceId !== undefined) {
+            const response = await fetch(
+              `https://api.elma.online/dl/level/${sourceId}`,
+            );
+            if (!response.ok)
+              throw new Error("Unable to load Elma Online level.");
+            const level = await editorLevelFromBuffer(
+              await response.arrayBuffer(),
+            );
+            if (isCanceled) return;
+
+            setData(level);
+            setFileName(level.levelName || `Level ${sourceId}`);
+            setStatus("done");
             return;
           }
 
@@ -247,10 +281,10 @@ export function useInitialLevel(levelName?: string): InitialDocument {
           console.error("Error loading initial level:", error);
           if (isCanceled) return;
 
-          if (!levelName) store.getState().fileSession.clear();
+          if (!sourceKind) store.getState().fileSession.clear();
           setData(undefined);
           setFileName(undefined);
-          setStatus(levelName ? "error" : "done");
+          setStatus(sourceKind ? "error" : "done");
         }
       }
 
@@ -260,13 +294,13 @@ export function useInitialLevel(levelName?: string): InitialDocument {
         isCanceled = true;
       };
     },
-    [levelName, store],
+    [sourceDisplayName, sourceId, sourceKind, sourceName, store],
   );
 
   const document = React.useMemo<EditorDocumentInput | undefined>(() => {
     if (status === "loading") return undefined;
 
-    if (!levelName && data && fileName) {
+    if (!sourceKind && data && fileName) {
       return {
         level: data,
         origin: { kind: "file", label: "File", canOverwrite: true },
@@ -275,7 +309,7 @@ export function useInitialLevel(levelName?: string): InitialDocument {
       };
     }
 
-    if (!levelName || !data) {
+    if (!sourceKind || !data) {
       return {
         level: getDefaultLevel(
           initialDefaultLevelPreset,
@@ -292,19 +326,30 @@ export function useInitialLevel(levelName?: string): InitialDocument {
       };
     }
 
-    return {
-      level: data,
-      origin: { kind: "builtin", label: "Built-in level", canOverwrite: false },
-      displayName: data.levelName || levelName,
-      hasExternalHandle: false,
-    };
+    return sourceKind === "elma-online"
+      ? {
+          level: data,
+          origin: { kind: "api", label: "Elma Online", canOverwrite: false },
+          displayName: fileName,
+          hasExternalHandle: false,
+        }
+      : {
+          level: data,
+          origin: {
+            kind: "builtin",
+            label: "Built-in level",
+            canOverwrite: false,
+          },
+          displayName: fileName,
+          hasExternalHandle: false,
+        };
   }, [
     data,
     fileName,
     initialCustomDefaultLevelTemplate,
     initialDefaultLevelPreset,
     initialDefaultLevelTitle,
-    levelName,
+    sourceKind,
     status,
   ]);
 

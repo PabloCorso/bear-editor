@@ -1,3 +1,17 @@
-import { type RouteConfig, route } from "@react-router/dev/routes";
+import { index, type RouteConfig, route } from "@react-router/dev/routes";
 
-export default [route(":level?", "routes/home.tsx")] satisfies RouteConfig;
+const desktop = process.env.BEAR_DESKTOP === "1";
+
+export default (desktop
+  ? [
+      index("routes/home.tsx"),
+      route("internal/:number?", "routes/internal-level.desktop.tsx"),
+      route("int/:number?", "routes/internal-alias.desktop.tsx"),
+    ]
+  : [
+      index("routes/home.tsx"),
+      route("levels/:id", "routes/elma-level.tsx"),
+      route("internal", "routes/internal-index.ts"),
+      route("internal/:number", "routes/internal-level.tsx"),
+      route("int/:number?", "routes/internal-alias.ts"),
+    ]) satisfies RouteConfig;

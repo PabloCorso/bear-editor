@@ -17,6 +17,7 @@ import {
 } from "~/editor/use-editor-store";
 import {
   EditorView,
+  type InitialLevelSource,
   useEditorView,
   useInitialLevel,
 } from "~/editor/edit-mode/editor-view";
@@ -29,15 +30,15 @@ const LazyPlayModeOverlay = lazy(async () => {
 });
 
 type EditorShellProps = {
-  initialLevelName?: string;
+  initialLevel?: InitialLevelSource;
   rendererBackend?: WorldSceneRendererBackend;
 };
 
 export function EditorShell({
-  initialLevelName,
+  initialLevel,
   rendererBackend = "webgl",
 }: EditorShellProps) {
-  const initialDocument = useInitialLevel(initialLevelName);
+  const initialDocument = useInitialLevel(initialLevel);
   const { canvasRef, engineRef } = useEditorView({
     initialDocument,
     rendererBackend,
