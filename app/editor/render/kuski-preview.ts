@@ -2,7 +2,10 @@ import type { LgrAssets } from "~/components/lgr-assets";
 import { standardSprites } from "~/components/standard-sprites";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import { defaultLevelVisibility } from "~/editor/level-visibility";
-import { WebGLRenderContext } from "./webgl-render-context";
+import {
+  WebGLInitializationError,
+  WebGLRenderContext,
+} from "./webgl-render-context";
 import { WebGLWorldItemDrawer } from "./webgl-world-item-drawer";
 import type { WorldRenderScene } from "./world-scene";
 
@@ -23,7 +26,13 @@ export function getKuskiPreview(lgr: LgrAssets, color: string) {
   const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
   const side = Math.max(maxX - minX, maxY - minY) * 1.08;
   const canvas = document.createElement("canvas");
-  const context = new WebGLRenderContext(canvas, { alpha: true });
+  let context: WebGLRenderContext;
+  try {
+    context = new WebGLRenderContext(canvas, { alpha: true });
+  } catch (error) {
+    if (error instanceof WebGLInitializationError) return;
+    throw error;
+  }
   try {
     context.resize({ width: PREVIEW_SIZE, height: PREVIEW_SIZE });
     context.clear("#000000", 0);

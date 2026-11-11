@@ -51,7 +51,11 @@ import {
   DEFAULT_KEYS,
   InputManager,
 } from "~/editor/play-mode/engine/input-manager";
-import { createPlayModeRenderer } from "~/editor/play-mode/scene/renderer";
+import {
+  createPlayModeRenderer,
+  type PlayModeRenderer,
+} from "~/editor/play-mode/scene/renderer";
+import { WebGLInitializationError } from "~/editor/render/webgl-render-context";
 import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import { ToolButton } from "~/components/tool-button";
 
@@ -419,16 +423,25 @@ export function PlayModeOverlay({
         return;
       }
 
+      let renderer: PlayModeRenderer;
+      try {
+        renderer = createPlayModeRenderer({
+          canvas,
+          lgrAssets: lgr,
+          backend: rendererBackend,
+        });
+      } catch (error) {
+        if (!(error instanceof WebGLInitializationError)) throw error;
+        stopPlayMode();
+        alert(error.message);
+        return;
+      }
+
       const input = new InputManager(
         getPlayInputKeys(store.getState().playSettings),
         store.getState().playModeSeedKeys,
       );
       inputRef.current = input;
-      const renderer = createPlayModeRenderer({
-        canvas,
-        lgrAssets: lgr,
-        backend: rendererBackend,
-      });
       const keyBindings = keyBindingsRef.current;
 
       let gameState: GameState = createGame(levelData, input, keyBindings);
