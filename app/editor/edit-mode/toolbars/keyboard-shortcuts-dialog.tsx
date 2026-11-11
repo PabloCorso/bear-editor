@@ -88,7 +88,9 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
       textureSprite,
       playKeyBindings: playSettings.keyBindings,
       showVertexInternalEdgeClickHint: vertexEdgeClickBehavior === "internal",
-      showDesktopDevelopmentShortcuts: window.bearDesktop?.development ?? false,
+      showDesktopDevelopmentShortcuts:
+        typeof window !== "undefined" &&
+        (window.bearDesktop?.development ?? false),
     },
   );
 
