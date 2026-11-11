@@ -255,13 +255,7 @@ export function HeaderToolbar({
           onClose={() => setImageExport(null)}
         />
       )}
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-4 top-4 z-10",
-          className,
-        )}
-        {...props}
-      >
+      <div className={cn("relative z-10 col-span-full", className)} {...props}>
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
             actions={menuActions}
@@ -327,11 +321,11 @@ export function HeaderToolbar({
           entrance={fileNameEntrance}
         />
 
-        <div className="pointer-events-none mt-2 flex justify-center">
+        <div className="absolute inset-x-0 top-full mt-2 flex justify-center">
           <TopologyResultPanel />
         </div>
       </div>
-      <CanvasTips>
+      <CanvasTips className="row-start-3 self-end">
         <CanvasTipSections>
           <DesktopUpdate />
           <LevelFolderTip
@@ -581,7 +575,7 @@ function useMainMenuActions() {
     // reported save failure. Inspection never mutates the document.
     try {
       const result = getLevelTopology(state, lgr);
-      if (result.issues.length || result.truncated) {
+      if (result.checks.some((check) => check.status !== "passed")) {
         state.actions.setTopologyInspection(
           state.topologyInspection ?? {
             activeIssueId: null,
