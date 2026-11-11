@@ -49,3 +49,29 @@ Developer certificate, macOS updates are manual downloads from GitHub Releases.
 Packaged Windows and Linux builds check for updates at startup and every six
 hours. Once downloaded, **Restart to update** closes the editor through its
 unsaved-changes prompt before installing.
+
+## Analytics
+
+Production web and desktop packages report to the same Umami website. In
+Umami, open **Filters → Other → Tag** and select `web` or `desktop` to compare
+visitors, page views, and custom events. Older web traffic has no tag. The
+tracker handles page views automatically on both platforms.
+
+| Event              | When it fires                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `first_edit`       | First meaningful edit in the editor session.                                                                                                |
+| `playtest_started` | The user enters play mode.                                                                                                                  |
+| `level_saved`      | A file write succeeds or the editor starts a level download.                                                                                |
+| `level_opened`     | A local level is loaded through Open or level-folder navigation. Startup restoration and built-in examples are excluded.                    |
+| `level_created`    | The user creates a level through New or its shortcut. The initial blank level is excluded.                                                  |
+| `level_folder_set` | A directory picked through the File System Access API is saved as the level folder. Cancelled picks and automatic restoration are excluded. |
+
+Custom events send no level names, directory paths, or level contents. Browsers
+without directory picker support can still send the other applicable events.
+Analytics is best effort and the desktop editor works offline.
+
+The desktop packaging workflow and Netlify production configuration use the same
+public website ID. Local desktop builds can opt in with
+`VITE_UMAMI_WEBSITE_ID` using the default Umami Cloud tracker. For smoke tests,
+use a separate test website ID or intercept the collection requests to keep test
+traffic out of production.

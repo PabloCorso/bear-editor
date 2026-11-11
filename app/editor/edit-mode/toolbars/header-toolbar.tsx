@@ -1,3 +1,4 @@
+import { trackEvent } from "~/analytics";
 import { DesktopDownloadDialog } from "./desktop-download-dialog";
 import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
@@ -512,6 +513,7 @@ function useMainMenuActions() {
           displayName: fileName,
           hasExternalHandle: true,
         });
+        trackEvent("level_opened");
         triggerFitToView();
       } catch (error) {
         alert(
@@ -547,6 +549,7 @@ function useMainMenuActions() {
       displayName: title,
       hasExternalHandle: false,
     });
+    trackEvent("level_created");
     triggerFitToView();
   }, [
     activeTool,
@@ -931,6 +934,7 @@ function LevelFileName({
         displayName: result.fileName,
         hasExternalHandle: true,
       });
+      trackEvent("level_opened");
       entrance.onNavigate();
       triggerFitToView();
     } catch (error) {

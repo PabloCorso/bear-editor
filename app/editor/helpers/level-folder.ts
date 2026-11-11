@@ -1,3 +1,4 @@
+import { trackEvent } from "~/analytics";
 import type { EditorStore } from "~/editor/editor-store";
 
 const DB_NAME = "elma-level-folder";
@@ -71,6 +72,7 @@ export class LevelFolder {
       this.loadPromise = Promise.resolve(true);
       await persistHandle(LEVEL_FOLDER_KEY, handle);
       this.notifyChange();
+      trackEvent("level_folder_set");
       return true;
     } catch (err: any) {
       if (err?.name === "AbortError") return false;
