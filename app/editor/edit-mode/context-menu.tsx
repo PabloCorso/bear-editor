@@ -1,4 +1,5 @@
 import { ReplaceSelectionDialog } from "./toolbars/replace-selection-dialog";
+import { PictureConversionDialog } from "./toolbars/picture-conversion-dialog";
 import { ImageOpacityControl } from "./toolbars/image-opacity-control";
 import { ShapeTool } from "./tools/shape-tool";
 import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
@@ -106,11 +107,17 @@ export function EditorContextMenu() {
   const tool = useEditorActiveTool<SelectTool>();
   const sessionId = useEditor((state) => state.documentSession.clipboardSessionId);
   const [replaceSession, setReplaceSession] = useState<string | null>(null);
+  const [convertSession, setConvertSession] = useState<string | null>(null);
   const replacing = replaceSession === sessionId && tool instanceof SelectTool;
+  const converting = convertSession === sessionId && tool instanceof SelectTool;
 
   return (
     <>
       <SelectionContextToolbar
+        onConvertPicture={() => {
+          setConvertSession(sessionId);
+          tool?.closeContextMenu();
+        }}
         onReplace={() => {
           setReplaceSession(sessionId);
           tool?.closeContextMenu();
@@ -122,11 +129,23 @@ export function EditorContextMenu() {
           onClose={() => setReplaceSession(null)}
         />
       )}
+      {converting && (
+        <PictureConversionDialog
+          tool={tool}
+          onClose={() => setConvertSession(null)}
+        />
+      )}
     </>
   );
 }
 
-function SelectionContextToolbar({ onReplace }: { onReplace: () => void }) {
+function SelectionContextToolbar({
+  onReplace,
+  onConvertPicture,
+}: {
+  onReplace: () => void;
+  onConvertPicture: () => void;
+}) {
   const { setApples, setPictures, setPolygons, getTool } = useEditorActions();
   const selectToolState = useEditorToolState<SelectToolState>(
     defaultTools.select.id,
@@ -381,6 +400,8 @@ function SelectionContextToolbar({ onReplace }: { onReplace: () => void }) {
   const selectionActionsIndex = toolbarSections.length;
   toolbarSections.push(
     <SelectionActionsMenu
+      canConvertPicture={Boolean(selectTool?.getSelectedPictureForConversion())}
+      onConvertPicture={onConvertPicture}
       canReplace={(selectTool?.getReplacementCount() ?? 0) > 0}
       onReplace={onReplace}
       direct={directMenu}
@@ -695,6 +716,8 @@ function useSelectionGroupIcons(): Record<
 }
 
 function SelectionActionsMenu({
+  canConvertPicture,
+  onConvertPicture,
   canReplace,
   onReplace,
   direct,
@@ -717,6 +740,8 @@ function SelectionActionsMenu({
   onDuplicate,
   onDelete,
 }: {
+  canConvertPicture: boolean;
+  onConvertPicture: () => void;
   canReplace: boolean;
   onReplace: () => void;
   direct: boolean;
@@ -833,6 +858,11 @@ function SelectionActionsMenu({
           {canReplace && (
             <DropdownMenuItem onClick={onReplace}>
               Replace selection…
+            </DropdownMenuItem>
+          )}
+          {canConvertPicture && (
+            <DropdownMenuItem onClick={onConvertPicture}>
+              Convert picture…
             </DropdownMenuItem>
           )}
           {canDuplicate && (
