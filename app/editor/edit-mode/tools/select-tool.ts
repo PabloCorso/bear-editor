@@ -1,3 +1,7 @@
+import type { LgrAssets } from "~/components/lgr-assets";
+import { standardSprites } from "~/components/standard-sprites";
+import { tracePictureSilhouette } from "~/editor/helpers/picture-silhouette";
+import { createFillMask, generateTextureFill } from "~/editor/helpers/texture-fill";
 import { findSessionArtifact } from "~/editor/session-artifacts";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
@@ -1308,6 +1312,86 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!this.copySelection()) return false;
     void this.copySelectionToSystemClipboard();
     return true;
+  }
+
+  /** Only a single ordinary LGR picture may be traced into terrain. */
+  public getSelectedPictureForConversion(): Picture | null {
+    const { state, toolState } = this.getState();
+    if (
+      !toolState ||
+      toolState.selectedPictures.length !== 1 ||
+      toolState.selectedVertices.length !== 0 ||
+      toolState.selectedObjects.length !== 0
+    ) return null;
+    const picture = state.pictures.find(
+      (item) => item.position === toolState.selectedPictures[0],
+    );
+    return picture?.name && !picture.texture ? picture : null;
+  }
+
+  /** Commit a traced polygon silhouette, optionally filling its outer contours.
+   * All expensive tracing and mask placement happens before the history mutation.
+   */
+  public convertSelectedPicture(
+    assets: LgrAssets,
+    texture?: { texture: string; distance: number; clip: Picture["clip"] },
+  ): string | null {
+    this.pruneHiddenSelection();
+    const source = this.getSelectedPictureForConversion();
+    if (!source) return "Select one regular picture to convert.";
+    if (!assets.isReady()) return "The active LGR is still loading.";
+    const traced = tracePictureSilhouette(source, assets);
+    if (traced.error) return traced.error;
+    const polygons = traced.contours.map(({ polygon }) => polygon);
+    const pictures: Picture[] = [];
+    if (texture) {
+      if (!assets.getSprite(texture.texture)) {
+        return "This texture is missing from the active LGR.";
+      }
+      const masks = standardSprites.textureMasks.flatMap((mask) => {
+        const sprite = assets.getSpritePixels(mask);
+        const fillMask = sprite && createFillMask(mask, sprite);
+        return fillMask ? [fillMask] : [];
+      });
+      for (const contour of traced.contours) {
+        if (contour.isHole) continue;
+        const fill = generateTextureFill(contour.polygon, masks);
+        if (fill.error) return fill.error;
+        pictures.push(
+          ...fill.placements.map((placement) => ({
+            name: "",
+            ...texture,
+            mask: placement.mask,
+            position: placement.position,
+          })),
+        );
+      }
+      if (pictures.length > 5000)
+        return "This silhouette requires too many texture elements.";
+    }
+
+    const { state, setToolState } = this.getState();
+    if (!state.pictures.includes(source)) return "The picture selection changed.";
+    this.runHistoryBatch(() => {
+      state.actions.setPolygons([...state.polygons, ...polygons]);
+      state.actions.setPictures([
+        ...state.pictures.filter((picture) => picture !== source),
+        ...pictures,
+      ]);
+    });
+    this.transformFrame = null;
+    setToolState({
+      selectedVertices: polygons.flatMap((polygon) =>
+        polygon.vertices.map((vertex) => ({ polygon, vertex })),
+      ),
+      selectedObjects: [],
+      selectedPictures: [],
+      hoveredObject: undefined,
+      hoveredPictureBounds: undefined,
+      contextMenuType: undefined,
+      transformMode: false,
+    });
+    return null;
   }
 
   /** Replacement uses selected vertices and element anchors; the start is protected. */
