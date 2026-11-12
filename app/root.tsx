@@ -13,6 +13,7 @@ import stylesheet from "./styles/tailwind.css?url";
 import {
   analyticsDomains,
   analyticsEnabled,
+  analyticsPlatform,
   analyticsScriptUrl,
   analyticsWebsiteId,
 } from "./analytics";
@@ -39,10 +40,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
         {analyticsEnabled && (
           <script
-            defer
+            async={analyticsPlatform === "desktop"}
+            defer={analyticsPlatform === "web"}
             src={analyticsScriptUrl}
             data-website-id={analyticsWebsiteId}
             data-domains={analyticsDomains}
+            data-tag={analyticsPlatform}
             data-exclude-search="true"
             data-exclude-hash="true"
           />
