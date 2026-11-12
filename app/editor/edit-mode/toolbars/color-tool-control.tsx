@@ -8,9 +8,11 @@ import { Switch } from "~/components/ui/switch";
 import {
   useEditorActions,
   useEditorToolState,
+  useEditorActiveTool,
 } from "~/editor/use-editor-store";
 import { defaultTools } from "../tools/default-tools";
 import type { ColorToolState } from "../tools/color-tool";
+import type { SceneryFillToolState } from "../tools/scenery-fill-tool";
 import { getColorPalette } from "./color-palette";
 import { PictureTexturePicker } from "./picture-texture-picker";
 import {
@@ -56,19 +58,30 @@ function ColorListControl({
     [colors],
   );
   const state = useEditorToolState<ColorToolState>(defaultTools.color.id);
-  const { setToolState } = useEditorActions();
+  const fillState = useEditorToolState<SceneryFillToolState>(
+    defaultTools.colorFill.id,
+  );
+  const activeTool = useEditorActiveTool();
+  const fillMode = activeTool?.meta.id === defaultTools.colorFill.id;
+  const isActive = fillMode || activeTool?.meta.id === defaultTools.color.id;
+  const { setToolState, activateTool } = useEditorActions();
+  const selectedName = fillMode ? fillState?.name : state?.name;
   const selectedColor =
-    colors.find(({ picture }) => picture.name === state?.name) ??
+    colors.find(({ picture }) => picture.name === selectedName) ??
     ordered.find(({ picture }) => baseNames.has(picture.name));
   const visibleColors = showAll
     ? ordered
     : ordered.filter(
         ({ picture }) =>
-          baseNames.has(picture.name) || picture.name === state?.name,
+          baseNames.has(picture.name) || picture.name === selectedName,
       );
 
-  const distance = state?.distance ?? selectedColor?.picture.distance ?? 0;
-  const clip = state?.clip ?? selectedColor?.picture.clip ?? Clip.Unclipped;
+  const distance =
+    (fillMode ? fillState?.distance : state?.distance) ??
+    selectedColor?.picture.distance ?? 0;
+  const clip =
+    (fillMode ? fillState?.clip : state?.clip) ??
+    selectedColor?.picture.clip ?? Clip.Unclipped;
 
   // Keep the placement choice aligned with the colors available in the loaded LGR,
   // including when the tool is activated by keyboard without opening its picker.
@@ -94,13 +107,53 @@ function ColorListControl({
     [isLoaded, selectedColor, state?.name, distance, clip, setToolState],
   );
 
-  function activate(color: ColorSprite) {
-    setToolState<ColorToolState>(defaultTools.color.id, {
-      name: color.picture.name,
-      distance,
-      clip,
-    });
+  function updateColor(patch: Partial<SceneryFillToolState>) {
+    if (fillMode) {
+      setToolState<SceneryFillToolState>(defaultTools.colorFill.id, patch);
+    } else {
+      setToolState<ColorToolState>(defaultTools.color.id, patch);
+    }
   }
+
+  function activate(color: ColorSprite) {
+    updateColor({ name: color.picture.name, distance, clip });
+  }
+
+  function switchMode(nextFill: boolean) {
+    const name = selectedColor?.picture.name ?? "";
+    if (nextFill) {
+      setToolState<SceneryFillToolState>(defaultTools.colorFill.id, {
+        name, distance, clip,
+      });
+      activateTool(defaultTools.colorFill.id);
+    } else {
+      setToolState<ColorToolState>(defaultTools.color.id, {
+        name, distance, clip,
+      });
+      activateTool(defaultTools.color.id);
+    }
+  }
+  const modePicker = (
+    <div className="flex items-center gap-1 rounded-md border border-default p-0.5" role="group" aria-label="Color application mode">
+      <button
+        type="button"
+        aria-pressed={!fillMode}
+        className={`rounded px-3 py-1 text-xs ${!fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
+        onClick={() => switchMode(false)}
+      >
+        Place
+      </button>
+      <button
+        type="button"
+        aria-pressed={fillMode}
+        className={`rounded px-3 py-1 text-xs ${fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
+        onClick={() => switchMode(true)}
+        title="Repeat the selected color tile over a polygon; edges may extend beyond it."
+      >
+        Fill
+      </button>
+    </div>
+  );
 
   const items = visibleColors.map((color) => {
     const { picture } = color;
@@ -114,7 +167,7 @@ function ColorListControl({
       previewSrc: lgr.getSpritePreview(picture.name),
       width: color.width,
       height: color.height,
-      isSelected: state?.name === picture.name,
+      isSelected: selectedName === picture.name,
       onActivate: () => activate(color),
     };
   });
@@ -126,13 +179,20 @@ function ColorListControl({
         <ToolControlButton
           {...defaultTools.color}
           {...props}
+          id={undefined}
+          isActive={isActive}
           isLoading={!isLoaded}
           onClick={() => {
-            if (selectedColor) activate(selectedColor);
-            else
-              setToolState<ColorToolState>(defaultTools.color.id, {
-                name: "",
-              });
+            if (!isActive) {
+              if (selectedColor) {
+                setToolState<ColorToolState>(defaultTools.color.id, {
+                  name: selectedColor.picture.name, distance, clip,
+                });
+              } else {
+                setToolState<ColorToolState>(defaultTools.color.id, { name: "" });
+              }
+              activateTool(defaultTools.color.id);
+            }
           }}
         >
           <PaletteIcon />
@@ -154,19 +214,11 @@ function ColorListControl({
                 clip={clip}
                 defaultDistance={selectedColor?.picture.distance}
                 defaultClip={selectedColor?.picture.clip}
-                onDistanceChange={(distance) =>
-                  setToolState<ColorToolState>(defaultTools.color.id, {
-                    distance,
-                  })
-                }
-                onClipChange={(clip) =>
-                  setToolState<ColorToolState>(defaultTools.color.id, {
-                    clip,
-                  })
-                }
+                onDistanceChange={(distance) => updateColor({ distance })}
+                onClipChange={(clip) => updateColor({ clip })}
                 onResetDefaults={() => {
                   if (!selectedColor) return;
-                  setToolState<ColorToolState>(defaultTools.color.id, {
+                  updateColor({
                     distance: selectedColor.picture.distance,
                     clip: selectedColor.picture.clip,
                   });
@@ -174,7 +226,9 @@ function ColorListControl({
               />
             }
             header={
-              colors.length > baseNames.size && (
+              <div className="flex w-full flex-wrap items-center justify-between gap-2">
+                {modePicker}
+                {colors.length > baseNames.size && (
                 <label
                   title={`Show all ${colors.length} colors`}
                   className="inline-flex cursor-pointer items-center gap-1.5 pl-1 text-[10px] text-secondary"
@@ -187,7 +241,8 @@ function ColorListControl({
                     All {colors.length}
                   </span>
                 </label>
-              )
+              )}
+              </div>
             }
           />
         ) : (
