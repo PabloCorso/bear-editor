@@ -67,7 +67,8 @@ export function ToolMenu({
   // Use the middle grid row as the containing block so the toolbar scroll
   // does not clip the submenu.
   return (
-    <div className="absolute inset-y-0 right-0 left-16 z-40 flex items-center">
+    {/* The menu container spans the canvas height; only its visible controls should intercept pointers. */}
+    <div className="pointer-events-none absolute inset-y-0 right-0 left-16 z-40 flex items-center">
       <div
         className={cn(
           "pointer-events-auto max-h-full overflow-auto",
