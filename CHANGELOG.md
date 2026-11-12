@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-12
+
+- Unify Picture, Texture and Color tools with Place / Fill modes and shared LGR pickers.
+- Fill polygons with adaptive masked textures or repeated ordinary picture/color tiles, with hover previews.
+- Replace selection anchors with objects, pictures, textures, color tiles or copied groups.
+- Convert selected LGR pictures into editable polygon silhouettes, optionally filled with texture.
+
 ## 2026-11-06
 
 - Image to polygon support via AI prompts library @ofta

@@ -1,7 +1,5 @@
 name: Validate editor
 on:
-  push:
-    branches: [feat/unified-material-workflows]
   pull_request:
     branches: [main]
   workflow_dispatch:

@@ -2,8 +2,10 @@
 
 Open the selection toolbar's more-actions menu and choose **Replace selection…**.
 Choose apples (variant and gravity), killers, flowers, a picture, a texture/mask,
-or copied content. Pictures and textures use the active LGR and expose distance
-and clipping. Settings in the dialog are drafts until **Replace** is clicked.
+a color tile or copied content. Pictures, textures and color tiles use the active
+LGR. A color tile is an ordinary color picture placed at each anchor, **not**
+a change to polygon fill color. Picture and texture entries share the standard
+asset picker and expose distance and clipping. Settings in the dialog are drafts until **Replace** is clicked.
 
 Each selected vertex or element position receives one replacement. Selecting an
 entire polygon therefore replaces its vertices, rather than placing one element

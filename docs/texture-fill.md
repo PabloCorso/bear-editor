@@ -1,6 +1,11 @@
 # Texture Fill
 
-Choose Texture Fill (bucket icon beside Texture), select a texture, and hover a non-grass polygon to preview. Click to add all generated texture elements in one history update. The picker exposes only the texture, clipping, and distance. There is no manual mask choice, placement mode, or new keyboard shortcut. The innermost containing polygon wins when polygons are nested; edges can also be targeted. Hidden polygons cannot be filled when both their fill and bounds are hidden.
+Open **Texture** in the main tool toolbar and select **Fill** instead of **Place**.
+Select a texture, then hover a non-grass polygon to preview the generated mask
+placements and click to apply. The Fill picker reuses the regular texture assets
+and distance/clipping properties; mask sizes are automatic. The innermost
+containing polygon wins for nested geometry; nearby edges are also targetable.
+The one-button Texture UI keeps the normal **T** shortcut for Place.
 
 Generated elements are ordinary Elma masked textures, so they remain selectable, editable, and serializable through existing level operations. Filling adds elements; it does not replace earlier textures or alter geometry. Pictures and objects are outside this tool's scope.
 
