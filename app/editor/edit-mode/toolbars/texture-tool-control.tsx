@@ -29,7 +29,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   const textureTool = useEditorToolState<TextureToolState>(
     defaultTools.texture.id,
   );
-  const { setToolState, activateTool } = useEditorActions();
+  const { setToolState, activateTool, setToolMenuOpen } = useEditorActions();
   const activeTool = useEditorActiveTool();
   const isActive =
     activeTool?.meta.id === defaultTools.texture.id ||
@@ -198,6 +198,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
             clip: selectedClip,
           });
           activateTool(defaultTools.texture.id);
+          setToolMenuOpen(true, defaultTools.texture.id);
         }}
       >
         Place
@@ -213,6 +214,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
             clip: selectedClip,
           });
           activateTool(defaultTools.textureFill.id);
+          setToolMenuOpen(true, defaultTools.texture.id);
         }}
       >
         Fill

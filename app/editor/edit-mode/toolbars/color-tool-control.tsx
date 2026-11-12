@@ -64,7 +64,7 @@ function ColorListControl({
   const activeTool = useEditorActiveTool();
   const fillMode = activeTool?.meta.id === defaultTools.colorFill.id;
   const isActive = fillMode || activeTool?.meta.id === defaultTools.color.id;
-  const { setToolState, activateTool } = useEditorActions();
+  const { setToolState, activateTool, setToolMenuOpen } = useEditorActions();
   const selectedName = fillMode ? fillState?.name : state?.name;
   const selectedColor =
     colors.find(({ picture }) => picture.name === selectedName) ??
@@ -126,11 +126,13 @@ function ColorListControl({
         name, distance, clip,
       });
       activateTool(defaultTools.colorFill.id);
+      setToolMenuOpen(true, defaultTools.color.id);
     } else {
       setToolState<ColorToolState>(defaultTools.color.id, {
         name, distance, clip,
       });
       activateTool(defaultTools.color.id);
+      setToolMenuOpen(true, defaultTools.color.id);
     }
   }
   const modePicker = (
@@ -192,6 +194,7 @@ function ColorListControl({
                 setToolState<ColorToolState>(defaultTools.color.id, { name: "" });
               }
               activateTool(defaultTools.color.id);
+      setToolMenuOpen(true, defaultTools.color.id);
             }
           }}
         >

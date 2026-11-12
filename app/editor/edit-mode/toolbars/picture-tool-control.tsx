@@ -30,7 +30,7 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   const pictureTool = useEditorToolState<PictureToolState>(
     defaultTools.picture.id,
   );
-  const { setToolState, activateTool } = useEditorActions();
+  const { setToolState, activateTool, setToolMenuOpen } = useEditorActions();
   const activeTool = useEditorActiveTool();
   const fillMode = activeTool?.meta.id === defaultTools.pictureFill.id;
   const isActive = fillMode || activeTool?.meta.id === defaultTools.picture.id;
@@ -94,9 +94,11 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     if (nextFillMode) {
       setToolState<SceneryFillToolState>(defaultTools.pictureFill.id, next);
       activateTool(defaultTools.pictureFill.id);
+      setToolMenuOpen(true, defaultTools.picture.id);
     } else {
       setToolState<PictureToolState>(defaultTools.picture.id, next);
       activateTool(defaultTools.picture.id);
+      setToolMenuOpen(true, defaultTools.picture.id);
     }
   }
 
