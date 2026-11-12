@@ -31,6 +31,9 @@ const SPRITE_TOOL_IDS = new Set<string>([
   defaultTools.picture.id,
   defaultTools.color.id,
   defaultTools.texture.id,
+  defaultTools.textureFill.id,
+  defaultTools.pictureFill.id,
+  defaultTools.colorFill.id,
 ]);
 
 type ControlToolbarProps = ToolbarProps;
@@ -55,7 +58,10 @@ export function ControlToolbar({ className, ...props }: ControlToolbarProps) {
       ) &&
       !isPolygonBooleanTool(tool.id) &&
       tool.id !== "killer" &&
-      tool.id !== "flower",
+      tool.id !== "flower" &&
+      tool.id !== defaultTools.textureFill.id &&
+      tool.id !== defaultTools.pictureFill.id &&
+      tool.id !== defaultTools.colorFill.id,
   );
 
   return (

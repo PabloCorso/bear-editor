@@ -1,3 +1,5 @@
+import { TextureFillTool } from "../tools/texture-fill-tool";
+import { SceneryFillTool } from "../tools/scenery-fill-tool";
 import type { PictureToolState } from "../tools/picture-tool";
 import {
   MAX_PICTURE_DISTANCE,
@@ -137,6 +139,39 @@ export function ToolInfo() {
         title={`${toolName} · Skew`}
         aria-label="Active tool info"
       />
+    );
+  }
+
+  if (activeToolId === "pictureFill" || activeToolId === "colorFill") {
+    const preview = getActiveTool<SceneryFillTool>()?.getFillPreview();
+    return (
+      <CanvasTipGroup
+        title={
+          activeToolId === "pictureFill" ? "Picture · Fill" : "Color · Fill"
+        }
+        aria-label="Active tool info"
+      >
+        <CanvasTipSegment>
+          {preview?.error ??
+            (preview?.pictures.length
+              ? `Click to fill · ${preview.pictures.length} tiles`
+              : "Hover a polygon to preview")}
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
+  if (activeToolId === "textureFill") {
+    const preview = getActiveTool<TextureFillTool>()?.getFillPreview();
+    return (
+      <CanvasTipGroup title="Texture · Fill" aria-label="Active tool info">
+        <CanvasTipSegment>
+          {preview?.error ??
+            (preview?.pictures.length
+              ? `Click to fill · ${preview.pictures.length} textures`
+              : "Hover a polygon to preview")}
+        </CanvasTipSegment>
+      </CanvasTipGroup>
     );
   }
 

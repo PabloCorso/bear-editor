@@ -1,3 +1,11 @@
+import { EOL_LEVEL_LIMITS } from "~/editor/helpers/level-limits";
+import type { LgrAssets } from "~/components/lgr-assets";
+import { standardSprites } from "~/components/standard-sprites";
+import { tracePictureSilhouette } from "~/editor/helpers/picture-silhouette";
+import {
+  createFillMask,
+  generateTextureFill,
+} from "~/editor/helpers/texture-fill";
 import { findSessionArtifact } from "~/editor/session-artifacts";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
@@ -13,7 +21,7 @@ import {
   uiColors,
   uiStrokeWidths,
 } from "~/editor/constants";
-import type { Picture, Polygon, Position } from "~/editor/elma-types";
+import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
 import type { EditorStore } from "~/editor/editor-store";
 import type { HistoryTransaction } from "~/editor/history/transaction-history";
@@ -27,6 +35,8 @@ import fastDeepEqual from "fast-deep-equal";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import {
   SelectionClipboardController,
+  getClipboardCenter,
+  type SelectionClipboard,
   type PastedSelection,
 } from "./selection-clipboard";
 import { SelectionMutations } from "./selection-mutations";
@@ -1308,6 +1318,344 @@ export class SelectTool extends Tool<SelectToolState> {
     if (!this.copySelection()) return false;
     void this.copySelectionToSystemClipboard();
     return true;
+  }
+
+  /** Only a single ordinary LGR picture may be traced into terrain. */
+  public getSelectedPictureForConversion(): Picture | null {
+    const { state, toolState } = this.getState();
+    if (
+      !toolState ||
+      toolState.selectedPictures.length !== 1 ||
+      toolState.selectedVertices.length !== 0 ||
+      toolState.selectedObjects.length !== 0
+    )
+      return null;
+    const picture = state.pictures.find(
+      (item) => item.position === toolState.selectedPictures[0],
+    );
+    return picture?.name && !picture.texture ? picture : null;
+  }
+
+  /** Commit a traced polygon silhouette, optionally filling its outer contours.
+   * All expensive tracing and mask placement happens before the history mutation.
+   */
+  public convertSelectedPicture(
+    assets: LgrAssets,
+    texture?: { texture: string; distance: number; clip: Picture["clip"] },
+  ): string | null {
+    this.pruneHiddenSelection();
+    const source = this.getSelectedPictureForConversion();
+    if (!source) return "Select one regular picture to convert.";
+    if (!assets.isReady()) return "The active LGR is still loading.";
+    const traced = tracePictureSilhouette(source, assets);
+    if (traced.error) return traced.error;
+    const polygons = traced.contours.map(({ polygon }) => polygon);
+    const pictures: Picture[] = [];
+    if (texture) {
+      if (!assets.getSprite(texture.texture)) {
+        return "This texture is missing from the active LGR.";
+      }
+      const masks = standardSprites.textureMasks.flatMap((mask) => {
+        const sprite = assets.getSpritePixels(mask);
+        const fillMask = sprite && createFillMask(mask, sprite);
+        return fillMask ? [fillMask] : [];
+      });
+      for (const contour of traced.contours) {
+        if (contour.isHole) continue;
+        const fill = generateTextureFill(contour.polygon, masks);
+        if (fill.error) return fill.error;
+        pictures.push(
+          ...fill.placements.map((placement) => ({
+            name: "",
+            ...texture,
+            mask: placement.mask,
+            position: placement.position,
+          })),
+        );
+      }
+      if (pictures.length > 5000)
+        return "This silhouette requires too many texture elements.";
+    }
+
+    const { state, setToolState } = this.getState();
+    const prospectiveVertices =
+      state.polygons.reduce((sum, item) => sum + item.vertices.length, 0) +
+      polygons.reduce((sum, item) => sum + item.vertices.length, 0);
+    if (
+      state.polygons.length + polygons.length > EOL_LEVEL_LIMITS.polygons ||
+      prospectiveVertices > EOL_LEVEL_LIMITS.vertices ||
+      state.pictures.length - 1 + pictures.length > EOL_LEVEL_LIMITS.pictures
+    )
+      return "Conversion exceeds Elma level limits.";
+    if (!state.pictures.includes(source))
+      return "The picture selection changed.";
+    this.edit("picture.convert", () => {
+      state.actions.setPolygons([...state.polygons, ...polygons]);
+      state.actions.setPictures([
+        ...state.pictures.filter((picture) => picture !== source),
+        ...pictures,
+      ]);
+    });
+    this.transformFrame = null;
+    setToolState({
+      selectedVertices: polygons.flatMap((polygon) =>
+        polygon.vertices.map((vertex) => ({ polygon, vertex })),
+      ),
+      selectedObjects: [],
+      selectedPictures: [],
+      hoveredObject: undefined,
+      hoveredPictureBounds: undefined,
+      contextMenuType: undefined,
+      transformMode: false,
+    });
+    return null;
+  }
+
+  /** Replacement uses selected vertices and element anchors; the start is protected. */
+  public getReplacementCount(): number {
+    return this.getReplacementTargets().length;
+  }
+
+  private getReplacementTargets(): Position[] {
+    const { state, toolState } = this.getState();
+    if (!toolState) return [];
+    return [
+      ...new Set([
+        ...toolState.selectedVertices
+          .filter(
+            ({ polygon, vertex }) =>
+              state.polygons.includes(polygon) &&
+              polygon.vertices.includes(vertex),
+          )
+          .map(({ vertex }) => vertex),
+        ...toolState.selectedObjects.filter(
+          (position) =>
+            position !== state.start && this.isObjectPresent(position),
+        ),
+        ...toolState.selectedPictures.filter((position) =>
+          state.pictures.some((picture) => picture.position === position),
+        ),
+      ]),
+    ];
+  }
+
+  public replaceSelectionWithObject(
+    kind: "apples" | "killers" | "flowers",
+    apple: Omit<Apple, "position">,
+  ): string | null {
+    const origin = { x: 0, y: 0 };
+    return this.replaceSelectionWithContent({
+      polygons: [],
+      apples: kind === "apples" ? [{ ...apple, position: origin }] : [],
+      killers: kind === "killers" ? [origin] : [],
+      flowers: kind === "flowers" ? [origin] : [],
+      pictures: [],
+    });
+  }
+
+  public replaceSelectionWithPicture(
+    picture: Omit<Picture, "position">,
+  ): string | null {
+    return this.replaceSelectionWithContent({
+      polygons: [],
+      apples: [],
+      killers: [],
+      flowers: [],
+      pictures: [{ ...picture, position: { x: 0, y: 0 } }],
+    });
+  }
+
+  public async replaceSelectionWithCopiedContent(
+    signal?: AbortSignal,
+  ): Promise<string | null> {
+    const { state, toolState } = this.getState();
+    if (!toolState) return "Select vertices or elements to replace.";
+    const sessionId = state.documentSession.clipboardSessionId;
+    const documentSnapshot = {
+      polygons: state.polygons,
+      apples: state.apples,
+      killers: state.killers,
+      flowers: state.flowers,
+      pictures: state.pictures,
+    };
+    // Reading a copy does not consume the source or change normal paste offsets.
+    const content = await this.clipboard.readForReplacement();
+    const current = this.getState();
+    if (signal?.aborted) return "Replacement cancelled.";
+    if (
+      current.state.documentSession.clipboardSessionId !== sessionId ||
+      current.state.activeToolId !== this.meta.id ||
+      !fastDeepEqual(toolState, current.toolState) ||
+      current.state.polygons !== documentSnapshot.polygons ||
+      current.state.apples !== documentSnapshot.apples ||
+      current.state.killers !== documentSnapshot.killers ||
+      current.state.flowers !== documentSnapshot.flowers ||
+      current.state.pictures !== documentSnapshot.pictures
+    ) {
+      return "The selection or level changed. Try again.";
+    }
+    if (!content) return "Copy level elements in Bear first.";
+    return this.replaceSelectionWithContent(content);
+  }
+
+  private replaceSelectionWithContent(
+    content: SelectionClipboard,
+  ): string | null {
+    this.pruneHiddenSelection();
+    const { state, toolState, setToolState } = this.getState();
+    const targets = this.getReplacementTargets();
+    if (!toolState || targets.length === 0)
+      return "Select vertices or elements to replace.";
+    const center = getClipboardCenter(content);
+    if (!center) return "Copy level elements in Bear first.";
+    const pointCount =
+      content.polygons.reduce(
+        (total, polygon) => total + polygon.vertices.length,
+        0,
+      ) +
+      content.apples.length +
+      content.killers.length +
+      content.flowers.length +
+      content.pictures.length;
+    if (pointCount * targets.length > 20000)
+      return "Replacement is too large. Select fewer elements or copy a smaller group.";
+    const added: SelectionClipboard = {
+      polygons: [],
+      apples: [],
+      killers: [],
+      flowers: [],
+      pictures: [],
+    };
+    const atTarget = (point: Position, target: Position): Position => ({
+      x: point.x - center.x + target.x,
+      y: point.y - center.y + target.y,
+    });
+    for (const target of targets) {
+      added.polygons.push(
+        ...content.polygons.map((polygon) => ({
+          ...polygon,
+          vertices: polygon.vertices.map((point) => atTarget(point, target)),
+        })),
+      );
+      added.apples.push(
+        ...content.apples.map((apple) => ({
+          ...apple,
+          position: atTarget(apple.position, target),
+        })),
+      );
+      added.killers.push(
+        ...content.killers.map((point) => atTarget(point, target)),
+      );
+      added.flowers.push(
+        ...content.flowers.map((point) => atTarget(point, target)),
+      );
+      added.pictures.push(
+        ...content.pictures.map((picture) => ({
+          ...picture,
+          position: atTarget(picture.position, target),
+        })),
+      );
+    }
+    if (
+      [
+        ...added.polygons.flatMap((p) => p.vertices),
+        ...added.apples.map((a) => a.position),
+        ...added.killers,
+        ...added.flowers,
+        ...added.pictures.map((p) => p.position),
+      ].some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))
+    ) {
+      return "Replacement contains invalid coordinates.";
+    }
+    const vertices = new Map<Polygon, Set<Position>>();
+    for (const { polygon, vertex } of toolState.selectedVertices) {
+      const selected = vertices.get(polygon) ?? new Set<Position>();
+      selected.add(vertex);
+      vertices.set(polygon, selected);
+    }
+    const objects = new Set(toolState.selectedObjects);
+    const pictures = new Set(toolState.selectedPictures);
+    // Build the complete result before touching the document. Partial polygons follow Delete rules.
+    const remainingPolygons = state.polygons.flatMap((polygon) => {
+      const removed = vertices.get(polygon);
+      if (!removed) return [polygon];
+      const remaining = polygon.vertices.filter(
+        (vertex) => !removed.has(vertex),
+      );
+      return remaining.length >= (polygon.grass ? 2 : 3)
+        ? [{ ...polygon, vertices: remaining }]
+        : [];
+    });
+    if (
+      remainingPolygons.length + added.polygons.length >
+        EOL_LEVEL_LIMITS.polygons ||
+      remainingPolygons.some(
+        (p) => p.vertices.length > EOL_LEVEL_LIMITS.verticesPerPolygon,
+      ) ||
+      [...remainingPolygons, ...added.polygons].reduce(
+        (sum, polygon) => sum + polygon.vertices.length,
+        0,
+      ) > EOL_LEVEL_LIMITS.vertices ||
+      state.apples.length +
+        state.killers.length +
+        state.flowers.length +
+        added.apples.length +
+        added.killers.length +
+        added.flowers.length -
+        [...objects].filter(
+          (point) =>
+            state.apples.some((a) => a.position === point) ||
+            state.killers.includes(point) ||
+            state.flowers.includes(point),
+        ).length +
+        1 >
+        EOL_LEVEL_LIMITS.objects ||
+      state.pictures.length -
+        [...pictures].filter((point) =>
+          state.pictures.some((p) => p.position === point),
+        ).length +
+        added.pictures.length >
+        EOL_LEVEL_LIMITS.pictures
+    )
+      return "Replacement exceeds Elma level limits.";
+
+    this.edit("selection.replace", () => {
+      state.actions.setPolygons([...remainingPolygons, ...added.polygons]);
+      state.actions.setApples([
+        ...state.apples.filter((apple) => !objects.has(apple.position)),
+        ...added.apples,
+      ]);
+      state.actions.setKillers([
+        ...state.killers.filter((point) => !objects.has(point)),
+        ...added.killers,
+      ]);
+      state.actions.setFlowers([
+        ...state.flowers.filter((point) => !objects.has(point)),
+        ...added.flowers,
+      ]);
+      state.actions.setPictures([
+        ...state.pictures.filter((picture) => !pictures.has(picture.position)),
+        ...added.pictures,
+      ]);
+    });
+    this.transformFrame = null;
+    setToolState({
+      selectedVertices: added.polygons.flatMap((polygon) =>
+        polygon.vertices.map((vertex) => ({ polygon, vertex })),
+      ),
+      selectedObjects: [
+        ...added.apples.map((apple) => apple.position),
+        ...added.killers,
+        ...added.flowers,
+        ...(objects.has(state.start) ? [state.start] : []),
+      ],
+      selectedPictures: added.pictures.map((picture) => picture.position),
+      hoveredObject: undefined,
+      hoveredPictureBounds: undefined,
+      contextMenuType: undefined,
+      transformMode: false,
+    });
+    return null;
   }
 
   public canArrangeSelection(): boolean {
