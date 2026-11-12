@@ -11,7 +11,10 @@ import {
   type ToolControlButtonProps,
 } from "./tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
-import { useTextureMaskSprites, useTextureSprites } from "~/components/use-lgr-assets";
+import {
+  useTextureMaskSprites,
+  useTextureSprites,
+} from "~/components/use-lgr-assets";
 import { useEditorActiveTool } from "~/editor/use-editor-store";
 import type { TextureFillToolState } from "../tools/texture-fill-tool";
 import { standardSprites } from "~/components/standard-sprites";
@@ -65,8 +68,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     (fillMode ? fillTool?.distance : textureTool?.distance) ??
     defaultTextureState.distance;
   const selectedClip =
-    (fillMode ? fillTool?.clip : textureTool?.clip) ??
-    defaultTextureState.clip;
+    (fillMode ? fillTool?.clip : textureTool?.clip) ?? defaultTextureState.clip;
   const rowHeaders: Record<string, React.ReactNode> = {};
   const groupedTextures = new Set<string>();
   const settingsFor = (texture: (typeof textureSprites)[number]["texture"]) =>
@@ -185,7 +187,11 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   });
 
   const modePicker = (
-    <div className="flex items-center gap-1 rounded-md border border-default p-0.5" role="group" aria-label="Texture application mode">
+    <div
+      className="flex items-center gap-1 rounded-md border border-default p-0.5"
+      role="group"
+      aria-label="Texture application mode"
+    >
       <button
         type="button"
         aria-pressed={!fillMode}
@@ -247,7 +253,12 @@ export function TextureToolControl(props: ToolControlButtonProps) {
         items={fillMode ? fillItems : pickerItems}
         maxSpriteDimension={
           fillMode
-            ? Math.max(1, ...fillSprites.map((s) => Math.max(s.width ?? 0, s.height ?? 0)))
+            ? Math.max(
+                1,
+                ...fillSprites.map((s) =>
+                  Math.max(s.width ?? 0, s.height ?? 0),
+                ),
+              )
             : maxTextureSpriteDimension
         }
       />

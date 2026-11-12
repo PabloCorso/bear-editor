@@ -92,23 +92,25 @@ export function ReplaceSelectionDialog({
         ? colorSprites.map(({ picture: asset, rgb, width, height }) => ({
             key: asset.name,
             label: asset.name,
-            title: `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase()}`,
+            title: `#${rgb
+              .map((v) => v.toString(16).padStart(2, "0"))
+              .join("")
+              .toUpperCase()}`,
             previewSrc: lgr.getSpritePreview(asset.name),
             width,
             height,
             isSelected: picture?.name === asset.name,
-            onActivate: () =>
-              setPicture({ ...asset, texture: "", mask: "" }),
+            onActivate: () => setPicture({ ...asset, texture: "", mask: "" }),
           }))
         : pictureSprites.map(({ picture: asset, ...sprite }) => ({
-          key: asset.name,
-          label: formatSpriteTitle(asset.name),
-          previewSrc: sprite.src,
-          width: sprite.width,
-          height: sprite.height,
-          isSelected: picture?.name === asset.name,
-          onActivate: () => setPicture({ ...asset, texture: "", mask: "" }),
-        }));
+            key: asset.name,
+            label: formatSpriteTitle(asset.name),
+            previewSrc: sprite.src,
+            width: sprite.width,
+            height: sprite.height,
+            isSelected: picture?.name === asset.name,
+            onActivate: () => setPicture({ ...asset, texture: "", mask: "" }),
+          }));
 
   function close() {
     pending.current?.abort();
@@ -231,7 +233,10 @@ export function ReplaceSelectionDialog({
           {needsPicture && (
             <>
               {kind === "colors" && (
-                <p className="text-xs text-secondary">Color tiles are ordinary LGR pictures placed at each selected position; this does not recolor polygon geometry.</p>
+                <p className="text-xs text-secondary">
+                  Color tiles are ordinary LGR pictures placed at each selected
+                  position; this does not recolor polygon geometry.
+                </p>
               )}
               <div className="@container max-h-64 overflow-y-auto">
                 <PictureTexturePicker

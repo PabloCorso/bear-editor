@@ -50,7 +50,11 @@ function simplifyLine(points: PixelPoint[], tolerance: number): PixelPoint[] {
     let farthest = start;
     let maximum = tolerance * tolerance;
     for (let i = start + 1; i < end; i++) {
-      const distance = distanceToSegmentSquared(points[i], points[start], points[end]);
+      const distance = distanceToSegmentSquared(
+        points[i],
+        points[start],
+        points[end],
+      );
       if (distance > maximum) {
         maximum = distance;
         farthest = i;
@@ -78,7 +82,10 @@ function simplifyLoop(points: PixelPoint[], tolerance: number): PixelPoint[] {
   }
   return [
     ...simplifyLine(points.slice(0, opposite + 1), tolerance).slice(0, -1),
-    ...simplifyLine([...points.slice(opposite), points[0]], tolerance).slice(0, -1),
+    ...simplifyLine([...points.slice(opposite), points[0]], tolerance).slice(
+      0,
+      -1,
+    ),
   ];
 }
 
@@ -122,7 +129,8 @@ export function tracePictureSilhouette(
       if (!opaque(x + 1, y)) add({ x: x + 1, y }, { x: x + 1, y: y + 1 }, 1);
       if (!opaque(x, y + 1)) add({ x: x + 1, y: y + 1 }, { x, y: y + 1 }, 2);
       if (!opaque(x - 1, y)) add({ x, y: y + 1 }, { x, y }, 3);
-      if (edges.length > MAX_EDGES) return fail("The picture outline is too detailed to trace.");
+      if (edges.length > MAX_EDGES)
+        return fail("The picture outline is too detailed to trace.");
     }
   }
   if (!edges.length) return fail("This picture has no visible outline.");
@@ -144,7 +152,9 @@ export function tracePictureSilhouette(
         closed = true;
         break;
       }
-      const choices = (outgoing.get(keyOf(edge.to)) ?? []).filter((i) => !visited[i]);
+      const choices = (outgoing.get(keyOf(edge.to)) ?? []).filter(
+        (i) => !visited[i],
+      );
       if (!choices.length) break;
       // Prefer a right turn at pixel-diagonal contacts to retain separate islands.
       const preference = [1, 0, 3, 2];
@@ -184,8 +194,7 @@ export function tracePictureSilhouette(
   // Outer boundaries first, holes afterward, preserving their nested geometry.
   contours.sort(
     (a, b) =>
-      Math.abs(area(b.polygon.vertices)) -
-      Math.abs(area(a.polygon.vertices)),
+      Math.abs(area(b.polygon.vertices)) - Math.abs(area(a.polygon.vertices)),
   );
   return { contours };
 }

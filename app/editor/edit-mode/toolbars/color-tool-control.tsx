@@ -78,10 +78,12 @@ function ColorListControl({
 
   const distance =
     (fillMode ? fillState?.distance : state?.distance) ??
-    selectedColor?.picture.distance ?? 0;
+    selectedColor?.picture.distance ??
+    0;
   const clip =
     (fillMode ? fillState?.clip : state?.clip) ??
-    selectedColor?.picture.clip ?? Clip.Unclipped;
+    selectedColor?.picture.clip ??
+    Clip.Unclipped;
 
   // Keep the placement choice aligned with the colors available in the loaded LGR,
   // including when the tool is activated by keyboard without opening its picker.
@@ -123,20 +125,28 @@ function ColorListControl({
     const name = selectedColor?.picture.name ?? "";
     if (nextFill) {
       setToolState<SceneryFillToolState>(defaultTools.colorFill.id, {
-        name, distance, clip,
+        name,
+        distance,
+        clip,
       });
       activateTool(defaultTools.colorFill.id);
       setToolMenuOpen(true, defaultTools.color.id);
     } else {
       setToolState<ColorToolState>(defaultTools.color.id, {
-        name, distance, clip,
+        name,
+        distance,
+        clip,
       });
       activateTool(defaultTools.color.id);
       setToolMenuOpen(true, defaultTools.color.id);
     }
   }
   const modePicker = (
-    <div className="flex items-center gap-1 rounded-md border border-default p-0.5" role="group" aria-label="Color application mode">
+    <div
+      className="flex items-center gap-1 rounded-md border border-default p-0.5"
+      role="group"
+      aria-label="Color application mode"
+    >
       <button
         type="button"
         aria-pressed={!fillMode}
@@ -188,13 +198,17 @@ function ColorListControl({
             if (!isActive) {
               if (selectedColor) {
                 setToolState<ColorToolState>(defaultTools.color.id, {
-                  name: selectedColor.picture.name, distance, clip,
+                  name: selectedColor.picture.name,
+                  distance,
+                  clip,
                 });
               } else {
-                setToolState<ColorToolState>(defaultTools.color.id, { name: "" });
+                setToolState<ColorToolState>(defaultTools.color.id, {
+                  name: "",
+                });
               }
               activateTool(defaultTools.color.id);
-      setToolMenuOpen(true, defaultTools.color.id);
+              setToolMenuOpen(true, defaultTools.color.id);
             }
           }}
         >
@@ -232,19 +246,19 @@ function ColorListControl({
               <div className="flex w-full flex-wrap items-center justify-between gap-2">
                 {modePicker}
                 {colors.length > baseNames.size && (
-                <label
-                  title={`Show all ${colors.length} colors`}
-                  className="inline-flex cursor-pointer items-center gap-1.5 pl-1 text-[10px] text-secondary"
-                >
-                  <Switch checked={showAll} onCheckedChange={setShowAll} />
-                  <span className="sr-only">
-                    Show all {colors.length} colors
-                  </span>
-                  <span aria-hidden="true" className="whitespace-nowrap">
-                    All {colors.length}
-                  </span>
-                </label>
-              )}
+                  <label
+                    title={`Show all ${colors.length} colors`}
+                    className="inline-flex cursor-pointer items-center gap-1.5 pl-1 text-[10px] text-secondary"
+                  >
+                    <Switch checked={showAll} onCheckedChange={setShowAll} />
+                    <span className="sr-only">
+                      Show all {colors.length} colors
+                    </span>
+                    <span aria-hidden="true" className="whitespace-nowrap">
+                      All {colors.length}
+                    </span>
+                  </label>
+                )}
               </div>
             }
           />

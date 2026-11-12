@@ -2,7 +2,10 @@ import { EOL_LEVEL_LIMITS } from "~/editor/helpers/level-limits";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { standardSprites } from "~/components/standard-sprites";
 import { tracePictureSilhouette } from "~/editor/helpers/picture-silhouette";
-import { createFillMask, generateTextureFill } from "~/editor/helpers/texture-fill";
+import {
+  createFillMask,
+  generateTextureFill,
+} from "~/editor/helpers/texture-fill";
 import { findSessionArtifact } from "~/editor/session-artifacts";
 import { Tool } from "./tool-interface";
 import type { EventContext } from "~/editor/helpers/event-handler";
@@ -1325,7 +1328,8 @@ export class SelectTool extends Tool<SelectToolState> {
       toolState.selectedPictures.length !== 1 ||
       toolState.selectedVertices.length !== 0 ||
       toolState.selectedObjects.length !== 0
-    ) return null;
+    )
+      return null;
     const picture = state.pictures.find(
       (item) => item.position === toolState.selectedPictures[0],
     );
@@ -1374,15 +1378,17 @@ export class SelectTool extends Tool<SelectToolState> {
     }
 
     const { state, setToolState } = this.getState();
-    const prospectiveVertices = state.polygons.reduce(
-      (sum, item) => sum + item.vertices.length, 0,
-    ) + polygons.reduce((sum, item) => sum + item.vertices.length, 0);
+    const prospectiveVertices =
+      state.polygons.reduce((sum, item) => sum + item.vertices.length, 0) +
+      polygons.reduce((sum, item) => sum + item.vertices.length, 0);
     if (
       state.polygons.length + polygons.length > EOL_LEVEL_LIMITS.polygons ||
       prospectiveVertices > EOL_LEVEL_LIMITS.vertices ||
       state.pictures.length - 1 + pictures.length > EOL_LEVEL_LIMITS.pictures
-    ) return "Conversion exceeds Elma level limits.";
-    if (!state.pictures.includes(source)) return "The picture selection changed.";
+    )
+      return "Conversion exceeds Elma level limits.";
+    if (!state.pictures.includes(source))
+      return "The picture selection changed.";
     this.edit("picture.convert", () => {
       state.actions.setPolygons([...state.polygons, ...polygons]);
       state.actions.setPictures([
@@ -1581,22 +1587,37 @@ export class SelectTool extends Tool<SelectToolState> {
         : [];
     });
     if (
-      remainingPolygons.length + added.polygons.length > EOL_LEVEL_LIMITS.polygons ||
-      remainingPolygons.some((p) => p.vertices.length > EOL_LEVEL_LIMITS.verticesPerPolygon) ||
+      remainingPolygons.length + added.polygons.length >
+        EOL_LEVEL_LIMITS.polygons ||
+      remainingPolygons.some(
+        (p) => p.vertices.length > EOL_LEVEL_LIMITS.verticesPerPolygon,
+      ) ||
       [...remainingPolygons, ...added.polygons].reduce(
-        (sum, polygon) => sum + polygon.vertices.length, 0,
+        (sum, polygon) => sum + polygon.vertices.length,
+        0,
       ) > EOL_LEVEL_LIMITS.vertices ||
-      state.apples.length + state.killers.length + state.flowers.length +
-        added.apples.length + added.killers.length + added.flowers.length -
-        [...objects].filter((point) =>
-          state.apples.some((a) => a.position === point) ||
-          state.killers.includes(point) ||
-          state.flowers.includes(point)
-        ).length + 1 > EOL_LEVEL_LIMITS.objects ||
-      state.pictures.length - [...pictures].filter((point) =>
-        state.pictures.some((p) => p.position === point)
-      ).length + added.pictures.length > EOL_LEVEL_LIMITS.pictures
-    ) return "Replacement exceeds Elma level limits.";
+      state.apples.length +
+        state.killers.length +
+        state.flowers.length +
+        added.apples.length +
+        added.killers.length +
+        added.flowers.length -
+        [...objects].filter(
+          (point) =>
+            state.apples.some((a) => a.position === point) ||
+            state.killers.includes(point) ||
+            state.flowers.includes(point),
+        ).length +
+        1 >
+        EOL_LEVEL_LIMITS.objects ||
+      state.pictures.length -
+        [...pictures].filter((point) =>
+          state.pictures.some((p) => p.position === point),
+        ).length +
+        added.pictures.length >
+        EOL_LEVEL_LIMITS.pictures
+    )
+      return "Replacement exceeds Elma level limits.";
 
     this.edit("selection.replace", () => {
       state.actions.setPolygons([...remainingPolygons, ...added.polygons]);

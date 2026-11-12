@@ -74,10 +74,11 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     (fillMode ? fillTool?.distance : pictureTool?.distance) ??
     defaultPictureState.distance;
   const selectedClip =
-    (fillMode ? fillTool?.clip : pictureTool?.clip) ??
-    defaultPictureState.clip;
+    (fillMode ? fillTool?.clip : pictureTool?.clip) ?? defaultPictureState.clip;
 
-  function updatePicture(next: Pick<PictureToolState, "name" | "distance" | "clip">) {
+  function updatePicture(
+    next: Pick<PictureToolState, "name" | "distance" | "clip">,
+  ) {
     if (fillMode) {
       setToolState<SceneryFillToolState>(defaultTools.pictureFill.id, next);
     } else {
@@ -103,7 +104,11 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   }
 
   const modePicker = (
-    <div className="flex items-center gap-1 rounded-md border border-default p-0.5" role="group" aria-label="Picture application mode">
+    <div
+      className="flex items-center gap-1 rounded-md border border-default p-0.5"
+      role="group"
+      aria-label="Picture application mode"
+    >
       <button
         type="button"
         aria-pressed={!fillMode}
@@ -152,7 +157,11 @@ export function PictureToolControl(props: ToolControlButtonProps) {
         updatePicture({ name: picture.name, distance, clip });
       },
       onResetDefaults: () => {
-        updatePicture({ name: picture.name, distance: picture.distance, clip: picture.clip });
+        updatePicture({
+          name: picture.name,
+          distance: picture.distance,
+          clip: picture.clip,
+        });
       },
     };
   });

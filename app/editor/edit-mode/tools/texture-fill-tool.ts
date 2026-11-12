@@ -114,7 +114,10 @@ export class TextureFillTool extends Tool<TextureFillToolState> {
     const preview = this.getFillPreview(context.worldPos);
     if (!preview?.pictures.length || preview.error) return false;
     const { state } = this.getState();
-    if (state.pictures.length + preview.pictures.length > EOL_LEVEL_LIMITS.pictures)
+    if (
+      state.pictures.length + preview.pictures.length >
+      EOL_LEVEL_LIMITS.pictures
+    )
       return false;
     this.edit("texture.fill", () =>
       state.actions.setPictures([...state.pictures, ...preview.pictures]),

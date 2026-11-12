@@ -105,7 +105,9 @@ type PointAnchor = {
 
 export function EditorContextMenu() {
   const tool = useEditorActiveTool<SelectTool>();
-  const sessionId = useEditor((state) => state.documentSession.clipboardSessionId);
+  const sessionId = useEditor(
+    (state) => state.documentSession.clipboardSessionId,
+  );
   const [replaceSession, setReplaceSession] = useState<string | null>(null);
   const [convertSession, setConvertSession] = useState<string | null>(null);
   const replacing = replaceSession === sessionId && tool instanceof SelectTool;

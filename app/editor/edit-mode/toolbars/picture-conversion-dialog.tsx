@@ -62,29 +62,42 @@ export function PictureConversionDialog({
     setError(null);
     const result = tool.convertSelectedPicture(
       lgr,
-      mode === "textured" ? chosen ?? undefined : undefined,
+      mode === "textured" ? (chosen ?? undefined) : undefined,
     );
     if (result) setError(result);
     else onClose();
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent>
         <DialogHeader showCloseButton>
           <DialogTitle>Convert picture</DialogTitle>
         </DialogHeader>
         <DialogBody className="gap-4">
           <DialogDescription>
-            Trace the visible outline of {source?.name ?? "the selected picture"}
+            Trace the visible outline of{" "}
+            {source?.name ?? "the selected picture"}
             into editable physical polygons. The original image is replaced.
           </DialogDescription>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Conversion result">
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label="Conversion result"
+          >
             <button
               type="button"
               aria-pressed={mode === "polygon"}
               className={`rounded-md border border-default px-3 py-2 text-sm ${mode === "polygon" ? "bg-primary-hover/50" : "hover:bg-primary-hover/30"}`}
-              onClick={() => { setMode("polygon"); setError(null); }}
+              onClick={() => {
+                setMode("polygon");
+                setError(null);
+              }}
             >
               Polygon
             </button>
@@ -92,7 +105,10 @@ export function PictureConversionDialog({
               type="button"
               aria-pressed={mode === "textured"}
               className={`rounded-md border border-default px-3 py-2 text-sm ${mode === "textured" ? "bg-primary-hover/50" : "hover:bg-primary-hover/30"}`}
-              onClick={() => { setMode("textured"); setError(null); }}
+              onClick={() => {
+                setMode("textured");
+                setError(null);
+              }}
             >
               Polygon + texture
             </button>
@@ -110,7 +126,9 @@ export function PictureConversionDialog({
                   items={items}
                   maxSpriteDimension={Math.max(
                     1,
-                    ...textures.map((sprite) => Math.max(sprite.width ?? 0, sprite.height ?? 0)),
+                    ...textures.map((sprite) =>
+                      Math.max(sprite.width ?? 0, sprite.height ?? 0),
+                    ),
                   )}
                 />
               </div>
@@ -126,7 +144,11 @@ export function PictureConversionDialog({
               )}
             </>
           )}
-          {error && <p role="alert" className="text-sm">{error}</p>}
+          {error && (
+            <p role="alert" className="text-sm">
+              {error}
+            </p>
+          )}
         </DialogBody>
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>

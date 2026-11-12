@@ -146,7 +146,9 @@ export function ToolInfo() {
     const preview = getActiveTool<SceneryFillTool>()?.getFillPreview();
     return (
       <CanvasTipGroup
-        title={activeToolId === "pictureFill" ? "Picture · Fill" : "Color · Fill"}
+        title={
+          activeToolId === "pictureFill" ? "Picture · Fill" : "Color · Fill"
+        }
         aria-label="Active tool info"
       >
         <CanvasTipSegment>
