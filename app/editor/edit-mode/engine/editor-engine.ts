@@ -20,6 +20,7 @@ import {
   getPictureSelectionSegments,
   isPictureSelectionHit,
 } from "~/editor/helpers/picture-selection";
+import { TextureFillTool } from "../tools/texture-fill-tool";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import { type EditorState } from "~/editor/editor-state";
 import {
@@ -291,6 +292,9 @@ export class EditorEngine {
         tool.setPictureDimensionsResolver((picture) =>
           getPictureWorldDimensions(picture, this.lgrAssets),
         );
+      }
+      if (tool instanceof TextureFillTool) {
+        tool.setAssetsResolver(() => this.lgrAssets);
       }
       state.actions.registerTool(tool);
     });

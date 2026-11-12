@@ -206,7 +206,7 @@ function getDrawItemQueue(
       clip: picture.clip,
       draft: true,
       opacity: DRAFT_PREVIEW_OPACITY,
-      showBounds: true,
+      showBounds: drafts.showPictureBounds ?? true,
       boundsLineWidth: idleBoundsLineWidth,
       boundsColor: idleBoundsColor,
       boundsOpacity: idleBoundsOpacity,
