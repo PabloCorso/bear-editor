@@ -11,7 +11,9 @@ import {
   type ToolControlButtonProps,
 } from "./tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
-import { useTextureMaskSprites } from "~/components/use-lgr-assets";
+import { useTextureMaskSprites, useTextureSprites } from "~/components/use-lgr-assets";
+import { useEditorActiveTool } from "~/editor/use-editor-store";
+import type { TextureFillToolState } from "../tools/texture-fill-tool";
 import { standardSprites } from "~/components/standard-sprites";
 import { Mask } from "~/editor/elma-types";
 import {
@@ -27,8 +29,17 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   const textureTool = useEditorToolState<TextureToolState>(
     defaultTools.texture.id,
   );
-  const { setToolState } = useEditorActions();
+  const { setToolState, activateTool } = useEditorActions();
+  const activeTool = useEditorActiveTool();
+  const isActive =
+    activeTool?.meta.id === defaultTools.texture.id ||
+    activeTool?.meta.id === defaultTools.textureFill.id;
+  const fillMode = activeTool?.meta.id === defaultTools.textureFill.id;
+  const fillTool = useEditorToolState<TextureFillToolState>(
+    defaultTools.textureFill.id,
+  );
   const textureSprites = useTextureMaskSprites();
+  const fillSprites = useTextureSprites();
   const [rowSettings, setRowSettings] = useState<
     Record<string, Pick<TextureToolState, "distance" | "clip">>
   >({});
@@ -38,7 +49,10 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     ),
     1,
   );
-  const selectedTexture = textureTool?.texture ?? defaultTextureState.texture;
+  const selectedTexture =
+    (fillMode ? fillTool?.texture : textureTool?.texture) ??
+    textureTool?.texture ??
+    defaultTextureState.texture;
   const selectedMask = textureTool?.mask ?? standardSprites.textureMasks[0];
   const defaultTextureSprite = textureSprites.find(
     ({ texture, mask }) =>
@@ -48,8 +62,11 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   const textureSrc =
     defaultTextureSprite?.maskedSrc ?? defaultTextureSprite?.src;
   const selectedDistance =
-    textureTool?.distance ?? defaultTextureState.distance;
-  const selectedClip = textureTool?.clip ?? defaultTextureState.clip;
+    (fillMode ? fillTool?.distance : textureTool?.distance) ??
+    defaultTextureState.distance;
+  const selectedClip =
+    (fillMode ? fillTool?.clip : textureTool?.clip) ??
+    defaultTextureState.clip;
   const rowHeaders: Record<string, React.ReactNode> = {};
   const groupedTextures = new Set<string>();
   const settingsFor = (texture: (typeof textureSprites)[number]["texture"]) =>
@@ -71,11 +88,18 @@ export function TextureToolControl(props: ToolControlButtonProps) {
       [selectedTexture]: { distance: selectedDistance, clip: selectedClip },
       [texture.texture]: settings,
     }));
-    setToolState<TextureToolState>(defaultTools.texture.id, {
-      texture: texture.texture,
-      mask,
-      ...settings,
-    });
+    if (fillMode) {
+      setToolState<TextureFillToolState>(defaultTools.textureFill.id, {
+        texture: texture.texture,
+        ...settings,
+      });
+    } else {
+      setToolState<TextureToolState>(defaultTools.texture.id, {
+        texture: texture.texture,
+        mask,
+        ...settings,
+      });
+    }
   }
 
   const pickerItems = textureSprites.map(
@@ -128,6 +152,74 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     },
   );
 
+  const fillItems = fillSprites.map(({ texture, src, width, height }) => {
+    const isSelected = texture.texture === selectedTexture;
+    const { distance, clip } = isSelected
+      ? { distance: selectedDistance, clip: selectedClip }
+      : texture;
+    const update = (patch: Partial<TextureFillToolState> = {}) => {
+      setToolState<TextureFillToolState>(defaultTools.textureFill.id, {
+        texture: texture.texture,
+        distance,
+        clip,
+        ...patch,
+      });
+    };
+    return {
+      key: texture.texture,
+      label: formatSpriteTitle(texture.texture),
+      previewSrc: src,
+      width,
+      height,
+      isSelected,
+      distance,
+      clip,
+      defaultDistance: texture.distance,
+      defaultClip: texture.clip,
+      onActivate: () => update(),
+      onDistanceChange: (distance: number) => update({ distance }),
+      onClipChange: (clip: TextureFillToolState["clip"]) => update({ clip }),
+      onResetDefaults: () =>
+        update({ distance: texture.distance, clip: texture.clip }),
+    };
+  });
+
+  const modePicker = (
+    <div className="flex items-center gap-1 rounded-md border border-default p-0.5" role="group" aria-label="Texture application mode">
+      <button
+        type="button"
+        aria-pressed={!fillMode}
+        className={`rounded px-3 py-1 text-xs ${!fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
+        onClick={() => {
+          setToolState<TextureToolState>(defaultTools.texture.id, {
+            texture: selectedTexture,
+            mask: selectedMask,
+            distance: selectedDistance,
+            clip: selectedClip,
+          });
+          activateTool(defaultTools.texture.id);
+        }}
+      >
+        Place
+      </button>
+      <button
+        type="button"
+        aria-pressed={fillMode}
+        className={`rounded px-3 py-1 text-xs ${fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
+        onClick={() => {
+          setToolState<TextureFillToolState>(defaultTools.textureFill.id, {
+            texture: selectedTexture,
+            distance: selectedDistance,
+            clip: selectedClip,
+          });
+          activateTool(defaultTools.textureFill.id);
+        }}
+      >
+        Fill
+      </button>
+    </div>
+  );
+
   return (
     <ToolControlMenu
       id={defaultTools.texture.id}
@@ -136,16 +228,26 @@ export function TextureToolControl(props: ToolControlButtonProps) {
           isLoading={!textureSrc}
           {...defaultTools.texture}
           {...props}
+          id={undefined}
+          isActive={isActive}
+          onClick={() => {
+            if (!isActive) activateTool(defaultTools.texture.id);
+          }}
         >
           <PictureIcon src={textureSrc} />
         </ToolControlButton>
       }
     >
       <PictureTexturePicker
+        header={modePicker}
         maxColumns={4}
-        rowHeaders={rowHeaders}
-        items={pickerItems}
-        maxSpriteDimension={maxTextureSpriteDimension}
+        rowHeaders={fillMode ? undefined : rowHeaders}
+        items={fillMode ? fillItems : pickerItems}
+        maxSpriteDimension={
+          fillMode
+            ? Math.max(1, ...fillSprites.map((s) => Math.max(s.width ?? 0, s.height ?? 0)))
+            : maxTextureSpriteDimension
+        }
       />
     </ToolControlMenu>
   );
