@@ -1,14 +1,14 @@
 import type { WorldRenderScene } from "~/editor/render/world-scene";
 
-const VERTEX_SHADER_SOURCE = `
-attribute vec2 a_position;
-attribute vec2 a_texCoord;
-attribute vec2 a_maskTexCoord;
+const VERTEX_SHADER_SOURCE = `#version 300 es
+in vec2 a_position;
+in vec2 a_texCoord;
+in vec2 a_maskTexCoord;
 
 uniform vec4 u_viewRect;
 
-varying vec2 v_texCoord;
-varying vec2 v_maskTexCoord;
+out mediump vec2 v_texCoord;
+out mediump vec2 v_maskTexCoord;
 
 void main() {
   vec2 viewSize = max(u_viewRect.zw - u_viewRect.xy, vec2(0.0001));
@@ -19,7 +19,7 @@ void main() {
 }
 `;
 
-const FRAGMENT_SHADER_SOURCE = `
+const FRAGMENT_SHADER_SOURCE = `#version 300 es
 precision mediump float;
 
 uniform bool u_useTexture;
@@ -30,16 +30,17 @@ uniform bool u_recolorKuski;
 uniform sampler2D u_texture;
 uniform sampler2D u_maskTexture;
 
-varying vec2 v_texCoord;
-varying vec2 v_maskTexCoord;
+in mediump vec2 v_texCoord;
+in mediump vec2 v_maskTexCoord;
+out vec4 fragColor;
 
 void main() {
   vec4 color = u_color;
   if (u_useTexture) {
     vec2 texCoord = u_repeatTexture ? fract(v_texCoord) : v_texCoord;
-    color = texture2D(u_texture, texCoord) * u_color;
+    vec4 sprite = texture(u_texture, texCoord);
+    color = sprite * u_color;
     if (u_recolorKuski) {
-      vec4 sprite = texture2D(u_texture, texCoord);
       // Remove the original red/yellow hue before applying the identity color.
       // Keep the sprite shading, with just a little lift to keep hues readable.
       vec3 original = sprite.rgb / max(sprite.a, 0.001);
@@ -52,11 +53,11 @@ void main() {
       color = vec4(tint * shade, sprite.a * u_color.a);
     }
     if (u_useMaskTexture) {
-      float maskAlpha = texture2D(u_maskTexture, v_maskTexCoord).a;
+      float maskAlpha = texture(u_maskTexture, v_maskTexCoord).a;
       color.a *= step(0.001, maskAlpha);
     }
   }
-  gl_FragColor = color;
+  fragColor = color;
 }
 `;
 
@@ -77,39 +78,59 @@ type ProgramInfo = {
 
 export type WebGLColor = [number, number, number, number];
 
+export class WebGLInitializationError extends Error {
+  constructor(cause?: unknown) {
+    super(
+      "Bear Editor requires WebGL 2. Try updating your browser or enabling hardware acceleration.",
+      { cause },
+    );
+  }
+}
+
 export class WebGLRenderContext {
   readonly canvas: HTMLCanvasElement;
-  readonly gl: WebGLRenderingContext;
+  readonly gl: WebGL2RenderingContext;
 
   private programInfo: ProgramInfo;
   private vertexBuffer: WebGLBuffer;
+  private vertices: WebGLVertexArrayObject;
+  private maskedVertices: WebGLVertexArrayObject;
   private textureCache = new WeakMap<ImageBitmap, WebGLTexture>();
   private canvasTextureCache = new WeakMap<HTMLCanvasElement, WebGLTexture>();
   private textures = new Set<WebGLTexture>();
 
   constructor(canvas: HTMLCanvasElement, { alpha = false } = {}) {
-    const gl = canvas.getContext("webgl", {
-      alpha,
-      antialias: true,
-      preserveDrawingBuffer: import.meta.env.DEV,
-      stencil: true,
-    });
-    if (!gl) throw new Error("WebGL context missing");
-
-    const vertexBuffer = gl.createBuffer();
-    if (!vertexBuffer) throw new Error("Failed to create WebGL vertex buffer");
-
     this.canvas = canvas;
-    this.gl = gl;
-    this.vertexBuffer = vertexBuffer;
-    this.programInfo = createProgramInfo(gl);
+    let gl: WebGL2RenderingContext | null = null;
 
-    gl.useProgram(this.programInfo.program);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.uniform1i(this.programInfo.textureUniform, 0);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.uniform1i(this.programInfo.maskTextureUniform, 1);
-    this.resetDrawState();
+    try {
+      gl = canvas.getContext("webgl2", {
+        alpha,
+        antialias: true,
+        preserveDrawingBuffer: import.meta.env.DEV,
+        stencil: true,
+      });
+      if (!gl) throw new Error("WebGL 2 context missing");
+
+      this.gl = gl;
+      this.programInfo = createProgramInfo(gl);
+      const vertexBuffer = gl.createBuffer();
+      if (!vertexBuffer)
+        throw new Error("Failed to create WebGL vertex buffer");
+
+      this.vertexBuffer = vertexBuffer;
+      // ARRAY_BUFFER stays bound for streaming uploads in both draw paths.
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+      this.vertices = createVertexArray(gl, this.programInfo, false);
+      this.maskedVertices = createVertexArray(gl, this.programInfo, true);
+
+      this.resetDrawState();
+      gl.uniform1i(this.programInfo.textureUniform, 0);
+      gl.uniform1i(this.programInfo.maskTextureUniform, 1);
+    } catch (cause) {
+      gl?.getExtension("WEBGL_lose_context")?.loseContext();
+      throw new WebGLInitializationError(cause);
+    }
   }
 
   resize({
@@ -138,6 +159,8 @@ export class WebGLRenderContext {
       this.gl.deleteTexture(texture);
     }
     this.textures.clear();
+    this.gl.deleteVertexArray(this.vertices);
+    this.gl.deleteVertexArray(this.maskedVertices);
     this.gl.deleteBuffer(this.vertexBuffer);
     this.gl.deleteProgram(this.programInfo.program);
   }
@@ -182,16 +205,8 @@ export class WebGLRenderContext {
 
     const gl = this.gl;
     const programInfo = this.programInfo;
-    gl.useProgram(programInfo.program);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
-    const expandedVertices = expandVerticesWithDefaultMask(vertices);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array(expandedVertices),
-      gl.STREAM_DRAW,
-    );
-
-    configureVertexAttributes(gl, programInfo);
+    gl.bindVertexArray(this.vertices);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
     applyViewportUniforms(gl, programInfo, scene);
     gl.uniform4fv(programInfo.colorUniform, color);
     gl.uniform1i(programInfo.useTextureUniform, texture ? 1 : 0);
@@ -223,11 +238,8 @@ export class WebGLRenderContext {
 
     const gl = this.gl;
     const programInfo = this.programInfo;
-    gl.useProgram(programInfo.program);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bindVertexArray(this.maskedVertices);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
-
-    configureVertexAttributes(gl, programInfo);
     applyViewportUniforms(gl, programInfo, scene);
     gl.uniform4fv(programInfo.colorUniform, color);
     gl.uniform1i(programInfo.useTextureUniform, 1);
@@ -266,29 +278,36 @@ export class WebGLRenderContext {
 
   private getCanvasTexture(sprite: HTMLCanvasElement) {
     const cached = this.canvasTextureCache.get(sprite);
-    const texture = cached ?? createTexture(this.gl, sprite);
-
-    if (!cached) {
-      this.canvasTextureCache.set(sprite, texture);
-      this.textures.add(texture);
+    if (cached) {
+      uploadTexture(this.gl, cached, sprite);
+      return cached;
     }
 
-    uploadTexture(this.gl, texture, sprite);
+    const texture = createTexture(this.gl, sprite);
+    this.canvasTextureCache.set(sprite, texture);
+    this.textures.add(texture);
     return texture;
   }
 }
 
-function configureVertexAttributes(
-  gl: WebGLRenderingContext,
+function createVertexArray(
+  gl: WebGL2RenderingContext,
   programInfo: ProgramInfo,
+  masked: boolean,
 ) {
+  const vertexArray = gl.createVertexArray();
+  if (!vertexArray) throw new Error("Failed to create WebGL vertex array");
+
+  // Both layouts share the streaming buffer. Ordinary draws only upload XY/UV.
+  const stride = masked ? 24 : 16;
+  gl.bindVertexArray(vertexArray);
   gl.enableVertexAttribArray(programInfo.positionAttribute);
   gl.vertexAttribPointer(
     programInfo.positionAttribute,
     2,
     gl.FLOAT,
     false,
-    24,
+    stride,
     0,
   );
   gl.enableVertexAttribArray(programInfo.texCoordAttribute);
@@ -297,22 +316,25 @@ function configureVertexAttributes(
     2,
     gl.FLOAT,
     false,
-    24,
+    stride,
     8,
   );
-  gl.enableVertexAttribArray(programInfo.maskTexCoordAttribute);
-  gl.vertexAttribPointer(
-    programInfo.maskTexCoordAttribute,
-    2,
-    gl.FLOAT,
-    false,
-    24,
-    16,
-  );
+  if (masked) {
+    gl.enableVertexAttribArray(programInfo.maskTexCoordAttribute);
+    gl.vertexAttribPointer(
+      programInfo.maskTexCoordAttribute,
+      2,
+      gl.FLOAT,
+      false,
+      stride,
+      16,
+    );
+  }
+  return vertexArray;
 }
 
 function applyViewportUniforms(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   programInfo: ProgramInfo,
   scene: WorldRenderScene,
 ) {
@@ -326,30 +348,30 @@ function applyViewportUniforms(
 }
 
 function createTexture(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   sprite: ImageBitmap | HTMLCanvasElement,
 ) {
   const texture = gl.createTexture();
   if (!texture) throw new Error("Failed to create WebGL texture");
   uploadTexture(gl, texture, sprite);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
   return texture;
 }
 
 function uploadTexture(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   texture: WebGLTexture,
   sprite: ImageBitmap | HTMLCanvasElement,
 ) {
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sprite);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, sprite);
 }
 
-function createProgramInfo(gl: WebGLRenderingContext): ProgramInfo {
+function createProgramInfo(gl: WebGL2RenderingContext): ProgramInfo {
   const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER_SOURCE);
   const fragmentShader = createShader(
     gl,
@@ -362,6 +384,8 @@ function createProgramInfo(gl: WebGLRenderingContext): ProgramInfo {
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
   gl.linkProgram(program);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     throw new Error(
       gl.getProgramInfoLog(program) ?? "Failed to link WebGL program",
@@ -411,7 +435,11 @@ function createProgramInfo(gl: WebGLRenderingContext): ProgramInfo {
   };
 }
 
-function createShader(gl: WebGLRenderingContext, type: number, source: string) {
+function createShader(
+  gl: WebGL2RenderingContext,
+  type: number,
+  source: string,
+) {
   const shader = gl.createShader(type);
   if (!shader) throw new Error("Failed to create WebGL shader");
 
@@ -424,21 +452,6 @@ function createShader(gl: WebGLRenderingContext, type: number, source: string) {
   }
 
   return shader;
-}
-
-function expandVerticesWithDefaultMask(vertices: number[]) {
-  const expanded: number[] = [];
-  for (let index = 0; index < vertices.length; index += 4) {
-    expanded.push(
-      vertices[index]!,
-      vertices[index + 1]!,
-      vertices[index + 2]!,
-      vertices[index + 3]!,
-      0,
-      0,
-    );
-  }
-  return expanded;
 }
 
 export function colorToRgba(color: string, opacity = 1): WebGLColor {
