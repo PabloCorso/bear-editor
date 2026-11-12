@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogBody,
@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import {
   usePictureSprites,
   useTextureMaskSprites,
+  useLgrAssets,
 } from "~/components/use-lgr-assets";
 import {
   Gravity,
@@ -25,6 +26,7 @@ import {
 } from "./picture-texture-picker";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { defaultAppleState } from "../tools/apple-tools";
+import { getColorPalette } from "./color-palette";
 
 type ReplacementKind =
   | "apples"
@@ -32,6 +34,7 @@ type ReplacementKind =
   | "flowers"
   | "pictures"
   | "textures"
+  | "colors"
   | "copied";
 const selectClass =
   "h-9 rounded-md border border-default bg-screen px-2 text-sm";
@@ -54,12 +57,25 @@ export function ReplaceSelectionDialog({
   const pending = useRef<AbortController | null>(null);
   const pictureSprites = usePictureSprites();
   const textureSprites = useTextureMaskSprites();
+  const { lgr, isLoaded } = useLgrAssets();
+  const colorSprites = useMemo(
+    () => getColorPalette(lgr.getColorSprites()).ordered,
+    // Assets load into the same LGR instance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lgr, isLoaded],
+  );
   useEffect(function cancelPendingClipboardOnUnmount() {
     return () => pending.current?.abort();
   }, []);
   const count = tool.getReplacementCount();
-  const needsPicture = kind === "pictures" || kind === "textures";
-  const sprites = kind === "textures" ? textureSprites : pictureSprites;
+  const needsPicture =
+    kind === "pictures" || kind === "textures" || kind === "colors";
+  const sprites =
+    kind === "textures"
+      ? textureSprites
+      : kind === "colors"
+        ? colorSprites
+        : pictureSprites;
   const pickerItems =
     kind === "textures"
       ? textureSprites.map(({ texture, mask, ...sprite }) => ({
@@ -72,7 +88,19 @@ export function ReplaceSelectionDialog({
             picture?.texture === texture.texture && picture?.mask === mask,
           onActivate: () => setPicture({ name: "", ...texture, mask }),
         }))
-      : pictureSprites.map(({ picture: asset, ...sprite }) => ({
+      : kind === "colors"
+        ? colorSprites.map(({ picture: asset, rgb, width, height }) => ({
+            key: asset.name,
+            label: asset.name,
+            title: `#${rgb.map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase()}`,
+            previewSrc: lgr.getSpritePreview(asset.name),
+            width,
+            height,
+            isSelected: picture?.name === asset.name,
+            onActivate: () =>
+              setPicture({ ...asset, texture: "", mask: "" }),
+          }))
+        : pictureSprites.map(({ picture: asset, ...sprite }) => ({
           key: asset.name,
           label: formatSpriteTitle(asset.name),
           previewSrc: sprite.src,
@@ -148,6 +176,7 @@ export function ReplaceSelectionDialog({
               <option value="flowers">Flowers</option>
               <option value="pictures">Picture</option>
               <option value="textures">Texture</option>
+              <option value="colors">Color tile</option>
               <option value="copied">Copied content</option>
             </select>
           </label>
@@ -201,6 +230,9 @@ export function ReplaceSelectionDialog({
           )}
           {needsPicture && (
             <>
+              {kind === "colors" && (
+                <p className="text-xs text-secondary">Color tiles are ordinary LGR pictures placed at each selected position; this does not recolor polygon geometry.</p>
+              )}
               <div className="@container max-h-64 overflow-y-auto">
                 <PictureTexturePicker
                   compact
