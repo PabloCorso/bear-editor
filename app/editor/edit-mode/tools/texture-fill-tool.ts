@@ -1,3 +1,4 @@
+import { EOL_LEVEL_LIMITS } from "~/editor/helpers/level-limits";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { standardSprites } from "~/components/standard-sprites";
 import type { Picture, Polygon, Position } from "~/editor/elma-types";
@@ -113,7 +114,11 @@ export class TextureFillTool extends Tool<TextureFillToolState> {
     const preview = this.getFillPreview(context.worldPos);
     if (!preview?.pictures.length || preview.error) return false;
     const { state } = this.getState();
-    state.actions.setPictures([...state.pictures, ...preview.pictures]);
+    if (state.pictures.length + preview.pictures.length > EOL_LEVEL_LIMITS.pictures)
+      return false;
+    this.edit("texture.fill", () =>
+      state.actions.setPictures([...state.pictures, ...preview.pictures]),
+    );
     return true;
   }
   getCursor() {
