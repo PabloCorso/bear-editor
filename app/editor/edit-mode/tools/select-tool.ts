@@ -17,7 +17,7 @@ import {
   uiColors,
   uiStrokeWidths,
 } from "~/editor/constants";
-import type { Picture, Polygon, Position } from "~/editor/elma-types";
+import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
 import type { EditorStore } from "~/editor/editor-store";
 import type { HistoryTransaction } from "~/editor/history/transaction-history";
@@ -31,6 +31,8 @@ import fastDeepEqual from "fast-deep-equal";
 import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import {
   SelectionClipboardController,
+  getClipboardCenter,
+  type SelectionClipboard,
   type PastedSelection,
 } from "./selection-clipboard";
 import { SelectionMutations } from "./selection-mutations";
@@ -1372,7 +1374,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
     const { state, setToolState } = this.getState();
     if (!state.pictures.includes(source)) return "The picture selection changed.";
-    this.runHistoryBatch(() => {
+    this.edit("picture.convert", () => {
       state.actions.setPolygons([...state.polygons, ...polygons]);
       state.actions.setPictures([
         ...state.pictures.filter((picture) => picture !== source),
@@ -1452,29 +1454,32 @@ export class SelectTool extends Tool<SelectToolState> {
     signal?: AbortSignal,
   ): Promise<string | null> {
     const { state, toolState } = this.getState();
-    const snapshot = this.getHistorySnapshot();
-    let content = this.clipboard;
-    if (this.canAccessSystemClipboard()) {
-      try {
-        const text = await navigator.clipboard.readText();
-        // An accessible but unrelated clipboard must never trigger a destructive fallback.
-        content = this.deserializeClipboard(text)?.payload ?? null;
-      } catch {
-        // Match ordinary paste when browser clipboard access is unavailable.
-      }
-    }
+    if (!toolState) return "Select vertices or elements to replace.";
+    const sessionId = state.documentSession.clipboardSessionId;
+    const documentSnapshot = {
+      polygons: state.polygons,
+      apples: state.apples,
+      killers: state.killers,
+      flowers: state.flowers,
+      pictures: state.pictures,
+    };
+    // Reading a copy does not consume the source or change normal paste offsets.
+    const content = await this.clipboard.readForReplacement();
     const current = this.getState();
     if (signal?.aborted) return "Replacement cancelled.";
     if (
-      current.state.documentSession.clipboardSessionId !==
-        state.documentSession.clipboardSessionId ||
+      current.state.documentSession.clipboardSessionId !== sessionId ||
       current.state.activeToolId !== this.meta.id ||
-      !fastDeepEqual(snapshot, this.getHistorySnapshot()) ||
-      !fastDeepEqual(toolState, current.toolState)
-    )
-      return "The selection changed. Try again.";
+      !fastDeepEqual(toolState, current.toolState) ||
+      current.state.polygons !== documentSnapshot.polygons ||
+      current.state.apples !== documentSnapshot.apples ||
+      current.state.killers !== documentSnapshot.killers ||
+      current.state.flowers !== documentSnapshot.flowers ||
+      current.state.pictures !== documentSnapshot.pictures
+    ) {
+      return "The selection or level changed. Try again.";
+    }
     if (!content) return "Copy level elements in Bear first.";
-    // Do not consume or replace the user's clipboard or advance ordinary paste offsets.
     return this.replaceSelectionWithContent(content);
   }
 
@@ -1566,7 +1571,7 @@ export class SelectTool extends Tool<SelectToolState> {
         ? [{ ...polygon, vertices: remaining }]
         : [];
     });
-    this.runHistoryBatch(() => {
+    this.edit("selection.replace", () => {
       state.actions.setPolygons([...remainingPolygons, ...added.polygons]);
       state.actions.setApples([
         ...state.apples.filter((apple) => !objects.has(apple.position)),

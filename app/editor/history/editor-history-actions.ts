@@ -38,6 +38,8 @@ export const editorHistoryActionLabels = {
   "selection.mirror": "Mirror selection",
   "selection.arrange-pictures": "Arrange pictures",
   "selection.paste": "Paste selection",
+  "selection.replace": "Replace selection",
+  "picture.convert": "Convert picture",
   "selection.delete": "Delete selection",
   "polygon.edit": "Edit polygon",
   "polygon.edit-grass": "Edit grass",
