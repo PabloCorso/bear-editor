@@ -355,7 +355,6 @@ function getShortcutGroups(
             },
             { shortcut: ["-", "+"], label: "Ellipse vertices / star points" },
             { shortcut: ["[", "]"], label: "Star inner radius (%)" },
-            { shortcut: "Esc / Right click", label: "Cancel item or capture" },
             {
               shortcut: "+ tile",
               label:
@@ -391,10 +390,6 @@ function getShortcutGroups(
               shortcut: "Space",
               label: "Flip direction",
             },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
-            },
           ],
         },
         {
@@ -405,10 +400,6 @@ function getShortcutGroups(
           ),
           subItems: [
             { shortcut: "Space", label: "Flip direction" },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
-            },
           ],
         },
         {
@@ -421,10 +412,6 @@ function getShortcutGroups(
             {
               shortcut: ["-", "+"],
               label: "Adjust edge length",
-            },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
             },
           ],
         },
@@ -453,10 +440,6 @@ function getShortcutGroups(
             },
             { shortcut: "S", label: "Toggle start chamber and player" },
             { shortcut: "F", label: "Toggle end flower" },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish pipe",
-            },
           ],
         },
         {
@@ -471,7 +454,6 @@ function getShortcutGroups(
           subItems: [
             { shortcut: ["-", "+"], label: "Adjust width" },
             { shortcut: "Enter", label: "Apply at cursor" },
-            { shortcut: ["Esc", "Right click"], label: "Cancel stroke" },
           ],
         },
         {
@@ -487,10 +469,6 @@ function getShortcutGroups(
               label: "Cycle mode: Inside / Outside / Centered",
             },
           ],
-        },
-        {
-          shortcut: ["Esc", "Right click"],
-          label: "Cancel polygon operation",
         },
         {
           shortcut: defaultTools.vertex.variants.smooth.shortcut,
@@ -527,10 +505,6 @@ function getShortcutGroups(
             { shortcut: "0–250", label: "Type apple count in count mode" },
             { shortcut: "S", label: "Toggle start chamber and player" },
             { shortcut: "F", label: "Toggle end flower" },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish brush stroke",
-            },
           ],
         },
         {
