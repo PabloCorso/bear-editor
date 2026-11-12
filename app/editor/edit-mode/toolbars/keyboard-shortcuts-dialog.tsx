@@ -2,7 +2,6 @@ import type { DialogProps } from "~/components/ui/dialog";
 import {
   CursorIcon,
   HandIcon,
-  PaintBucketIcon,
   TextTIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -26,6 +25,7 @@ import {
   useTextureMaskSprites,
 } from "~/components/use-lgr-assets";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
+import { ColorToolIcon } from "./color-tool-control";
 import {
   usePlaySettings,
   useVertexEdgeClickPreference,
@@ -607,11 +607,6 @@ function getShortcutGroups(
           ),
         },
         {
-          shortcut: defaultTools.color.shortcut,
-          label: defaultTools.color.name,
-          icon: <PaintBucketIcon className="h-5 w-5" weight="fill" />,
-        },
-        {
           shortcut: defaultTools.texture.shortcut,
           label: defaultTools.texture.name,
           icon: (
@@ -620,6 +615,11 @@ function getShortcutGroups(
               src={toolIcons.textureSprite}
             />
           ),
+        },
+        {
+          shortcut: defaultTools.color.shortcut,
+          label: defaultTools.color.name,
+          icon: <ColorToolIcon className="h-5 w-5" />,
         },
         {
           shortcut: defaultTools.text.shortcut,
