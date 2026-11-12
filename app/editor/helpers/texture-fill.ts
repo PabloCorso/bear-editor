@@ -1,16 +1,16 @@
-import type { Mask, Polygon, Position } from "~/editor/elma-types";
+import type { Polygon, Position } from "~/editor/elma-types";
 import { ELMA_PIXEL_SCALE } from "~/editor/constants";
 import { getPolygonBounds } from "~/editor/render/world-derived-data-cache";
 import type { WorldRect } from "~/editor/render/world-geometry";
 
 type MaskPixels = { width: number; height: number; pixels: Uint8ClampedArray };
 export type FillMask = {
-  mask: Mask;
+  mask: string;
   width: number;
   height: number;
   core: WorldRect;
 };
-export type FillPlacement = { mask: Mask; position: Position };
+export type FillPlacement = { mask: string; position: Position };
 export type TextureFillResult = { placements: FillPlacement[]; error?: string };
 const PIXEL = ELMA_PIXEL_SCALE;
 const MAX_PLACEMENTS = 5000;
@@ -20,7 +20,7 @@ const EPSILON = 1e-12;
 // Largest fully opaque rectangle, found in linear time using a histogram.
 // An inset leaves real overlap around every covered cell, including mask corners.
 export function createFillMask(
-  mask: Mask,
+  mask: string,
   sprite: MaskPixels,
 ): FillMask | null {
   const heights = new Int32Array(sprite.width);
