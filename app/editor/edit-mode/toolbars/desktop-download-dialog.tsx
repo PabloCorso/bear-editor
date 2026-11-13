@@ -10,6 +10,8 @@ import {
 import { Button } from "~/components/ui/button";
 
 const RELEASES_URL = "https://github.com/PabloCorso/bear-editor/releases";
+const LOADING = "Loading downloads…";
+const UNAVAILABLE = "Downloads aren’t available yet.";
 const PLATFORMS = [
   { name: "macOS", extension: /\.dmg$/i },
   { name: "Windows", extension: /\.exe$/i },
@@ -31,7 +33,7 @@ function detectedPlatform() {
 
 export function DesktopDownloadDialog(props: DialogProps) {
   const [installers, setInstallers] = useState<Installer[]>([]);
-  const [status, setStatus] = useState("Loading downloads…");
+  const [status, setStatus] = useState(LOADING);
   const [platform, setPlatform] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function DesktopDownloadDialog(props: DialogProps) {
     const controller = new AbortController();
     async function load() {
       setInstallers([]);
-      setStatus("Loading downloads…");
+      setStatus(LOADING);
       try {
         const response = await fetch(
           "https://api.github.com/repos/PabloCorso/bear-editor/releases/latest",
@@ -48,7 +50,7 @@ export function DesktopDownloadDialog(props: DialogProps) {
         );
         if (controller.signal.aborted) return;
         if (response.status === 404) {
-          setStatus("Downloads aren’t available yet.");
+          setStatus(UNAVAILABLE);
           return;
         }
         if (!response.ok) throw new Error("Release request failed");
@@ -68,13 +70,14 @@ export function DesktopDownloadDialog(props: DialogProps) {
     return () => controller.abort();
   }, [props.open]);
 
-  const visiblePlatforms = platform
-    ? PLATFORMS.filter(({ name }) => name === platform)
-    : PLATFORMS;
-  const downloads = visiblePlatforms.flatMap(({ name, extension }) => {
-    const installer = installers.find((asset) => extension.test(asset.name));
-    return installer ? [{ name, installer }] : [];
-  });
+  const downloads = PLATFORMS.map(({ name, extension }) => ({
+    name,
+    installer: installers.find((asset) => extension.test(asset.name)),
+  }));
+  const primary =
+    downloads.find(({ name, installer }) => name === platform && installer) ??
+    downloads.find(({ installer }) => installer);
+  const message = status || (!primary ? UNAVAILABLE : "");
 
   return (
     <Dialog {...props}>
@@ -83,41 +86,50 @@ export function DesktopDownloadDialog(props: DialogProps) {
           <DialogTitle>Bear Editor for desktop</DialogTitle>
         </DialogHeader>
         <DialogBody className="gap-3 pb-6">
-          {status && (
+          {message && (
             <p role="status" className="text-sm text-secondary">
-              {status}
+              {message}
             </p>
           )}
-          {!status && downloads.length === 0 && (
-            <p role="status" className="text-sm text-secondary">
-              Downloads aren’t available yet.
-            </p>
+          {!status && primary?.installer && (
+            <div>
+              <Button
+                as="a"
+                href={primary.installer.browser_download_url}
+                variant="accent"
+                className="w-full"
+              >
+                Download for {primary.name}
+              </Button>
+              {primary.name === "macOS" && (
+                <p className="mt-2 text-xs text-secondary">
+                  First time: Control-click the app and choose Open.
+                </p>
+              )}
+            </div>
           )}
-          {!status &&
-            downloads.map(({ name, installer }) => (
-              <div key={name}>
-                <Button
-                  as="a"
-                  href={installer.browser_download_url}
-                  variant="accent"
-                  className="w-full"
-                >
-                  Download for {name}
-                </Button>
-                {name === "macOS" && (
-                  <p className="mt-2 text-xs text-secondary">
-                    First time: Control-click the app and choose Open.
-                  </p>
-                )}
-              </div>
-            ))}
+          {!status && primary && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              {downloads
+                .filter(({ name }) => name !== primary.name)
+                .map(({ name, installer }) => (
+                  <a
+                    key={name}
+                    href={installer?.browser_download_url ?? RELEASES_URL}
+                    className="underline underline-offset-4"
+                  >
+                    {name}
+                  </a>
+                ))}
+            </div>
+          )}
           <a
             href={RELEASES_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm underline underline-offset-4"
           >
-            Other platforms and versions
+            GitHub Releases
           </a>
         </DialogBody>
       </DialogContent>
