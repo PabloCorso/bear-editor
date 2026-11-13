@@ -77,20 +77,25 @@ Custom LGRs and mobile Safari require separate verification.
 The release WASM is 4.01 MB raw and 1.18 MB gzipped. The generated JavaScript
 and adapter are also lazy. A normal navigation requested zero WASM files. The
 production SPA home bundle grew by about 4 kB minified and 1.2 kB gzipped
-compared with main. In two local Chromium runs, importing the module and
-instantiating WASM took 117 ms. Initializing the WebGL backend took another
-481–550 ms. First visible rectools frames took 4.5–7.0 seconds from navigation,
-including editor startup, LGR decoding and first-frame work. These timings
-use a local server and SwiftShader.
+compared with main. Across local runs, importing and instantiating WASM took
+81–122 ms. Initializing WebGL took another 481–878 ms. First visible rectools
+frames took 4.5–7.9 seconds from navigation, including editor startup, LGR
+decoding and first-frame work. These timings use a local server and SwiftShader.
 
-In an animated, fitted editor view on Tio250 (285 polygons, 2,933 vertices,
-979 pictures), 90 animation-frame intervals had a median / 95th percentile of
-200 / 417 ms for Bear and 1,117 / 2,550 ms for rectools. Both runs used
-Default.lgr, ground/sky and grass textures, 1100 × 730 pixels, DPR 1 and
-Chromium with SwiftShader. These are end-to-end callback intervals from one
-run per backend, not GPU timings. The static smoke test reached both renderers
-on WCup907 (188 polygons, 3,838 vertices, 1,238 pictures). Idle callback cadence
-there does not measure rendering throughput.
+The fitted editor views below used Default.lgr, ground/sky and grass textures,
+object animations, 1100 × 730 CSS pixels and DPR 1. Each result is the median
+and 95th percentile of 20 animation-frame callback intervals in Chromium with
+SwiftShader. These intervals include browser scheduling and rendering on the
+software GPU.
+
+| Level   | Polygons | Vertices | Pictures | Bear median / p95 | Rectools median / p95 |
+| ------- | -------: | -------: | -------: | ----------------: | --------------------: |
+| Tio250  |      285 |    2,933 |      979 |       67 / 267 ms |        850 / 2,250 ms |
+| WCup907 |      188 |    3,838 |    1,238 |       50 / 217 ms |        500 / 1,467 ms |
+
+A separate 90-frame Tio250 run measured 200 / 417 ms for Bear and
+1,117 / 2,550 ms for rectools. The variation is substantial, with rectools
+slower in both runs. Hardware measurements are needed to attribute the gap.
 
 Rectools allocates two R8 targets, one R16 target and one depth/stencil target.
 At roughly eight bytes per pixel, these account for about 6.1 MiB at
