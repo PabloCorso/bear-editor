@@ -21,6 +21,7 @@
   },
   "build": {
     "appId": "com.beareditor.desktop",
+    "artifactName": "Bear-Editor-${version}-${arch}.${ext}",
     "files": [
       "main.mjs",
       "preload.cjs",
