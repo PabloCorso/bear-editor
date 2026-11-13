@@ -1,8 +1,9 @@
 import type { LgrAssets } from "~/components/lgr-assets";
 import type { WorldRenderScene } from "~/editor/render/world-scene";
+import { RectoolsWorldSceneRenderer } from "./rectools-world-scene-renderer";
 import { WebGLWorldSceneRenderer } from "./webgl-world-scene-renderer";
 
-export type WorldSceneRendererBackend = "webgl";
+export type WorldSceneRendererBackend = "webgl" | "rectools";
 
 export interface WorldSceneRenderer {
   readonly backend: WorldSceneRendererBackend;
@@ -26,6 +27,8 @@ export function createWorldSceneRenderer({
   backend?: WorldSceneRendererBackend;
 }): WorldSceneRenderer {
   switch (backend) {
+    case "rectools":
+      return new RectoolsWorldSceneRenderer(canvas, lgrAssets);
     case "webgl":
       return new WebGLWorldSceneRenderer(canvas, lgrAssets);
     default: {

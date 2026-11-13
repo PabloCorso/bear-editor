@@ -28,6 +28,7 @@ export type PlayModeRenderOptions = {
 
 export interface PlayModeRenderer {
   resize(): void;
+  destroy(): void;
   render(state: GameState, options?: PlayModeRenderOptions): void;
 }
 

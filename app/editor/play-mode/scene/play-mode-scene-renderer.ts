@@ -38,6 +38,10 @@ export class PlayModeSceneRenderer {
     });
   }
 
+  destroy(): void {
+    this.worldRenderer.destroy();
+  }
+
   resize(): void {
     const rect = this.canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -79,6 +83,7 @@ export class PlayModeSceneRenderer {
 
     const scene = buildPlayModeScene({
       state,
+      includeRectoolsScenery: this.worldRenderer.backend === "rectools",
       viewport: {
         width,
         height,

@@ -641,6 +641,7 @@ export function PlayModeOverlay({
         captureRequestedRef.current = false;
         canvas.removeEventListener("wheel", handleWheel);
         observer.disconnect();
+        renderer.destroy();
         releaseMobileControls();
         lastCanvasTapRef.current = null;
         restartRequestedRef.current = false;
@@ -792,7 +793,7 @@ export function PlayModeOverlay({
       ) : null}
       <canvas
         ref={canvasRef}
-        className="block h-full w-full outline-none"
+        className="relative block h-full w-full outline-none"
         onPointerDown={handleCanvasPointerDown}
       />
       <PlaySettingsDialog

@@ -1518,6 +1518,7 @@ export class EditorEngine {
     const scene = buildEditorWorldScene({
       state,
       includeDrafts: includeEditor,
+      includeRectoolsScenery: this.worldRenderer.backend === "rectools",
       viewportSize,
       viewportRect,
       resolvePictureDimensions: (picture) =>

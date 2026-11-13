@@ -163,7 +163,26 @@ export type WorldRenderDrawItem =
   | WorldRenderStartItem
   | WorldRenderBikeItem;
 
+export type RectoolsScenery = {
+  polygons: ReadonlyArray<{
+    vertices: WorldPoint[];
+    isGrass?: boolean;
+    grass?: boolean;
+    opacity?: number;
+  }>;
+  pictures: ReadonlyArray<{
+    name?: string;
+    texture?: string;
+    mask?: string;
+    position: WorldPoint;
+    distance: number;
+    clip: number;
+  }>;
+};
+
 export type WorldRenderScene = {
+  // Rectools derives its texture origin and picture ordering from the whole level.
+  rectoolsScenery?: RectoolsScenery;
   referenceImages?: ReferenceImage[];
   clearColor: string;
   ground: string;

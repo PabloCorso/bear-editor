@@ -17,6 +17,7 @@ const SPRITE_LOAD_FRAME_BUDGET_MS = 8;
 
 export class LgrAssets {
   private ready = false;
+  private sourceBytes: ArrayBuffer | null = null;
   private lgrSprites: Record<string, LoadedSprite> = {};
   private maskedPreviewUrls = new Map<string, string>();
   private loadPromise: Promise<void> | null = null;
@@ -49,6 +50,7 @@ export class LgrAssets {
     try {
       const sprites = await decodeLgrSprites(data);
       await this.loadDecodedSprites(sprites);
+      this.sourceBytes = data;
       this.ready = true;
     } catch (error) {
       this.destroy();
@@ -92,6 +94,10 @@ export class LgrAssets {
         lastYieldTime = getNow();
       }
     }
+  }
+
+  getSourceBytes() {
+    return this.sourceBytes;
   }
 
   getSprites() {
@@ -370,6 +376,7 @@ export class LgrAssets {
       URL.revokeObjectURL(src);
     }
     this.maskedPreviewUrls.clear();
+    this.sourceBytes = null;
     this.ready = false;
   }
 
