@@ -1,17 +1,19 @@
 import { DEFAULT_REFERENCE_IMAGE_OPACITY } from "../reference-images";
 import { referenceImagePoint } from "../reference-images";
 import type { LgrAssets } from "~/components/lgr-assets";
+import { Clip } from "~/editor/elma-types";
 import { colors } from "~/editor/constants";
 import { WebGLOverlayDrawer } from "~/editor/render/webgl-overlay-drawer";
 import { WebGLPolygonDrawer } from "~/editor/render/webgl-polygon-drawer";
 import { WebGLRenderContext } from "~/editor/render/webgl-render-context";
 import { WebGLWorldItemDrawer } from "~/editor/render/webgl-world-item-drawer";
-import type { WorldRenderScene } from "~/editor/render/world-scene";
+import type {
+  WorldRenderDrawItem,
+  WorldRenderScene,
+} from "~/editor/render/world-scene";
 import type { WorldSceneRenderer } from "~/editor/render/world-scene-renderer";
 
 export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
-  readonly backend = "webgl" as const;
-
   private referenceBitmaps = new Set<ImageBitmap>();
   private renderContext: WebGLRenderContext;
   private polygonDrawer: WebGLPolygonDrawer;
@@ -21,8 +23,9 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
   constructor(
     canvas: HTMLCanvasElement,
     private lgrAssets: LgrAssets | null,
+    { alpha = false } = {},
   ) {
-    this.renderContext = new WebGLRenderContext(canvas);
+    this.renderContext = new WebGLRenderContext(canvas, { alpha });
     this.polygonDrawer = new WebGLPolygonDrawer(
       this.renderContext,
       this.lgrAssets,
@@ -88,6 +91,46 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
     }
     this.polygonDrawer.drawPolygonEdges(scene);
     this.worldItemDrawer.drawQueuedItems(scene, "rest");
+    this.worldItemDrawer.drawQueuedItemBounds(scene);
+    this.overlayDrawer.draw(scene);
+  }
+
+  renderOverRectools(scene: WorldRenderScene, items: WorldRenderDrawItem[]) {
+    this.renderContext.clear("#000000", 0);
+    const hasDraftPolygons = scene.polygons.some(
+      (polygon) => !polygon.isGrass && (polygon.opacity ?? 1) < 1,
+    );
+    if (
+      hasDraftPolygons ||
+      items.some(
+        (item) => item.type === "picture" && item.clip !== Clip.Unclipped,
+      )
+    ) {
+      this.polygonDrawer.writeSkyStencil(scene);
+    }
+    if (hasDraftPolygons) {
+      this.polygonDrawer.drawDraftGroundSkyPolygons(
+        scene,
+        scene.ground,
+        scene.sky,
+        this.lgrAssets,
+        colors.ground,
+        colors.sky,
+      );
+    }
+    if (!scene.visibility.useGrassTextures) {
+      this.polygonDrawer.drawGrassPolygons(scene);
+    }
+    this.drawReferenceImages(scene);
+    if (scene.backgroundOverlays?.length) {
+      this.overlayDrawer.draw({ ...scene, overlays: scene.backgroundOverlays });
+    }
+    this.polygonDrawer.drawPolygonEdges(scene);
+    if (items.length) {
+      const editorScene = { ...scene, drawItems: items };
+      this.worldItemDrawer.drawQueuedItems(editorScene, "ground");
+      this.worldItemDrawer.drawQueuedItems(editorScene, "rest");
+    }
     this.worldItemDrawer.drawQueuedItemBounds(scene);
     this.overlayDrawer.draw(scene);
   }

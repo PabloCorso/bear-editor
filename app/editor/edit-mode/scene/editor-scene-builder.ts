@@ -42,9 +42,11 @@ export function buildEditorWorldScene({
   viewportRect,
   resolvePictureDimensions,
   includeDrafts = true,
+  includeRectoolsScenery = false,
 }: {
   state: EditorState;
   includeDrafts?: boolean;
+  includeRectoolsScenery?: boolean;
   viewportSize: { width: number; height: number };
   viewportRect: WorldRect;
   resolvePictureDimensions?: (picture: {
@@ -56,6 +58,9 @@ export function buildEditorWorldScene({
   const scenePolygons = getScenePolygons(state, includeDrafts);
 
   return {
+    rectoolsScenery: includeRectoolsScenery
+      ? { polygons: scenePolygons, pictures: state.pictures }
+      : undefined,
     referenceImages: includeDrafts ? state.referenceImages : undefined,
     clearColor: "#1a1a2e",
     backgroundOverlays: buildGridOverlays(state.grid, viewportRect, state.zoom),
@@ -365,6 +370,13 @@ function getScenePolygons(
       opacity: drafts.polygonOpacity,
     })) || [];
   const vertexToolState = state.actions.getToolState<VertexToolState>("vertex");
+  if (
+    !draftPolygons.length &&
+    !drafts?.hiddenPolygons?.length &&
+    !vertexToolState?.editingPolygon
+  ) {
+    return state.polygons;
+  }
   const scenePolygons: ScenePolygon[] = vertexToolState?.editingPolygon
     ? state.polygons.filter(
         (polygon) => polygon !== vertexToolState.editingPolygon,

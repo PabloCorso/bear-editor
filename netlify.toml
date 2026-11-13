@@ -1,5 +1,10 @@
 [build]
-command = "react-router build"
+command = """
+rustup toolchain install 1.100.0 --profile minimal --target wasm32-unknown-unknown &&
+cargo +1.100.0 install wasm-bindgen-cli --version 0.2.129 --locked &&
+RUSTUP_TOOLCHAIN=1.100.0 sh experiments/rectools/build.sh &&
+react-router build
+"""
 publish = "build/client"
 
 [dev]

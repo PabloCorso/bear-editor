@@ -20,7 +20,6 @@ import {
   useEditorView,
   useInitialLevel,
 } from "~/editor/edit-mode/editor-view";
-import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import { TextEditorOverlay } from "~/editor/edit-mode/text-editor-overlay";
 
 const LazyPlayModeOverlay = lazy(async () => {
@@ -30,17 +29,12 @@ const LazyPlayModeOverlay = lazy(async () => {
 
 type EditorShellProps = {
   initialLevelName?: string;
-  rendererBackend?: WorldSceneRendererBackend;
 };
 
-export function EditorShell({
-  initialLevelName,
-  rendererBackend = "webgl",
-}: EditorShellProps) {
+export function EditorShell({ initialLevelName }: EditorShellProps) {
   const initialDocument = useInitialLevel(initialLevelName);
   const { canvasRef, engineRef } = useEditorView({
     initialDocument,
-    rendererBackend,
   });
   const isPlayMode = useEditorIsPlayMode();
 
@@ -51,7 +45,7 @@ export function EditorShell({
         <TextEditorOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
-            <LazyPlayModeOverlay rendererBackend={rendererBackend} />
+            <LazyPlayModeOverlay />
           </Suspense>
         ) : null}
       </div>

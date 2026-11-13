@@ -1,11 +1,8 @@
 import type { LgrAssets } from "~/components/lgr-assets";
 import type { WorldRenderScene } from "~/editor/render/world-scene";
-import { WebGLWorldSceneRenderer } from "./webgl-world-scene-renderer";
-
-export type WorldSceneRendererBackend = "webgl";
+import { RectoolsWorldSceneRenderer } from "./rectools-world-scene-renderer";
 
 export interface WorldSceneRenderer {
-  readonly backend: WorldSceneRendererBackend;
   setLgrAssets(lgrAssets: LgrAssets | null): void;
   resize(options: {
     width: number;
@@ -19,18 +16,9 @@ export interface WorldSceneRenderer {
 export function createWorldSceneRenderer({
   canvas,
   lgrAssets,
-  backend = "webgl",
 }: {
   canvas: HTMLCanvasElement;
   lgrAssets: LgrAssets | null;
-  backend?: WorldSceneRendererBackend;
 }): WorldSceneRenderer {
-  switch (backend) {
-    case "webgl":
-      return new WebGLWorldSceneRenderer(canvas, lgrAssets);
-    default: {
-      const exhaustivenessCheck: never = backend;
-      throw new Error(`Unsupported renderer backend: ${exhaustivenessCheck}`);
-    }
-  }
+  return new RectoolsWorldSceneRenderer(canvas, lgrAssets);
 }

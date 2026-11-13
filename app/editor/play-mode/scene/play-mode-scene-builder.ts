@@ -34,6 +34,7 @@ type LevelRenderCache = {
       grassEdgeIndices: number[];
     };
   }>;
+  pictures: PlayModeScenePictureItem[];
   staticDrawItems: Array<
     | PlayModeScenePictureItem
     | {
@@ -76,6 +77,10 @@ export function buildPlayModeScene({
     .map((entry) => entry.item);
 
   return {
+    rectoolsScenery: {
+      polygons: state.level.polygons,
+      pictures: cache.pictures,
+    },
     clearColor: "#1a1a2e",
     ground: state.level.foregroundName,
     sky: state.level.backgroundName,
@@ -247,7 +252,20 @@ function getLevelRenderCache(level: LevelData): LevelRenderCache {
   const cached = levelRenderCache.get(level);
   if (cached) return cached;
 
+  const pictures = level.sprites.map(
+    (sprite): PlayModeScenePictureItem => ({
+      type: "picture",
+      cacheKey: sprite,
+      name: sprite.pictureName || undefined,
+      mask: sprite.maskName || undefined,
+      texture: sprite.textureName || undefined,
+      clip: sprite.clipping,
+      distance: sprite.distance,
+      position: { x: sprite.r.x, y: sprite.r.y },
+    }),
+  );
   const cache: LevelRenderCache = {
+    pictures,
     polygons: level.polygons.map((polygon) => {
       const derived = getCachedPolygonDerivedData(polygon);
       return {
@@ -260,21 +278,7 @@ function getLevelRenderCache(level: LevelData): LevelRenderCache {
       };
     }),
     staticDrawItems: [
-      ...level.sprites.map(
-        (sprite): PlayModeScenePictureItem => ({
-          type: "picture",
-          cacheKey: sprite,
-          name: sprite.pictureName || undefined,
-          mask: sprite.maskName || undefined,
-          texture: sprite.textureName || undefined,
-          clip: sprite.clipping,
-          distance: sprite.distance,
-          position: {
-            x: sprite.r.x,
-            y: sprite.r.y,
-          },
-        }),
-      ),
+      ...pictures,
       ...level.objects
         .filter((obj) => obj.type !== "start")
         .map((obj) => ({
