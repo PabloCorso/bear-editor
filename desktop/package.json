@@ -2,7 +2,7 @@
   "name": "bear-editor-desktop",
   "productName": "Bear Editor",
   "desktopName": "bear-editor.desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Offline Elasto Mania level editor",
   "author": "Pablo Corso",
   "private": true,
