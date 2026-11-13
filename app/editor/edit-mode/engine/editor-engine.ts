@@ -954,6 +954,14 @@ export class EditorEngine {
       return;
     }
     if (isUserTyping()) return;
+    if (
+      event.target instanceof Element &&
+      (event.target.closest('[role="menu"]') ||
+        (event.target.closest('[aria-haspopup="menu"]') &&
+          ["Enter", " ", "ArrowUp", "ArrowDown"].includes(event.key)))
+    ) {
+      return;
+    }
 
     if (state.isPlayMode) {
       if (event.key === "Escape") {
@@ -1153,7 +1161,7 @@ export class EditorEngine {
       !event.defaultPrevented &&
       !(
         event.target instanceof Element &&
-        event.target.closest('[role="menu"], [role="dialog"]')
+        event.target.closest('[role="dialog"]')
       )
     ) {
       if (!event.repeat) this.fitToView();

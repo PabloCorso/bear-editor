@@ -62,13 +62,7 @@ export function CanvasOptionsMenu({
     <DropdownMenu>
       <Tooltip>
         <TooltipTrigger>
-          <DropdownMenuTrigger
-            onKeyDown={(event) => {
-              if (["Enter", " ", "ArrowUp", "ArrowDown"].includes(event.key)) {
-                event.stopPropagation();
-              }
-            }}
-          >
+          <DropdownMenuTrigger>
             <ToolbarButton
               aria-label="Canvas options"
               className="gap-1 p-2"
@@ -89,7 +83,6 @@ export function CanvasOptionsMenu({
         align="end"
         collisionPadding={16}
         className="min-w-48"
-        onKeyDown={(event) => event.stopPropagation()}
       >
         <GridMenuGroup />
         <DropdownMenuSeparator />
