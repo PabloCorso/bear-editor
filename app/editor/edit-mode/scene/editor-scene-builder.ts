@@ -14,7 +14,7 @@ import {
   type EditorWorldScene,
 } from "./editor-scene";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
-import { buildRideMomentBikeSceneItem } from "~/editor/play-mode/scene/play-mode-scene-builder";
+import { buildRideMomentBikeSceneItem } from "~/editor/play-mode/scene/live-bike";
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldPoint } from "~/editor/render/world-scene";
 import {
@@ -62,7 +62,6 @@ export function buildEditorWorldScene({
     ground: state.ground,
     sky: state.sky,
     animateSprites: state.animateSprites,
-    groundClipMode: "when-polygons-visible",
     visibility: {
       useGroundSkyTextures: state.levelVisibility.useGroundSkyTextures,
       useGrassTextures: state.levelVisibility.useGrassTextures,

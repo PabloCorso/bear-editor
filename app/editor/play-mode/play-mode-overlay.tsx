@@ -44,6 +44,8 @@ import {
   getTimeCentiseconds,
   type GameState,
 } from "~/editor/play-mode/engine/game/game-loop";
+import { Vec2 } from "~/editor/play-mode/engine/core/vec2";
+import { correctVertexPrecision } from "~/editor/helpers/polygon-helpers";
 import { RideHistory } from "~/editor/play-mode/engine/game/ride-history";
 import { formatShortcutCode } from "~/editor/edit-mode/toolbars/keyboard-shortcuts";
 import type { LevelData } from "~/editor/play-mode/engine/level";
@@ -51,12 +53,8 @@ import {
   DEFAULT_KEYS,
   InputManager,
 } from "~/editor/play-mode/engine/input-manager";
-import {
-  createPlayModeRenderer,
-  type PlayModeRenderer,
-} from "~/editor/play-mode/scene/renderer";
+import { PlayModeSceneRenderer } from "~/editor/play-mode/scene/play-mode-scene-renderer";
 import { WebGLInitializationError } from "~/editor/render/webgl-render-context";
-import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import { ToolButton } from "~/components/tool-button";
 
 const PLAY_MODE_WHEEL_ZOOM_STEP = 420;
@@ -122,11 +120,7 @@ function getActiveMobileControlState(
   };
 }
 
-export function PlayModeOverlay({
-  rendererBackend = "webgl",
-}: {
-  rendererBackend?: WorldSceneRendererBackend;
-}) {
+export function PlayModeOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeMobilePointersRef = useRef<Map<number, PlayModeMobileControlId>>(
@@ -423,13 +417,9 @@ export function PlayModeOverlay({
         return;
       }
 
-      let renderer: PlayModeRenderer;
+      let renderer: PlayModeSceneRenderer;
       try {
-        renderer = createPlayModeRenderer({
-          canvas,
-          lgrAssets: lgr,
-          backend: rendererBackend,
-        });
+        renderer = new PlayModeSceneRenderer(canvas, lgr);
       } catch (error) {
         if (!(error instanceof WebGLInitializationError)) throw error;
         stopPlayMode();
@@ -459,8 +449,18 @@ export function PlayModeOverlay({
       syncStoredZoom(gameState.camera.zoom);
       updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
 
+      const render = () => {
+        const { start, testStarts, playSettings } = store.getState();
+        renderer.render(gameState, playSettings.videoDetail, {
+          start,
+          testStarts,
+        });
+      };
+
+      let redraw = true;
       const resize = () => {
         renderer.resize();
+        redraw = true;
       };
 
       const observer = new ResizeObserver(() => resize());
@@ -492,12 +492,18 @@ export function PlayModeOverlay({
         const currentZoom = gameState.camera.zoom;
         const active = activeTestStart(store.getState());
         // The active start can change during this play session after a capture.
-        levelData = convertLevelToGameData(
-          elmaLevelFromEditorState({
-            ...store.getState(),
-            start: active.position,
-          }),
-        );
+        const start = correctVertexPrecision(active.position);
+        levelData = {
+          ...levelData,
+          objects: levelData.objects.map((object) =>
+            object.type === "start"
+              ? {
+                  ...object,
+                  r: new Vec2(start.x, start.y),
+                }
+              : object,
+          ),
+        };
         gameState = createGame(levelData, input, keyBindingsRef.current);
         history = new RideHistory(gameState, active.ride);
         gameStateRef.current = gameState;
@@ -534,6 +540,8 @@ export function PlayModeOverlay({
         rewindPointerRef.current = false;
       };
       window.addEventListener("blur", releaseRewind);
+      let lastRenderedDetail = store.getState().playSettings.videoDetail;
+      let lastRenderedZoom = gameState.camera.zoom;
       const loop = (timestamp: number) => {
         const wallSeconds = Math.min(
           Math.max(0, (timestamp - lastFrameTimestamp) / 1000),
@@ -541,6 +549,18 @@ export function PlayModeOverlay({
         );
         lastFrameTimestamp = timestamp;
         if (settingsOpenRef.current || document.hidden) {
+          const detail = store.getState().playSettings.videoDetail;
+          if (
+            !document.hidden &&
+            (redraw ||
+              detail !== lastRenderedDetail ||
+              gameState.camera.zoom !== lastRenderedZoom)
+          ) {
+            render();
+            redraw = false;
+            lastRenderedDetail = detail;
+            lastRenderedZoom = gameState.camera.zoom;
+          }
           gameState.lastTimestamp = timestamp;
           rewindPointerRef.current = false;
           input.update();
@@ -612,16 +632,10 @@ export function PlayModeOverlay({
           return currentState;
         });
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
-        renderer.render(gameState, {
-          testStartState: {
-            start: store.getState().start,
-            testStarts: store.getState().testStarts,
-          },
-          visibility: {
-            ...store.getState().levelVisibility,
-            showGrassBounds: false,
-          },
-        });
+        render();
+        redraw = false;
+        lastRenderedDetail = store.getState().playSettings.videoDetail;
+        lastRenderedZoom = gameState.camera.zoom;
 
         if (gameState.result === "escaped") {
           stopPlayMode();
@@ -641,6 +655,7 @@ export function PlayModeOverlay({
         captureRequestedRef.current = false;
         canvas.removeEventListener("wheel", handleWheel);
         observer.disconnect();
+        renderer.destroy();
         releaseMobileControls();
         lastCanvasTapRef.current = null;
         restartRequestedRef.current = false;
@@ -649,14 +664,7 @@ export function PlayModeOverlay({
         input.destroy();
       };
     },
-    [
-      lgr,
-      releaseMobileControls,
-      rendererBackend,
-      store,
-      stopPlayMode,
-      syncStoredZoom,
-    ],
+    [lgr, releaseMobileControls, store, stopPlayMode, syncStoredZoom],
   );
 
   return (

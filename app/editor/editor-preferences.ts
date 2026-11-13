@@ -115,6 +115,8 @@ export function loadEditorPreferences(): EditorPreferences {
     playSettings: {
       ...defaultPlaySettings,
       ...(preferences?.playSettings ?? {}),
+      videoDetail:
+        preferences?.playSettings?.videoDetail === "low" ? "low" : "high",
       keyBindings: loadPlayKeyBindings(preferences?.playSettings?.keyBindings),
     },
     pictureSelection: normalizePictureSelectionSettings(

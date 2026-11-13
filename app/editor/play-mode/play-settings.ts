@@ -11,8 +11,11 @@ export type PlayKeyBindings = {
 
 export type PlayRunEndBehavior = "restart" | "pause" | "exit";
 
+export type PlayVideoDetail = "high" | "low";
+
 export type PlaySettings = {
   runEndBehavior: PlayRunEndBehavior;
+  videoDetail: PlayVideoDetail;
   keyBindings: PlayKeyBindings;
 };
 
@@ -23,6 +26,7 @@ export const DEFAULT_PLAY_MODE_ZOOM = 1.6;
 
 export const defaultPlaySettings: PlaySettings = {
   runEndBehavior: "pause",
+  videoDetail: "high",
   keyBindings: {
     throttle: "ArrowUp",
     brake: "ArrowDown",

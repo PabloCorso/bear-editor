@@ -869,11 +869,37 @@ export function PlaySettingsPanel() {
         </div>
       </div>
       <div className="flex flex-col gap-3">
-        <SettingsSectionHeading
-          title="View"
-          description="Remember the last zoom used in play mode."
-        />
+        <SettingsSectionHeading title="View" />
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+          <label className="flex items-center justify-between">
+            <span className="flex min-w-24 flex-col text-sm">
+              Video detail
+              <span className="text-xs text-secondary">
+                Low hides grass and level decorations.
+              </span>
+            </span>
+            <Select
+              value={playSettings.videoDetail}
+              items={[
+                { value: "high", label: "High" },
+                { value: "low", label: "Low" },
+              ]}
+              onValueChange={(value) => {
+                if (value === "high" || value === "low") {
+                  setPlaySettings({ videoDetail: value });
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-32 shrink-0 px-3 font-normal">
+                <SelectValue />
+                <SelectTriggerIcon />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
           <label className="flex items-center justify-between">
             <span className="flex min-w-24 flex-col text-sm">
               Zoom
