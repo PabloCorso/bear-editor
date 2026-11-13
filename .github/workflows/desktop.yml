@@ -60,6 +60,22 @@ jobs:
           pattern: bear-editor-*
           path: release-assets
           merge-multiple: true
-      - run: gh release create "$GITHUB_REF_NAME" release-assets/* --generate-notes
+      - name: Verify release assets
+        shell: bash
+        run: |
+          cd release-assets
+          shopt -s nullglob
+          dmg=(*.dmg)
+          exe=(*.exe)
+          appimage=(*.AppImage)
+          if [[ ${#dmg[@]} -ne 1 || ${#exe[@]} -ne 1 || ${#appimage[@]} -ne 1 ]]; then
+            echo "Expected one macOS DMG, Windows installer, and Linux AppImage."
+            exit 1
+          fi
+          test -s latest.yml
+          test -s latest-linux.yml
+          test -s "${exe[0]}.blockmap"
+      - run: gh release create "$GITHUB_REF_NAME" release-assets/* --verify-tag --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
