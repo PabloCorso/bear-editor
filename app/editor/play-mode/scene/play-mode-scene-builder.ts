@@ -59,10 +59,8 @@ export function buildPlayModeScene({
   viewport,
   visibility,
   resolvePictureDimensions,
-  includeRectoolsScenery = false,
 }: {
   state: GameState;
-  includeRectoolsScenery?: boolean;
   viewport: PlayModeViewport;
   visibility: PlayModeRenderVisibility;
   resolvePictureDimensions?: (picture: {
@@ -79,9 +77,10 @@ export function buildPlayModeScene({
     .map((entry) => entry.item);
 
   return {
-    rectoolsScenery: includeRectoolsScenery
-      ? { polygons: state.level.polygons, pictures: cache.pictures }
-      : undefined,
+    rectoolsScenery: {
+      polygons: state.level.polygons,
+      pictures: cache.pictures,
+    },
     clearColor: "#1a1a2e",
     ground: state.level.foregroundName,
     sky: state.level.backgroundName,

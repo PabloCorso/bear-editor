@@ -44,14 +44,13 @@ export type WorldBridge = {
 let initializedModule: Promise<RectoolsModule> | undefined;
 
 async function loadRectools() {
-  // A normal build can omit the experiment and its Rust toolchain.
   const modules = import.meta.glob<RectoolsModule>(
     "../../../experiments/rectools/pkg/bear_rectools.js",
   );
   const load = Object.values(modules)[0];
   if (!load) {
     throw new Error(
-      "Build the optional rectools module with experiments/rectools/build.sh.",
+      "Build the rectools module with experiments/rectools/build.sh.",
     );
   }
   const start = performance.now();

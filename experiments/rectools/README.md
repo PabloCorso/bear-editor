@@ -6,19 +6,17 @@ Install a Rust toolchain with the `wasm32-unknown-unknown` target and install th
 matching bindings generator with `cargo install wasm-bindgen-cli --version 0.2.129 --locked`.
 The prototype was built with Rust 1.100.0.
 
-Run `sh experiments/rectools/build.sh` before starting the dev server or running
-the production build. Open `/QWQUU046?renderer=rectools` and `/QWQUU046` in two
-tabs. Both start from the same bundled level and LGR. Turn on Ground/Sky
-textures and Grass textures in Visibility options, fit both views, and enter
-play mode to compare the starting area. For more geometry and pictures, use
-`/Tio250` and `/WCup907`. The switch is a URL parameter read at startup, so save
-an edited level before reloading it with the other renderer.
+Run `sh experiments/rectools/build.sh` before starting the local dev server or
+building the web or desktop app locally. Netlify and desktop CI build the WASM
+package automatically. Open `/QWQUU046` to try rectools in the editor and play
+mode. Turn on Ground/Sky textures and Grass textures in Visibility options to
+see textured rendering. For more geometry and pictures, use `/Tio250` and
+`/WCup907`.
 
 The input canvas's `data-renderer` reports `rectools-loading`, `rectools`, or
-`webgl-fallback`. The existing renderer draws while WASM loads and if initialization
+`webgl-fallback`. Bear's WebGL renderer draws while WASM loads and if initialization
 fails, the LGR is rejected, the rectools context is lost, or polygon visibility is
-off. The normal build can omit the generated package and requires no Rust toolchain.
-Ordinary deploy previews therefore need a build with the optional package to show rectools.
+off.
 
 ## Scope and implementation
 
@@ -106,14 +104,14 @@ The prototype keeps both graphics stacks live and can have both editor and
 play renderers allocated during play-testing. Browser-level GPU memory was
 unavailable in the software-rendered test environment.
 
-Keep the existing renderer as the default. Before a full migration, compare
+Before a full migration, compare
 against original Elma captures, split atlas and geometry updates, confirm
 placement and hit-test alignment at different zooms and DPRs, and measure
 frame time and memory on physical GPUs, including macOS and iOS Safari.
 
 The Rust adapter is available in this repository under the same terms as the
-optional rectools build. The optional build uses rectools under its
+rectools build. The build uses rectools under its
 [upstream dual license](https://github.com/elmadev/rectools/blob/2fd03a85d0fee2b42cdf79d9526ae82ed248dfe6/LICENSE.md),
 which includes noncommercial and share-alike terms. The build emits the
 upstream license beside its assets. Resolve distribution terms before shipping
-the optional renderer as a general release.
+the renderer as a general release.

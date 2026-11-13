@@ -56,7 +56,6 @@ import {
   type PlayModeRenderer,
 } from "~/editor/play-mode/scene/renderer";
 import { WebGLInitializationError } from "~/editor/render/webgl-render-context";
-import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import { ToolButton } from "~/components/tool-button";
 
 const PLAY_MODE_WHEEL_ZOOM_STEP = 420;
@@ -122,11 +121,7 @@ function getActiveMobileControlState(
   };
 }
 
-export function PlayModeOverlay({
-  rendererBackend = "webgl",
-}: {
-  rendererBackend?: WorldSceneRendererBackend;
-}) {
+export function PlayModeOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeMobilePointersRef = useRef<Map<number, PlayModeMobileControlId>>(
@@ -428,7 +423,6 @@ export function PlayModeOverlay({
         renderer = createPlayModeRenderer({
           canvas,
           lgrAssets: lgr,
-          backend: rendererBackend,
         });
       } catch (error) {
         if (!(error instanceof WebGLInitializationError)) throw error;
@@ -650,14 +644,7 @@ export function PlayModeOverlay({
         input.destroy();
       };
     },
-    [
-      lgr,
-      releaseMobileControls,
-      rendererBackend,
-      store,
-      stopPlayMode,
-      syncStoredZoom,
-    ],
+    [lgr, releaseMobileControls, store, stopPlayMode, syncStoredZoom],
   );
 
   return (

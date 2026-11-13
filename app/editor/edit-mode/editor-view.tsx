@@ -28,7 +28,6 @@ import { TextureTool } from "~/editor/edit-mode/tools/texture-tool";
 import { cn } from "~/utils/misc";
 import type { EditorLevel } from "~/editor/elma-types";
 import type { EditorDocumentInput } from "~/editor/editor-state";
-import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import {
   useCustomDefaultLevelTemplate,
   useDefaultLevelPreset,
@@ -50,13 +49,9 @@ export function EditorView({ className, ...props }: EditorViewProps) {
 
 type UseEditorViewOptions = {
   initialDocument?: InitialDocument;
-  rendererBackend?: WorldSceneRendererBackend;
 };
 
-export function useEditorView({
-  initialDocument,
-  rendererBackend = "webgl",
-}: UseEditorViewOptions) {
+export function useEditorView({ initialDocument }: UseEditorViewOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<EditorEngine | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
@@ -138,7 +133,6 @@ export function useEditorView({
         tools,
         lgrAssets: editorLgrAssets ?? undefined,
         initialDocument: initialDocument?.document,
-        rendererBackend,
       });
 
       // Add resize observer to handle parent size changes (batched to avoid flicker)
@@ -153,7 +147,6 @@ export function useEditorView({
       initialDocument?.document,
       initialDocument?.status,
       editorLgrAssets,
-      rendererBackend,
     ],
   );
 

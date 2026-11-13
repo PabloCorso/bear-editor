@@ -7,7 +7,6 @@ import type { WorldSceneRenderer } from "./world-scene-renderer";
 type Size = Parameters<WorldSceneRenderer["resize"]>[0];
 
 export class RectoolsWorldSceneRenderer implements WorldSceneRenderer {
-  readonly backend = "rectools" as const;
   private readonly worldCanvas = document.createElement("canvas");
   private readonly overlay: WebGLWorldSceneRenderer;
   private size: Size;

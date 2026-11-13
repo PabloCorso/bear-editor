@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - "desktop/**"
+      - "experiments/rectools/**"
       - ".github/workflows/desktop.yml"
       - "vite.config.ts"
       - "react-router.config.ts"
@@ -29,6 +30,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Build rectools WASM
+        shell: bash
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal --target wasm32-unknown-unknown
+          cargo +1.100.0 install wasm-bindgen-cli --version 0.2.129 --locked
+          RUSTUP_TOOLCHAIN=1.100.0 sh experiments/rectools/build.sh
       - run: npm run desktop:build
         # Same public website ID as the production web deployment in netlify.toml.
         env:

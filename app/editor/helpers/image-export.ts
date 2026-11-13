@@ -1,6 +1,6 @@
 import type { LgrAssets } from "~/components/lgr-assets";
 import type { WorldRenderScene } from "~/editor/render/world-scene";
-import { createWorldSceneRenderer } from "~/editor/render/world-scene-renderer";
+import { WebGLWorldSceneRenderer } from "~/editor/render/webgl-world-scene-renderer";
 
 export type ImageExportOptions = {
   appearance: "shown" | "game";
@@ -40,10 +40,7 @@ export class ImageExport {
       );
     }
     const canvas = document.createElement("canvas");
-    const renderer = createWorldSceneRenderer({
-      canvas,
-      lgrAssets: this.assets,
-    });
+    const renderer = new WebGLWorldSceneRenderer(canvas, this.assets);
     const gl = canvas.getContext("webgl2")!;
     const dispose = () => {
       renderer.destroy();

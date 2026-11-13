@@ -14,8 +14,6 @@ import type {
 import type { WorldSceneRenderer } from "~/editor/render/world-scene-renderer";
 
 export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
-  readonly backend = "webgl" as const;
-
   private referenceBitmaps = new Set<ImageBitmap>();
   private renderContext: WebGLRenderContext;
   private polygonDrawer: WebGLPolygonDrawer;

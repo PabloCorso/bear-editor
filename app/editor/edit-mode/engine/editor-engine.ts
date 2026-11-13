@@ -75,7 +75,6 @@ import {
 } from "~/editor/render/picture-metrics";
 import {
   createWorldSceneRenderer,
-  type WorldSceneRendererBackend,
   type WorldSceneRenderer,
 } from "~/editor/render/world-scene-renderer";
 import {
@@ -108,7 +107,6 @@ type EditorEngineOptions = {
   pinchPower?: number;
   store?: EditorStore;
   lgrAssets?: LgrAssets;
-  rendererBackend?: WorldSceneRendererBackend;
 };
 
 const KEYBOARD_PAN_STEP = 50;
@@ -248,14 +246,12 @@ export class EditorEngine {
       pinchPower = 1,
       store,
       lgrAssets,
-      rendererBackend = "webgl",
     }: EditorEngineOptions = {},
   ) {
     this.lgrAssets = lgrAssets || new LgrAssets();
     const worldRenderer = createWorldSceneRenderer({
       canvas,
       lgrAssets: this.lgrAssets,
-      backend: rendererBackend,
     });
 
     this.canvas = canvas;
@@ -1441,7 +1437,7 @@ export class EditorEngine {
           : cameraState;
         scenes.set(
           `${area}-${appearance}`,
-          this.buildScene(exportState, !game, viewportSize),
+          this.buildScene(exportState, !game, viewportSize, false),
         );
       }
     }
@@ -1507,6 +1503,7 @@ export class EditorEngine {
     state = this.store.getState(),
     includeEditor = true,
     viewportSize = { width: this.canvas.width, height: this.canvas.height },
+    includeRectoolsScenery = true,
   ) {
     const viewportRect = getViewportWorldRectFromOffset({
       width: viewportSize.width,
@@ -1518,7 +1515,7 @@ export class EditorEngine {
     const scene = buildEditorWorldScene({
       state,
       includeDrafts: includeEditor,
-      includeRectoolsScenery: this.worldRenderer.backend === "rectools",
+      includeRectoolsScenery,
       viewportSize,
       viewportRect,
       resolvePictureDimensions: (picture) =>

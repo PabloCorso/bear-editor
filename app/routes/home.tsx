@@ -1,6 +1,5 @@
 import type { Route } from "./+types/home";
-import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useEffect } from "react";
 import { EditorProvider, useEditor } from "../editor/use-editor-store";
 import { DefaultLevelPresetProvider } from "../editor/edit-mode/default-level-preset";
 import { EditorDocumentGuardProvider } from "~/editor/session/document-guard";
@@ -16,10 +15,6 @@ export function meta() {
 }
 
 export default function Home({ params }: Route.ComponentProps) {
-  const [searchParams] = useSearchParams();
-  const [rendererBackend] = useState(() =>
-    searchParams.get("renderer") === "rectools" ? "rectools" : "webgl",
-  );
   return (
     <TooltipProvider>
       <LgrAssetsProvider>
@@ -28,10 +23,7 @@ export default function Home({ params }: Route.ComponentProps) {
             <LevelLgrSync />
             <EditorDocumentGuardProvider>
               <div className="flex h-[100dvh]">
-                <EditorShell
-                  initialLevelName={params.level}
-                  rendererBackend={rendererBackend}
-                />
+                <EditorShell initialLevelName={params.level} />
               </div>
             </EditorDocumentGuardProvider>
           </EditorProvider>

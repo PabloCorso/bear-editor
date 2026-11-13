@@ -11,7 +11,6 @@ import { getPictureWorldDimensions } from "~/editor/render/picture-metrics";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
 import {
   createWorldSceneRenderer,
-  type WorldSceneRendererBackend,
   type WorldSceneRenderer,
 } from "~/editor/render/world-scene-renderer";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
@@ -24,17 +23,12 @@ export class PlayModeSceneRenderer {
   private viewportHeight = 0;
   private devicePixelRatio = 1;
 
-  constructor(
-    canvas: HTMLCanvasElement,
-    lgrAssets: LgrAssets | null = null,
-    backend: WorldSceneRendererBackend = "webgl",
-  ) {
+  constructor(canvas: HTMLCanvasElement, lgrAssets: LgrAssets | null = null) {
     this.canvas = canvas;
     this.lgrAssets = lgrAssets;
     this.worldRenderer = createWorldSceneRenderer({
       canvas,
       lgrAssets,
-      backend,
     });
   }
 
@@ -83,7 +77,6 @@ export class PlayModeSceneRenderer {
 
     const scene = buildPlayModeScene({
       state,
-      includeRectoolsScenery: this.worldRenderer.backend === "rectools",
       viewport: {
         width,
         height,
