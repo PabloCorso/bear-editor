@@ -4,6 +4,7 @@ import { NumberInput } from "~/components/ui/number-input";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
 } from "~/components/ui/dropdown-menu";
 
@@ -25,7 +26,22 @@ export function GridMenuGroup() {
       >
         Snap to grid
       </DropdownMenuCheckboxItem>
-      <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-sm">
+      <DropdownMenuItem
+        aria-label="Edit grid size"
+        className="justify-between gap-3"
+        closeOnClick={false}
+        onKeyDownCapture={(event) => {
+          if (
+            event.target === event.currentTarget &&
+            (event.key === "Enter" || event.key === " ")
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            const input = event.currentTarget.querySelector("input");
+            requestAnimationFrame(() => input?.focus());
+          }
+        }}
+      >
         <span>Grid size</span>
         <NumberInput
           aria-label="Grid size"
@@ -42,10 +58,12 @@ export function GridMenuGroup() {
             if (size !== null && Number.isFinite(size)) setGrid({ size });
           }}
           inputProps={{
-            onKeyDown: (event) => event.stopPropagation(),
+            onKeyDown: (event) => {
+              if (event.key !== "Escape") event.stopPropagation();
+            },
           }}
         />
-      </div>
+      </DropdownMenuItem>
     </DropdownMenuGroup>
   );
 }
