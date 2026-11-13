@@ -33,15 +33,12 @@ Run `npm --prefix desktop run package` to build an installer for your platform.
 The **Desktop builds** workflow also builds macOS DMG, Windows NSIS, and Linux
 AppImage artifacts for review.
 
-Desktop releases are intentional rather than automatic on every push. On a
-clean branch, run `npm run desktop:release -- patch` (or `minor`/`major`). The
-command bumps both desktop version files, creates the version commit, and
-creates the matching `v<version>` tag. Review the result, then push the commit
-and tag with `git push --follow-tags`.
-
-The tag starts the **Desktop builds** workflow, which publishes the macOS DMG,
-Windows installer, Linux AppImage, and the Windows and Linux update files to one
-GitHub release. The editor's download dialog links directly to its installers.
+To publish a desktop release, open **Actions → Desktop builds → Run workflow**.
+Select the **main** branch and choose **patch**, **minor**, or **major** under
+**Release desktop**. The workflow builds and verifies the installers, commits
+the version bump, creates the matching tag, and publishes the installers and
+Windows and Linux update files to GitHub Releases. Choose **build-only** for
+test builds. Pushing a version tag also starts a release.
 
 macOS builds use an ad-hoc signature and are not notarized, so on the first
 launch Control-click **Bear Editor** and choose **Open**. Without a paid Apple
