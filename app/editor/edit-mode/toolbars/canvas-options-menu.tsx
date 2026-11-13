@@ -2,9 +2,16 @@ import {
   ArrowsOutIcon,
   ArrowsInIcon,
   CaretDownIcon,
+  CornersOutIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { useEffect, useState } from "react";
-import { ToolButton } from "~/components/tool-button";
+import { Icon } from "~/components/ui/icon";
+import { ToolbarButton } from "~/components/ui/toolbar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -13,8 +20,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { useEditor } from "~/editor/use-editor-store";
-import { GridMenu } from "./grid-menu";
+import { useEditorActions } from "~/editor/use-editor-store";
+import { GridMenuGroup } from "./grid-menu";
+import { FIT_TO_VIEW_SHORTCUT } from "./keyboard-shortcuts";
 
 export function CanvasOptionsMenu({
   minimapVisible,
@@ -23,7 +31,7 @@ export function CanvasOptionsMenu({
   minimapVisible: boolean;
   onMinimapVisibleChange: (visible: boolean) => void;
 }) {
-  const zoom = useEditor((state) => state.zoom);
+  const { triggerFitToView } = useEditorActions();
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenEnabled, setFullscreenEnabled] = useState(false);
 
@@ -50,45 +58,63 @@ export function CanvasOptionsMenu({
     }
   }
 
-  // The camera scale is CSS pixels per level unit, not a percentage.
-  const label = zoom.toLocaleString("en-US", {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-    useGrouping: false,
-  });
-
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger>
-        <ToolButton
-          name="Canvas options"
-          aria-label={`Canvas options, zoom ${label}`}
-          className="w-auto min-w-16 gap-1 px-2"
-        >
-          <span className="font-mono text-xs tabular-nums">{label}</span>
-          <CaretDownIcon className="size-3" />
-        </ToolButton>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger>
+          <DropdownMenuTrigger
+            onKeyDown={(event) => {
+              if (["Enter", " ", "ArrowUp", "ArrowDown"].includes(event.key)) {
+                event.stopPropagation();
+              }
+            }}
+          >
+            <ToolbarButton
+              aria-label="Canvas options"
+              className="gap-1 p-2"
+              iconOnly={false}
+              iconBefore={<CornersOutIcon />}
+              iconAfter={
+                <Icon size="xs">
+                  <CaretDownIcon />
+                </Icon>
+              }
+            />
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top">Canvas options</TooltipContent>
+      </Tooltip>
       <DropdownMenuContent
         side="top"
         align="end"
         collisionPadding={16}
         className="min-w-48"
+        onKeyDown={(event) => event.stopPropagation()}
       >
-        <GridMenu />
+        <GridMenuGroup />
+        <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
           checked={minimapVisible}
           onCheckedChange={onMinimapVisibleChange}
         >
           Minimap
         </DropdownMenuCheckboxItem>
+        {(fullscreenEnabled || fullscreen) && (
+          <DropdownMenuItem
+            iconBefore={fullscreen ? <ArrowsInIcon /> : <ArrowsOutIcon />}
+            onClick={() => void toggleFullscreen()}
+          >
+            {fullscreen ? "Exit full screen" : "Enter full screen"}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          iconBefore={fullscreen ? <ArrowsInIcon /> : <ArrowsOutIcon />}
-          disabled={!fullscreenEnabled && !fullscreen}
-          onClick={() => void toggleFullscreen()}
+          iconBefore={<CornersOutIcon />}
+          shortcut={FIT_TO_VIEW_SHORTCUT}
+          aria-keyshortcuts={FIT_TO_VIEW_SHORTCUT}
+          onClick={triggerFitToView}
         >
-          {fullscreen ? "Exit full screen" : "Enter full screen"}
+          Fit to view
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

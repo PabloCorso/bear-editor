@@ -3,7 +3,6 @@ import { CanvasMinimap } from "./canvas-minimap";
 import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
-  useEditorActions,
   useEditorCanRedo,
   useEditorCanUndo,
   useEditorHistory,
@@ -13,7 +12,6 @@ import { Toolbar, type ToolbarProps } from "~/components/ui/toolbar";
 import {
   ArrowArcLeftIcon,
   ArrowArcRightIcon,
-  CornersOutIcon,
   ChatsCircleIcon,
   ClockCounterClockwiseIcon,
   ArrowUpRightIcon,
@@ -51,7 +49,6 @@ export function CanvasToolbar({
   canvasRef,
   ...props
 }: CanvasToolbarProps) {
-  const { triggerFitToView } = useEditorActions();
   const activeToolId = useEditor((state) => state.activeToolId);
   const vertex = useEditorToolState<VertexToolState>("vertex");
   const shape = useEditorToolState<ShapeToolState>("shape");
@@ -66,7 +63,6 @@ export function CanvasToolbar({
         vertex?.variant === "draw" ||
         vertex?.variant === "brush" ||
         vertex?.previewAutoGrassAll));
-  const modifier = useModifier();
   const [minimapVisible, setMinimapVisible] = useLocalStorage({
     key: "bear-editor-minimap-visible",
     defaultValue: false,
@@ -120,10 +116,6 @@ export function CanvasToolbar({
           >
             <MinusIcon />
           </ToolButton>
-          <CanvasOptionsMenu
-            minimapVisible={minimapVisible}
-            onMinimapVisibleChange={setMinimapVisible}
-          />
           <ToolButton
             name="Zoom in"
             shortcut={usesSizeShortcuts ? undefined : "+"}
@@ -131,13 +123,10 @@ export function CanvasToolbar({
           >
             <PlusIcon />
           </ToolButton>
-          <ToolButton
-            name="Fit to view"
-            shortcut={`${modifier} + 0`}
-            onClick={triggerFitToView}
-          >
-            <CornersOutIcon />
-          </ToolButton>
+          <CanvasOptionsMenu
+            minimapVisible={minimapVisible}
+            onMinimapVisibleChange={setMinimapVisible}
+          />
           <CanvasHelpMenu onOpenShortcuts={() => setShortcutsOpen(true)} />
         </Toolbar>
       </div>

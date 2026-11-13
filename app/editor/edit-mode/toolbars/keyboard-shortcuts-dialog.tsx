@@ -39,6 +39,7 @@ import {
 import {
   getNewLevelShortcut,
   formatShortcutCode,
+  FIT_TO_VIEW_SHORTCUT,
   GO_TO_PLAY_START_SHORTCUT,
   OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
 } from "./keyboard-shortcuts";
@@ -779,7 +780,7 @@ function getShortcutGroups(
           label: "Zoom out",
         },
         {
-          shortcut: `${modifier} + 0`,
+          shortcut: FIT_TO_VIEW_SHORTCUT,
           label: "Fit to view",
         },
         {
