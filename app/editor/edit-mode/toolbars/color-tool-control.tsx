@@ -1,6 +1,7 @@
 import { Clip } from "~/editor/elma-types";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
-import { PaletteIcon, type IconProps } from "@phosphor-icons/react/dist/ssr";
+import { PaletteIcon } from "@phosphor-icons/react/dist/ssr";
+import type { IconProps } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { useLgrAssets } from "~/components/use-lgr-assets";
