@@ -2,6 +2,16 @@ name: Desktop builds
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Release desktop
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+          - build-only
   push:
     tags:
       - "v*"
@@ -14,6 +24,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != 'build-only')) && 'desktop-release' || format('desktop-build-{0}', github.run_id) }}
+  cancel-in-progress: false
 
 jobs:
   package:
@@ -28,6 +42,17 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      - name: Set desktop release version
+        if: github.event_name == 'workflow_dispatch' && inputs.release != 'build-only'
+        shell: bash
+        env:
+          RELEASE_BUMP: ${{ inputs.release }}
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "Select the main branch to release Bear Editor."
+            exit 1
+          fi
+          npm run desktop:release -- "$RELEASE_BUMP" --no-git-tag-version
       - run: npm ci
       - run: npm run desktop:build
         # Same public website ID as the production web deployment in netlify.toml.
@@ -49,12 +74,20 @@ jobs:
             desktop/dist/latest-linux.yml
 
   release:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.release != 'build-only' && github.ref == 'refs/heads/main')
     needs: package
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch'
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          node-version: 24
       - uses: actions/download-artifact@v4
         with:
           pattern: bear-editor-*
@@ -75,7 +108,29 @@ jobs:
           test -s latest.yml
           test -s latest-linux.yml
           test -s "${exe[0]}.blockmap"
-      - run: gh release create "$GITHUB_REF_NAME" release-assets/* --verify-tag --generate-notes
+      - name: Commit and tag desktop version
+        if: github.event_name == 'workflow_dispatch'
+        id: version
+        shell: bash
+        env:
+          RELEASE_BUMP: ${{ inputs.release }}
+        run: |
+          npm run desktop:release -- "$RELEASE_BUMP" --no-git-tag-version
+          tag="v$(node -p 'require("./desktop/package.json").version')"
+          git add desktop/package.json desktop/package-lock.json
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            git fetch origin "refs/tags/$tag"
+            # A retry can reuse the tag if it points to the exact version bump.
+            test "$(git rev-parse FETCH_HEAD^)" = "$GITHUB_SHA"
+            test "$(git rev-parse 'FETCH_HEAD^{tree}')" = "$(git write-tree)"
+          else
+            git -c user.name=github-actions[bot] -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -m "Release desktop $tag"
+            git push --atomic origin HEAD:refs/heads/main "HEAD:refs/tags/$tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Publish desktop release
+        run: gh release create "$RELEASE_TAG" release-assets/* --verify-tag --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag || github.ref_name }}
