@@ -884,12 +884,7 @@ export function PlaySettingsPanel() {
         />
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
           <label className="flex items-center justify-between">
-            <span className="flex min-w-24 flex-col text-sm">
-              Video Detail
-              <span className="text-xs text-secondary">
-                Low hides grass and level decorations.
-              </span>
-            </span>
+            <span className="text-sm">Video Detail</span>
             <Select
               value={playSettings.videoDetail}
               items={[
