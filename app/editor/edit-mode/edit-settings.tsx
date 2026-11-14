@@ -995,7 +995,7 @@ export function PlaySettingsPanel() {
             </label>
           </div>
           <p className="text-xs text-secondary">
-            The browser usually renders at up to your display’s refresh rate.
+            FPS is limited by your display’s refresh rate.
           </p>
         </fieldset>
       </div>
