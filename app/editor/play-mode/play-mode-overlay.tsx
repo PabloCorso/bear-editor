@@ -151,7 +151,7 @@ export function PlayModeOverlay() {
     active: false,
   });
   const activeStartName = useEditor((state) => activeTestStart(state).name);
-  const playTimeTextRef = useRef<HTMLDivElement>(null);
+  const playTimeTextRef = useRef<HTMLSpanElement>(null);
   const fpsTextRef = useRef<HTMLSpanElement>(null);
   const lastPlayTimeRef = useRef("00:00,00");
   const { setPlayModeZoom, stopPlayMode } = useEditorActions();
@@ -715,26 +715,8 @@ export function PlayModeOverlay() {
       ref={containerRef}
       className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[1px] select-none"
     >
-      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-wrap items-center justify-end gap-3">
-        <div
-          ref={playTimeTextRef}
-          className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
-        >
-          {lastPlayTimeRef.current}
-          <div
-            aria-live="polite"
-            className="max-w-48 truncate text-xs font-normal text-secondary"
-          >
-            {activeStartName}
-          </div>
-        </div>
-        {playSettings.showFps ? (
-          <span
-            ref={fpsTextRef}
-            className="font-mono text-sm text-primary tabular-nums"
-          />
-        ) : null}
-        <Toolbar className="pointer-events-auto gap-2">
+      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <Toolbar className="pointer-events-auto gap-2 sm:order-last">
           <ToolButton
             name="Play settings"
             onClick={() => handlePlaySettingsOpenChange(true)}
@@ -811,6 +793,23 @@ export function PlayModeOverlay() {
             <StopIcon weight="fill" />
           </ToolButton>
         </Toolbar>
+        <div className="flex items-baseline gap-3 whitespace-nowrap">
+          {playSettings.showFps ? (
+            <span
+              ref={fpsTextRef}
+              className="font-mono text-sm text-primary tabular-nums"
+            />
+          ) : null}
+          <div className="text-right font-mono text-2xl font-bold text-primary tabular-nums">
+            <span ref={playTimeTextRef}>{lastPlayTimeRef.current}</span>
+            <div
+              aria-live="polite"
+              className="max-w-48 truncate text-xs font-normal text-secondary"
+            >
+              {activeStartName}
+            </div>
+          </div>
+        </div>
       </div>
       <div className="pointer-events-none absolute right-4 bottom-4 z-10 flex items-center gap-2">
         <Toolbar className="pointer-events-auto w-fit gap-2">
