@@ -34,6 +34,7 @@ import {
   PLAY_MODE_MAX_ZOOM,
   PLAY_MODE_MIN_ZOOM,
   type PlayRunEndBehavior,
+  type PlaySettings,
 } from "~/editor/play-mode/play-settings";
 import { elmaLevelFromEditorState } from "~/editor/helpers/level-parser";
 import { convertLevelToGameData } from "~/editor/play-mode/level-converter";
@@ -151,6 +152,7 @@ export function PlayModeOverlay() {
   });
   const activeStartName = useEditor((state) => activeTestStart(state).name);
   const playTimeTextRef = useRef<HTMLDivElement>(null);
+  const fpsTextRef = useRef<HTMLSpanElement>(null);
   const lastPlayTimeRef = useRef("00:00,00");
   const { setPlayModeZoom, stopPlayMode } = useEditorActions();
   const [playSettingsOpen, setPlaySettingsOpen] = useState(false);
@@ -449,14 +451,6 @@ export function PlayModeOverlay() {
       syncStoredZoom(gameState.camera.zoom);
       updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
 
-      const render = () => {
-        const { start, testStarts, playSettings } = store.getState();
-        renderer.render(gameState, playSettings.videoDetail, {
-          start,
-          testStarts,
-        });
-      };
-
       let redraw = true;
       const resize = () => {
         renderer.resize();
@@ -540,8 +534,70 @@ export function PlayModeOverlay() {
         rewindPointerRef.current = false;
       };
       window.addEventListener("blur", releaseRewind);
-      let lastRenderedDetail = store.getState().playSettings.videoDetail;
+      let lastRenderedSettings: PlaySettings | undefined;
       let lastRenderedZoom = gameState.camera.zoom;
+      let nextRenderTime = 0;
+      let fpsSampleStart: number | undefined;
+      let framesDrawn = 0;
+
+      const resetFpsSample = () => {
+        fpsSampleStart = undefined;
+        framesDrawn = 0;
+        if (fpsTextRef.current) fpsTextRef.current.textContent = "";
+      };
+
+      const render = (timestamp: number, paused: boolean) => {
+        const { start, testStarts, playSettings } = store.getState();
+        const viewChanged =
+          redraw ||
+          playSettings !== lastRenderedSettings ||
+          (paused && gameState.camera.zoom !== lastRenderedZoom);
+
+        if (paused && !viewChanged) return;
+
+        if (viewChanged) nextRenderTime = timestamp;
+        const interval =
+          playSettings.fpsLimit === "off"
+            ? 0
+            : 1000 / Number(playSettings.fpsLimit);
+
+        // Keep input and simulation on every animation callback. Carry the
+        // render deadline forward so limits between refresh rates average out.
+        if (timestamp + 0.5 < nextRenderTime) return;
+        nextRenderTime = interval
+          ? nextRenderTime +
+            Math.max(
+              1,
+              Math.floor((timestamp - nextRenderTime) / interval) + 1,
+            ) *
+              interval
+          : timestamp;
+
+        if (
+          playSettings.showFps !== lastRenderedSettings?.showFps ||
+          playSettings.fpsLimit !== lastRenderedSettings?.fpsLimit
+        ) {
+          resetFpsSample();
+        }
+        renderer.render(gameState, playSettings, { start, testStarts });
+        lastRenderedSettings = playSettings;
+        lastRenderedZoom = gameState.camera.zoom;
+        redraw = false;
+
+        const fpsText = fpsTextRef.current;
+        if (!paused && fpsText) {
+          fpsSampleStart ??= timestamp;
+          const elapsed = timestamp - fpsSampleStart;
+          if (elapsed >= 500) {
+            fpsText.textContent =
+              Math.round((framesDrawn * 1000) / elapsed) + " FPS";
+            fpsSampleStart = timestamp;
+            framesDrawn = 0;
+          }
+          framesDrawn++;
+        }
+      };
+
       const loop = (timestamp: number) => {
         const wallSeconds = Math.min(
           Math.max(0, (timestamp - lastFrameTimestamp) / 1000),
@@ -549,18 +605,8 @@ export function PlayModeOverlay() {
         );
         lastFrameTimestamp = timestamp;
         if (settingsOpenRef.current || document.hidden) {
-          const detail = store.getState().playSettings.videoDetail;
-          if (
-            !document.hidden &&
-            (redraw ||
-              detail !== lastRenderedDetail ||
-              gameState.camera.zoom !== lastRenderedZoom)
-          ) {
-            render();
-            redraw = false;
-            lastRenderedDetail = detail;
-            lastRenderedZoom = gameState.camera.zoom;
-          }
+          if (!document.hidden) render(timestamp, true);
+          resetFpsSample();
           gameState.lastTimestamp = timestamp;
           rewindPointerRef.current = false;
           input.update();
@@ -632,10 +678,7 @@ export function PlayModeOverlay() {
           return currentState;
         });
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
-        render();
-        redraw = false;
-        lastRenderedDetail = store.getState().playSettings.videoDetail;
-        lastRenderedZoom = gameState.camera.zoom;
+        render(timestamp, false);
 
         if (gameState.result === "escaped") {
           stopPlayMode();
@@ -685,6 +728,12 @@ export function PlayModeOverlay() {
             {activeStartName}
           </div>
         </div>
+        {playSettings.showFps ? (
+          <span
+            ref={fpsTextRef}
+            className="font-mono text-sm text-primary tabular-nums"
+          />
+        ) : null}
         <Toolbar className="pointer-events-auto gap-2">
           <ToolButton
             name="Play settings"

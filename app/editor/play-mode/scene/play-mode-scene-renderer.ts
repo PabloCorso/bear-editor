@@ -5,7 +5,7 @@ import { Clip } from "~/editor/elma-types";
 import type { GameState } from "~/editor/play-mode/engine/game/game-loop";
 import {
   PLAY_MODE_PIXELS_PER_METER,
-  type PlayVideoDetail,
+  type PlaySettings,
 } from "~/editor/play-mode/play-settings";
 import { composePlayGrass } from "~/editor/render/grass-renderer";
 import { WebGLRenderContext } from "~/editor/render/webgl-render-context";
@@ -99,7 +99,7 @@ export class PlayModeSceneRenderer {
 
   render(
     state: GameState,
-    detail: PlayVideoDetail,
+    settings: PlaySettings,
     starts: Pick<EditorState, "start" | "testStarts">,
   ) {
     if (this.width <= 0 || this.height <= 0) return;
@@ -184,7 +184,7 @@ export class PlayModeSceneRenderer {
     });
     gl.disable(gl.STENCIL_TEST);
 
-    if (detail === "high") {
+    if (settings.videoDetail === "high") {
       if (this.pictureLayout?.ppm !== ppm) {
         this.pictureLayout = {
           ppm,
@@ -221,9 +221,13 @@ export class PlayModeSceneRenderer {
         this.drawPicture(picture, scene);
       }
       if (!grassDrawn) this.drawGrass(scene);
+      if (settings.picturesInBackground) {
+        for (const picture of this.pictureLayout.front) {
+          this.drawPicture(picture, scene);
+        }
+      }
     }
-
-    this.drawObjects(state, scene, origin);
+    this.drawObjects(state, scene, origin, settings);
     const active = starts.testStarts.items.find(
       (item) => item.id === starts.testStarts.activeId,
     );
@@ -274,7 +278,11 @@ export class PlayModeSceneRenderer {
       scene,
     );
 
-    if (detail === "high" && this.pictureLayout) {
+    if (
+      settings.videoDetail === "high" &&
+      !settings.picturesInBackground &&
+      this.pictureLayout
+    ) {
       for (const picture of this.pictureLayout.front)
         this.drawPicture(picture, scene);
     }
@@ -398,6 +406,7 @@ export class PlayModeSceneRenderer {
     state: GameState,
     scene: WorldRenderScene,
     origin: WorldPoint,
+    { animatedObjects, stillObjects, gravityArrows }: PlaySettings,
   ) {
     if (this.objects !== state.level.objects) {
       this.objects = state.level.objects;
@@ -407,11 +416,12 @@ export class PlayModeSceneRenderer {
     const zoom = ppm / PPM;
     const targetSize = Math.max(1, Math.floor(OBJECT_FRAME_PX * zoom)) / ppm;
     const half = (OBJECT_FRAME_PX * zoom) / 2;
+    const frame = animatedObjects ? Math.floor(state.gameTime / 0.014) : 0;
     for (const { object, item } of this.objectItems) {
       if (!object.active || !isPointVisible(item.position, scene.viewport.rect))
         continue;
       const bob =
-        object.type === "killer"
+        !animatedObjects || stillObjects || object.type === "killer"
           ? 0
           : Math.trunc(
               5 * zoom * Math.sin(state.gameTime * 15.5 + object.floatingPhase),
@@ -422,6 +432,7 @@ export class PlayModeSceneRenderer {
       this.items.drawObject(
         {
           ...item,
+          gravity: gravityArrows ? item.gravity : undefined,
           position: {
             x: origin.x + left / ppm + targetSize / 2,
             y: origin.y - bottom / ppm - targetSize / 2,
@@ -436,8 +447,7 @@ export class PlayModeSceneRenderer {
             Math.floor(sprite.width / sourceWidth),
           );
           return {
-            sourceX:
-              (Math.floor(state.gameTime / 0.014) % frameCount) * sourceWidth,
+            sourceX: (frame % frameCount) * sourceWidth,
             sourceY: 0,
             sourceWidth,
             sourceHeight: Math.min(OBJECT_FRAME_PX, sprite.height),

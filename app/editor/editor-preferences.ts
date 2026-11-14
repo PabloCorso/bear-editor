@@ -16,6 +16,7 @@ import {
   DEFAULT_PLAY_MODE_ZOOM,
   defaultPlaySettings,
   loadPlayKeyBindings,
+  playFpsLimits,
 } from "./play-mode/play-settings";
 import type { EditorStore } from "./editor-store";
 import type {
@@ -117,6 +118,10 @@ export function loadEditorPreferences(): EditorPreferences {
       ...(preferences?.playSettings ?? {}),
       videoDetail:
         preferences?.playSettings?.videoDetail === "low" ? "low" : "high",
+      fpsLimit:
+        playFpsLimits.find(
+          (limit) => limit === preferences?.playSettings?.fpsLimit,
+        ) ?? defaultPlaySettings.fpsLimit,
       keyBindings: loadPlayKeyBindings(preferences?.playSettings?.keyBindings),
     },
     pictureSelection: normalizePictureSelectionSettings(

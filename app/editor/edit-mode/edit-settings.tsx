@@ -72,6 +72,7 @@ import {
   PLAY_MODE_MAX_ZOOM,
   PLAY_MODE_MIN_ZOOM,
   defaultPlaySettings,
+  playFpsLimits,
   type PlayRunEndBehavior,
   type PlayKeyBindings,
 } from "~/editor/play-mode/play-settings";
@@ -750,6 +751,24 @@ function PictureSelectionPreferences() {
   );
 }
 
+const playViewToggles = [
+  { key: "animatedObjects", label: "Animated Objects" },
+  { key: "stillObjects", label: "Still Objects" },
+  { key: "gravityArrows", label: "Gravity Arrows" },
+  { key: "picturesInBackground", label: "Pics In Background" },
+  { key: "showFps", label: "Show FPS" },
+] as const;
+
+const yesNoOptions = [
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+];
+
+const fpsLimitOptions = playFpsLimits.map((value) => ({
+  value,
+  label: value === "off" ? "Off" : value,
+}));
+
 export function PlaySettingsPanel() {
   const store = useEditorStore();
   const playModeZoom = usePlayModeZoom();
@@ -869,11 +888,14 @@ export function PlaySettingsPanel() {
         </div>
       </div>
       <div className="flex flex-col gap-3">
-        <SettingsSectionHeading title="View" />
+        <SettingsSectionHeading
+          title="View"
+          description="Adjust graphics, zoom, and frame rate."
+        />
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
           <label className="flex items-center justify-between">
             <span className="flex min-w-24 flex-col text-sm">
-              Video detail
+              Video Detail
               <span className="text-xs text-secondary">
                 Low hides grass and level decorations.
               </span>
@@ -890,13 +912,71 @@ export function PlaySettingsPanel() {
                 }
               }}
             >
-              <SelectTrigger className="h-9 w-32 shrink-0 px-3 font-normal">
+              <SelectTrigger
+                aria-label="Video Detail"
+                className="h-9 w-32 shrink-0 px-3 font-normal"
+              >
                 <SelectValue />
                 <SelectTriggerIcon />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="high">High</SelectItem>
                 <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          {playViewToggles.map(({ key, label }) => (
+            <label
+              key={key}
+              className="flex items-center justify-between gap-3 text-sm"
+            >
+              <span>{label}</span>
+              <Select
+                value={playSettings[key] ? "yes" : "no"}
+                items={yesNoOptions}
+                disabled={
+                  key === "stillObjects" && !playSettings.animatedObjects
+                }
+                onValueChange={(value) => {
+                  if (value) setPlaySettings({ [key]: value === "yes" });
+                }}
+              >
+                <SelectTrigger
+                  aria-label={label}
+                  className="h-9 w-32 shrink-0 px-3 font-normal"
+                >
+                  <SelectValue />
+                  <SelectTriggerIcon />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="yes">Yes</SelectItem>
+                  <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+          ))}
+          <label className="flex items-center justify-between gap-3 text-sm">
+            <span>FPS Limit</span>
+            <Select
+              value={playSettings.fpsLimit}
+              items={fpsLimitOptions}
+              onValueChange={(value) => {
+                if (value) setPlaySettings({ fpsLimit: value });
+              }}
+            >
+              <SelectTrigger
+                aria-label="FPS Limit"
+                className="h-9 w-32 shrink-0 px-3 font-normal"
+              >
+                <SelectValue />
+                <SelectTriggerIcon />
+              </SelectTrigger>
+              <SelectContent>
+                {fpsLimitOptions.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </label>
