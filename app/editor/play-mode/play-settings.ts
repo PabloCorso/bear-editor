@@ -11,8 +11,21 @@ export type PlayKeyBindings = {
 
 export type PlayRunEndBehavior = "restart" | "pause" | "exit";
 
+export type PlayVideoDetail = "high" | "low";
+
+export const MIN_PLAY_FPS_LIMIT = 1;
+export const MAX_PLAY_FPS_LIMIT = 999;
+
 export type PlaySettings = {
   runEndBehavior: PlayRunEndBehavior;
+  videoDetail: PlayVideoDetail;
+  animatedObjects: boolean;
+  stillObjects: boolean;
+  picturesInBackground: boolean;
+  gravityArrows: boolean;
+  showFps: boolean;
+  limitFps: boolean;
+  fpsLimit: number;
   keyBindings: PlayKeyBindings;
 };
 
@@ -23,6 +36,14 @@ export const DEFAULT_PLAY_MODE_ZOOM = 1.6;
 
 export const defaultPlaySettings: PlaySettings = {
   runEndBehavior: "pause",
+  videoDetail: "high",
+  animatedObjects: true,
+  stillObjects: false,
+  picturesInBackground: false,
+  gravityArrows: true,
+  showFps: false,
+  limitFps: false,
+  fpsLimit: 60,
   keyBindings: {
     throttle: "ArrowUp",
     brake: "ArrowDown",

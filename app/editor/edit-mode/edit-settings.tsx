@@ -72,6 +72,8 @@ import {
   PLAY_MODE_MAX_ZOOM,
   PLAY_MODE_MIN_ZOOM,
   defaultPlaySettings,
+  MAX_PLAY_FPS_LIMIT,
+  MIN_PLAY_FPS_LIMIT,
   type PlayRunEndBehavior,
   type PlayKeyBindings,
 } from "~/editor/play-mode/play-settings";
@@ -750,6 +752,13 @@ function PictureSelectionPreferences() {
   );
 }
 
+const playViewToggles = [
+  { key: "animatedObjects", label: "Animated Objects" },
+  { key: "stillObjects", label: "Still Objects" },
+  { key: "gravityArrows", label: "Gravity Arrows" },
+  { key: "picturesInBackground", label: "Pics In Background" },
+] as const;
+
 export function PlaySettingsPanel() {
   const store = useEditorStore();
   const playModeZoom = usePlayModeZoom();
@@ -871,9 +880,53 @@ export function PlaySettingsPanel() {
       <div className="flex flex-col gap-3">
         <SettingsSectionHeading
           title="View"
-          description="Remember the last zoom used in play mode."
+          description="Adjust graphics, zoom, and frame rate."
         />
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+          <label className="flex items-center justify-between">
+            <span className="text-sm">Video Detail</span>
+            <Select
+              value={playSettings.videoDetail}
+              items={[
+                { value: "high", label: "High" },
+                { value: "low", label: "Low" },
+              ]}
+              onValueChange={(value) => {
+                if (value === "high" || value === "low") {
+                  setPlaySettings({ videoDetail: value });
+                }
+              }}
+            >
+              <SelectTrigger
+                aria-label="Video Detail"
+                className="h-9 w-32 shrink-0 px-3 font-normal"
+              >
+                <SelectValue />
+                <SelectTriggerIcon />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          {playViewToggles.map(({ key, label }) => (
+            <label
+              key={key}
+              className="flex items-center justify-between gap-3 text-sm"
+            >
+              <span>{label}</span>
+              <Switch
+                checked={playSettings[key]}
+                disabled={
+                  key === "stillObjects" && !playSettings.animatedObjects
+                }
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ [key]: checked })
+                }
+              />
+            </label>
+          ))}
           <label className="flex items-center justify-between">
             <span className="flex min-w-24 flex-col text-sm">
               Zoom
@@ -896,6 +949,55 @@ export function PlaySettingsPanel() {
             />
           </label>
         </div>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-medium">Frame rate</legend>
+          <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Show FPS</span>
+              <Switch
+                checked={playSettings.showFps}
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ showFps: checked })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Limit FPS</span>
+              <Switch
+                checked={playSettings.limitFps}
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ limitFps: checked })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm sm:col-start-2">
+              <span>FPS Limit</span>
+              <NumberInput
+                aria-label="FPS Limit"
+                value={playSettings.fpsLimit}
+                min={MIN_PLAY_FPS_LIMIT}
+                max={MAX_PLAY_FPS_LIMIT}
+                disabled={!playSettings.limitFps}
+                format={{ maximumFractionDigits: 0 }}
+                className="w-32 justify-between"
+                inputProps={{ className: "min-w-0 flex-1" }}
+                onValueChange={(value) => {
+                  if (
+                    value !== null &&
+                    Number.isInteger(value) &&
+                    value >= MIN_PLAY_FPS_LIMIT &&
+                    value <= MAX_PLAY_FPS_LIMIT
+                  ) {
+                    setPlaySettings({ fpsLimit: value });
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-secondary">
+            The browser usually renders at up to your display’s refresh rate.
+          </p>
+        </fieldset>
       </div>
     </div>
   );

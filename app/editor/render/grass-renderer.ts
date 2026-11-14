@@ -105,6 +105,40 @@ export function composeGrassTexture({
   return composedCanvas;
 }
 
+export function composePlayGrass(
+  lgrAssets: LgrAssets,
+  polygons: WorldPoint[][],
+  origin: WorldPoint,
+): GrassTextureComposition[] {
+  const { qgrass, variants } = getGrassVariants(lgrAssets, true);
+  if (!qgrass || variants.length === 0) return [];
+
+  const chunks: GrassTextureComposition[] = [];
+  for (const vertices of polygons) {
+    const placements = calculateGrassPlacements(vertices, variants, origin);
+    let first = 0;
+    for (let i = 1; i <= placements.length; i++) {
+      const start = placements[first]!;
+      const next = placements[i];
+      if (
+        next &&
+        next.xPx - start.xPx < 512 &&
+        Math.abs(next.topYPx - start.topYPx) < 512
+      )
+        continue;
+
+      const chunk = composeGrassCanvas({
+        placements: placements.slice(first, i),
+        qgrass,
+        origin,
+      });
+      if (chunk) chunks.push(chunk);
+      first = i;
+    }
+  }
+  return chunks;
+}
+
 function scaleQgrass(qgrass: ImageBitmap, scale: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.floor(qgrass.width * scale));
@@ -118,14 +152,17 @@ function scaleQgrass(qgrass: ImageBitmap, scale: number): HTMLCanvasElement {
 
 function createGrassPolygonHeightmap(
   vertices: WorldPoint[],
+  origin?: WorldPoint,
 ): PolygonHeightmap | null {
   if (vertices.length < 3) return null;
 
-  const xOriginPx = Math.floor(
-    Math.min(
-      ...vertices.map((vertex) => vertex.x * ELMA_PIXELS_PER_WORLD_UNIT),
-    ),
-  );
+  const xOriginPx = origin
+    ? origin.x * ELMA_PIXELS_PER_WORLD_UNIT
+    : Math.floor(
+        Math.min(
+          ...vertices.map((vertex) => vertex.x * ELMA_PIXELS_PER_WORLD_UNIT),
+        ),
+      );
 
   let longestEdgeIndex = 0;
   let longestHorizontalSpan = 0;
@@ -139,7 +176,7 @@ function createGrassPolygonHeightmap(
 
     if (
       span > longestHorizontalSpan ||
-      (span === longestHorizontalSpan && averageY < longestAverageY)
+      (!origin && span === longestHorizontalSpan && averageY < longestAverageY)
     ) {
       longestHorizontalSpan = span;
       longestEdgeIndex = index;
@@ -182,6 +219,7 @@ function createGrassPolygonHeightmap(
       x0Px,
       currentXPx,
       yByXPx,
+      origin,
     );
 
     if (x0Px < 0 && yByXPx.length > 0) {
@@ -211,8 +249,9 @@ function createGrassPolygonHeightmap(
 function calculateGrassPlacements(
   vertices: WorldPoint[],
   variants: GrassVariant[],
+  origin?: WorldPoint,
 ): GrassPlacement[] {
-  const heightmap = createGrassPolygonHeightmap(vertices);
+  const heightmap = createGrassPolygonHeightmap(vertices, origin);
   if (!heightmap) return [];
 
   let currentXPx = heightmap.x0Px;
@@ -247,11 +286,12 @@ function calculateGrassPlacements(
       continue;
     }
 
-    const topYPx =
-      currentYPx - Math.ceil((bestVariant.heightPx - bestVariant.fallPx) / 2);
+    const topYPx = origin
+      ? currentYPx + 20 - bestVariant.heightPx + Math.max(0, bestVariant.fallPx)
+      : currentYPx - Math.ceil((bestVariant.heightPx - bestVariant.fallPx) / 2);
     placements.push({
       xPx: heightmap.xOriginPx + Math.floor(currentXPx),
-      topYPx: Math.floor(topYPx),
+      topYPx: origin ? topYPx : Math.floor(topYPx),
       variant: bestVariant,
     });
 
@@ -262,7 +302,7 @@ function calculateGrassPlacements(
   return placements;
 }
 
-function getGrassVariants(lgrAssets: LgrAssets) {
+function getGrassVariants(lgrAssets: LgrAssets, play = false) {
   const { qgrass, variants } = lgrAssets.getGrassSprites();
 
   return {
@@ -271,7 +311,10 @@ function getGrassVariants(lgrAssets: LgrAssets) {
       sprite,
       widthPx: sprite.width,
       heightPx: sprite.height,
-      fallPx: (sprite.height - GRASS_BASELINE_PX) * (isUp ? -1 : 1),
+      fallPx:
+        (play
+          ? Math.max(0, sprite.height - GRASS_BASELINE_PX)
+          : sprite.height - GRASS_BASELINE_PX) * (isUp ? -1 : 1),
       bordersPx: getGrassBorders(sprite),
     })),
   };
@@ -315,10 +358,13 @@ function getGrassBorders(sprite: ImageBitmap) {
 function composeGrassCanvas({
   placements,
   qgrass,
+  origin,
 }: {
   placements: GrassPlacement[];
   qgrass: ImageBitmap | null;
+  origin?: WorldPoint;
 }): GrassTextureComposition | null {
+  const grassMargin = origin ? 20 : QGRASS_TOP_EXTRA_PX;
   let minXPx = Number.POSITIVE_INFINITY;
   let minYPx = Number.POSITIVE_INFINITY;
   let maxXPx = Number.NEGATIVE_INFINITY;
@@ -326,13 +372,13 @@ function composeGrassCanvas({
 
   for (const placement of placements) {
     minXPx = Math.min(minXPx, placement.xPx);
-    minYPx = Math.min(minYPx, placement.topYPx - QGRASS_TOP_EXTRA_PX);
+    minYPx = Math.min(minYPx, placement.topYPx - grassMargin);
     maxXPx = Math.max(maxXPx, placement.xPx + placement.variant.widthPx);
     maxYPx = Math.max(maxYPx, placement.topYPx + placement.variant.heightPx);
   }
 
-  const widthPx = Math.max(1, maxXPx - minXPx);
-  const heightPx = Math.max(1, maxYPx - minYPx);
+  const widthPx = Math.max(1, Math.round(maxXPx - minXPx));
+  const heightPx = Math.max(1, Math.round(maxYPx - minYPx));
   const canvas = document.createElement("canvas");
   canvas.width = widthPx;
   canvas.height = heightPx;
@@ -345,13 +391,23 @@ function composeGrassCanvas({
 
   if (qgrass) {
     const scale = ELMA_PIXELS_PER_WORLD_UNIT / 100;
-    const scaledQgrass = scaleQgrass(qgrass, scale);
+    const scaledQgrass = origin ? qgrass : scaleQgrass(qgrass, scale);
     const qgrassPattern = canvasCtx.createPattern(scaledQgrass, "repeat");
     if (qgrassPattern) {
       const mod = (value: number, modulus: number) =>
         ((value % modulus) + modulus) % modulus;
-      const offsetX = -mod(minXPx, scaledQgrass.width);
-      const offsetY = -mod(minYPx, scaledQgrass.height);
+      const offsetX = -mod(
+        origin
+          ? Math.round(minXPx - origin.x * ELMA_PIXELS_PER_WORLD_UNIT)
+          : minXPx,
+        scaledQgrass.width,
+      );
+      const offsetY = -mod(
+        origin
+          ? Math.round(minYPx - origin.y * ELMA_PIXELS_PER_WORLD_UNIT)
+          : minYPx,
+        scaledQgrass.height,
+      );
 
       canvasCtx.save();
       canvasCtx.translate(offsetX, offsetY);
@@ -375,7 +431,14 @@ function composeGrassCanvas({
   maskCtx.fillStyle = "#ffffff";
 
   for (const placement of placements) {
-    drawLocalGrassTextureMask(maskCtx, placement, minXPx, minYPx);
+    drawLocalGrassTextureMask(
+      maskCtx,
+      placement,
+      minXPx,
+      minYPx,
+      grassMargin,
+      origin ? 0 : 1,
+    );
   }
 
   canvasCtx.globalCompositeOperation = "destination-in";
@@ -402,13 +465,16 @@ function drawLocalGrassTextureMask(
   placement: GrassPlacement,
   minXPx: number,
   minYPx: number,
+  grassMargin: number,
+  edgeOverlap: number,
 ) {
   const xPx = placement.xPx - minXPx;
   const topYPx = placement.topYPx - minYPx;
-  const maskTopYPx = topYPx - QGRASS_TOP_EXTRA_PX;
+  const maskTopYPx = topYPx - grassMargin;
 
   for (let index = 0; index < placement.variant.bordersPx.length; index += 1) {
-    const borderYPx = topYPx + placement.variant.bordersPx[index]! + 1;
+    const borderYPx =
+      topYPx + placement.variant.bordersPx[index]! + edgeOverlap;
     ctx.fillRect(xPx + index, maskTopYPx, 1, borderYPx - maskTopYPx);
   }
 }
@@ -420,11 +486,17 @@ function appendGrassLineHeightmap(
   x0Px: number,
   currentXPx: number,
   yByXPx: number[],
+  origin?: WorldPoint,
 ) {
   const x1Px = toLocalPixel(from.x, xOriginPx);
-  const y1Px = toPixel(from.y);
+  const yOriginPx = (origin?.y ?? 0) * ELMA_PIXELS_PER_WORLD_UNIT;
+  const y1Px = origin
+    ? from.y * ELMA_PIXELS_PER_WORLD_UNIT - yOriginPx
+    : toPixel(from.y);
   const x2Px = toLocalPixel(to.x, xOriginPx);
-  const y2Px = toPixel(to.y);
+  const y2Px = origin
+    ? to.y * ELMA_PIXELS_PER_WORLD_UNIT - yOriginPx
+    : toPixel(to.y);
 
   if (x1Px > x2Px) {
     return currentXPx;
@@ -436,7 +508,7 @@ function appendGrassLineHeightmap(
   if (nextCurrentXPx < 0) {
     nextCurrentXPx = x1Px;
     nextX0Px = x1Px;
-    yByXPx[0] = y1Px;
+    yByXPx[0] = origin ? Math.ceil(y1Px) + yOriginPx : y1Px;
   }
 
   if (x1Px >= x2Px) {
@@ -447,12 +519,15 @@ function appendGrassLineHeightmap(
     return nextCurrentXPx;
   }
 
-  for (let xPx = x1Px; xPx <= x2Px; xPx += 1) {
+  const endXPx = origin ? Math.min(x2Px, nextX0Px + 9999) : x2Px;
+  for (let xPx = x1Px; xPx <= endXPx; xPx += 1) {
     if (xPx < nextCurrentXPx) continue;
 
     const t = (xPx - x1Px) / (x2Px - x1Px);
     const yPx = Math.trunc(y1Px + (y2Px - y1Px) * t);
-    yByXPx[xPx - nextX0Px] = yPx;
+    yByXPx[xPx - nextX0Px] = origin
+      ? Math.ceil(y1Px + (y2Px - y1Px) * t) + yOriginPx
+      : yPx;
     nextCurrentXPx = xPx;
   }
 

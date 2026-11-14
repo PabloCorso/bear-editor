@@ -34,6 +34,7 @@ import {
   PLAY_MODE_MAX_ZOOM,
   PLAY_MODE_MIN_ZOOM,
   type PlayRunEndBehavior,
+  type PlaySettings,
 } from "~/editor/play-mode/play-settings";
 import { elmaLevelFromEditorState } from "~/editor/helpers/level-parser";
 import { convertLevelToGameData } from "~/editor/play-mode/level-converter";
@@ -44,6 +45,8 @@ import {
   getTimeCentiseconds,
   type GameState,
 } from "~/editor/play-mode/engine/game/game-loop";
+import { Vec2 } from "~/editor/play-mode/engine/core/vec2";
+import { correctVertexPrecision } from "~/editor/helpers/polygon-helpers";
 import { RideHistory } from "~/editor/play-mode/engine/game/ride-history";
 import { formatShortcutCode } from "~/editor/edit-mode/toolbars/keyboard-shortcuts";
 import type { LevelData } from "~/editor/play-mode/engine/level";
@@ -51,12 +54,8 @@ import {
   DEFAULT_KEYS,
   InputManager,
 } from "~/editor/play-mode/engine/input-manager";
-import {
-  createPlayModeRenderer,
-  type PlayModeRenderer,
-} from "~/editor/play-mode/scene/renderer";
+import { PlayModeSceneRenderer } from "~/editor/play-mode/scene/play-mode-scene-renderer";
 import { WebGLInitializationError } from "~/editor/render/webgl-render-context";
-import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import { ToolButton } from "~/components/tool-button";
 
 const PLAY_MODE_WHEEL_ZOOM_STEP = 420;
@@ -122,11 +121,7 @@ function getActiveMobileControlState(
   };
 }
 
-export function PlayModeOverlay({
-  rendererBackend = "webgl",
-}: {
-  rendererBackend?: WorldSceneRendererBackend;
-}) {
+export function PlayModeOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeMobilePointersRef = useRef<Map<number, PlayModeMobileControlId>>(
@@ -155,8 +150,8 @@ export function PlayModeOverlay({
     available: false,
     active: false,
   });
-  const activeStartName = useEditor((state) => activeTestStart(state).name);
-  const playTimeTextRef = useRef<HTMLDivElement>(null);
+  const playTimeTextRef = useRef<HTMLSpanElement>(null);
+  const fpsTextRef = useRef<HTMLSpanElement>(null);
   const lastPlayTimeRef = useRef("00:00,00");
   const { setPlayModeZoom, stopPlayMode } = useEditorActions();
   const [playSettingsOpen, setPlaySettingsOpen] = useState(false);
@@ -423,13 +418,9 @@ export function PlayModeOverlay({
         return;
       }
 
-      let renderer: PlayModeRenderer;
+      let renderer: PlayModeSceneRenderer;
       try {
-        renderer = createPlayModeRenderer({
-          canvas,
-          lgrAssets: lgr,
-          backend: rendererBackend,
-        });
+        renderer = new PlayModeSceneRenderer(canvas, lgr);
       } catch (error) {
         if (!(error instanceof WebGLInitializationError)) throw error;
         stopPlayMode();
@@ -459,8 +450,10 @@ export function PlayModeOverlay({
       syncStoredZoom(gameState.camera.zoom);
       updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
 
+      let redraw = true;
       const resize = () => {
         renderer.resize();
+        redraw = true;
       };
 
       const observer = new ResizeObserver(() => resize());
@@ -492,12 +485,18 @@ export function PlayModeOverlay({
         const currentZoom = gameState.camera.zoom;
         const active = activeTestStart(store.getState());
         // The active start can change during this play session after a capture.
-        levelData = convertLevelToGameData(
-          elmaLevelFromEditorState({
-            ...store.getState(),
-            start: active.position,
-          }),
-        );
+        const start = correctVertexPrecision(active.position);
+        levelData = {
+          ...levelData,
+          objects: levelData.objects.map((object) =>
+            object.type === "start"
+              ? {
+                  ...object,
+                  r: new Vec2(start.x, start.y),
+                }
+              : object,
+          ),
+        };
         gameState = createGame(levelData, input, keyBindingsRef.current);
         history = new RideHistory(gameState, active.ride);
         gameStateRef.current = gameState;
@@ -534,6 +533,70 @@ export function PlayModeOverlay({
         rewindPointerRef.current = false;
       };
       window.addEventListener("blur", releaseRewind);
+      let lastRenderedSettings: PlaySettings | undefined;
+      let lastRenderedZoom = gameState.camera.zoom;
+      let nextRenderTime = 0;
+      let fpsSampleStart: number | undefined;
+      let framesDrawn = 0;
+
+      const resetFpsSample = () => {
+        fpsSampleStart = undefined;
+        framesDrawn = 0;
+        if (fpsTextRef.current) fpsTextRef.current.textContent = "";
+      };
+
+      const render = (timestamp: number, paused: boolean) => {
+        const { start, testStarts, playSettings } = store.getState();
+        const viewChanged =
+          redraw ||
+          playSettings !== lastRenderedSettings ||
+          (paused && gameState.camera.zoom !== lastRenderedZoom);
+
+        if (paused && !viewChanged) return;
+
+        if (viewChanged) nextRenderTime = timestamp;
+        const interval = playSettings.limitFps
+          ? 1000 / playSettings.fpsLimit
+          : 0;
+
+        // Keep input and simulation on every animation callback. Carry the
+        // render deadline forward so limits between refresh rates average out.
+        if (timestamp + 0.5 < nextRenderTime) return;
+        nextRenderTime = interval
+          ? nextRenderTime +
+            Math.max(
+              1,
+              Math.floor((timestamp - nextRenderTime) / interval) + 1,
+            ) *
+              interval
+          : timestamp;
+
+        if (
+          playSettings.showFps !== lastRenderedSettings?.showFps ||
+          playSettings.limitFps !== lastRenderedSettings?.limitFps ||
+          playSettings.fpsLimit !== lastRenderedSettings?.fpsLimit
+        ) {
+          resetFpsSample();
+        }
+        renderer.render(gameState, playSettings, { start, testStarts });
+        lastRenderedSettings = playSettings;
+        lastRenderedZoom = gameState.camera.zoom;
+        redraw = false;
+
+        const fpsText = fpsTextRef.current;
+        if (!paused && fpsText) {
+          fpsSampleStart ??= timestamp;
+          const elapsed = timestamp - fpsSampleStart;
+          if (elapsed >= 500) {
+            fpsText.textContent =
+              Math.round((framesDrawn * 1000) / elapsed) + " FPS";
+            fpsSampleStart = timestamp;
+            framesDrawn = 0;
+          }
+          framesDrawn++;
+        }
+      };
+
       const loop = (timestamp: number) => {
         const wallSeconds = Math.min(
           Math.max(0, (timestamp - lastFrameTimestamp) / 1000),
@@ -541,6 +604,8 @@ export function PlayModeOverlay({
         );
         lastFrameTimestamp = timestamp;
         if (settingsOpenRef.current || document.hidden) {
+          if (!document.hidden) render(timestamp, true);
+          resetFpsSample();
           gameState.lastTimestamp = timestamp;
           rewindPointerRef.current = false;
           input.update();
@@ -612,16 +677,7 @@ export function PlayModeOverlay({
           return currentState;
         });
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
-        renderer.render(gameState, {
-          testStartState: {
-            start: store.getState().start,
-            testStarts: store.getState().testStarts,
-          },
-          visibility: {
-            ...store.getState().levelVisibility,
-            showGrassBounds: false,
-          },
-        });
+        render(timestamp, false);
 
         if (gameState.result === "escaped") {
           stopPlayMode();
@@ -641,6 +697,7 @@ export function PlayModeOverlay({
         captureRequestedRef.current = false;
         canvas.removeEventListener("wheel", handleWheel);
         observer.disconnect();
+        renderer.destroy();
         releaseMobileControls();
         lastCanvasTapRef.current = null;
         restartRequestedRef.current = false;
@@ -649,14 +706,7 @@ export function PlayModeOverlay({
         input.destroy();
       };
     },
-    [
-      lgr,
-      releaseMobileControls,
-      rendererBackend,
-      store,
-      stopPlayMode,
-      syncStoredZoom,
-    ],
+    [lgr, releaseMobileControls, store, stopPlayMode, syncStoredZoom],
   );
 
   return (
@@ -664,20 +714,8 @@ export function PlayModeOverlay({
       ref={containerRef}
       className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[1px] select-none"
     >
-      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-wrap items-center justify-end gap-3">
-        <div
-          ref={playTimeTextRef}
-          className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
-        >
-          {lastPlayTimeRef.current}
-          <div
-            aria-live="polite"
-            className="max-w-48 truncate text-xs font-normal text-secondary"
-          >
-            {activeStartName}
-          </div>
-        </div>
-        <Toolbar className="pointer-events-auto gap-2">
+      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <Toolbar className="pointer-events-auto gap-2 sm:order-last">
           <ToolButton
             name="Play settings"
             onClick={() => handlePlaySettingsOpenChange(true)}
@@ -754,6 +792,20 @@ export function PlayModeOverlay({
             <StopIcon weight="fill" />
           </ToolButton>
         </Toolbar>
+        <div className="flex items-baseline gap-3 whitespace-nowrap">
+          {playSettings.showFps ? (
+            <span
+              ref={fpsTextRef}
+              className="font-mono text-sm text-primary tabular-nums"
+            />
+          ) : null}
+          <span
+            ref={playTimeTextRef}
+            className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
+          >
+            {lastPlayTimeRef.current}
+          </span>
+        </div>
       </div>
       <div className="pointer-events-none absolute right-4 bottom-4 z-10 flex items-center gap-2">
         <Toolbar className="pointer-events-auto w-fit gap-2">
