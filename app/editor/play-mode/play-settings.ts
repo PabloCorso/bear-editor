@@ -13,8 +13,8 @@ export type PlayRunEndBehavior = "restart" | "pause" | "exit";
 
 export type PlayVideoDetail = "high" | "low";
 
-export const playFpsLimits = ["off", "60", "100", "144", "240", "500"] as const;
-export type PlayFpsLimit = (typeof playFpsLimits)[number];
+export const MIN_PLAY_FPS_LIMIT = 1;
+export const MAX_PLAY_FPS_LIMIT = 999;
 
 export type PlaySettings = {
   runEndBehavior: PlayRunEndBehavior;
@@ -24,7 +24,8 @@ export type PlaySettings = {
   picturesInBackground: boolean;
   gravityArrows: boolean;
   showFps: boolean;
-  fpsLimit: PlayFpsLimit;
+  limitFps: boolean;
+  fpsLimit: number;
   keyBindings: PlayKeyBindings;
 };
 
@@ -41,7 +42,8 @@ export const defaultPlaySettings: PlaySettings = {
   picturesInBackground: false,
   gravityArrows: true,
   showFps: false,
-  fpsLimit: "off",
+  limitFps: false,
+  fpsLimit: 60,
   keyBindings: {
     throttle: "ArrowUp",
     brake: "ArrowDown",

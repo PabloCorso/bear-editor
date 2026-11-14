@@ -72,7 +72,8 @@ import {
   PLAY_MODE_MAX_ZOOM,
   PLAY_MODE_MIN_ZOOM,
   defaultPlaySettings,
-  playFpsLimits,
+  MAX_PLAY_FPS_LIMIT,
+  MIN_PLAY_FPS_LIMIT,
   type PlayRunEndBehavior,
   type PlayKeyBindings,
 } from "~/editor/play-mode/play-settings";
@@ -756,18 +757,7 @@ const playViewToggles = [
   { key: "stillObjects", label: "Still Objects" },
   { key: "gravityArrows", label: "Gravity Arrows" },
   { key: "picturesInBackground", label: "Pics In Background" },
-  { key: "showFps", label: "Show FPS" },
 ] as const;
-
-const yesNoOptions = [
-  { value: "yes", label: "Yes" },
-  { value: "no", label: "No" },
-];
-
-const fpsLimitOptions = playFpsLimits.map((value) => ({
-  value,
-  label: value === "off" ? "Off" : value,
-}));
 
 export function PlaySettingsPanel() {
   const store = useEditorStore();
@@ -931,55 +921,17 @@ export function PlaySettingsPanel() {
               className="flex items-center justify-between gap-3 text-sm"
             >
               <span>{label}</span>
-              <Select
-                value={playSettings[key] ? "yes" : "no"}
-                items={yesNoOptions}
+              <Switch
+                checked={playSettings[key]}
                 disabled={
                   key === "stillObjects" && !playSettings.animatedObjects
                 }
-                onValueChange={(value) => {
-                  if (value) setPlaySettings({ [key]: value === "yes" });
-                }}
-              >
-                <SelectTrigger
-                  aria-label={label}
-                  className="h-9 w-32 shrink-0 px-3 font-normal"
-                >
-                  <SelectValue />
-                  <SelectTriggerIcon />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">Yes</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ [key]: checked })
+                }
+              />
             </label>
           ))}
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>FPS Limit</span>
-            <Select
-              value={playSettings.fpsLimit}
-              items={fpsLimitOptions}
-              onValueChange={(value) => {
-                if (value) setPlaySettings({ fpsLimit: value });
-              }}
-            >
-              <SelectTrigger
-                aria-label="FPS Limit"
-                className="h-9 w-32 shrink-0 px-3 font-normal"
-              >
-                <SelectValue />
-                <SelectTriggerIcon />
-              </SelectTrigger>
-              <SelectContent>
-                {fpsLimitOptions.map(({ value, label }) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
           <label className="flex items-center justify-between">
             <span className="flex min-w-24 flex-col text-sm">
               Zoom
@@ -1002,6 +954,55 @@ export function PlaySettingsPanel() {
             />
           </label>
         </div>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-medium">Frame rate</legend>
+          <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Show FPS</span>
+              <Switch
+                checked={playSettings.showFps}
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ showFps: checked })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Limit FPS</span>
+              <Switch
+                checked={playSettings.limitFps}
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ limitFps: checked })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm sm:col-start-2">
+              <span>FPS Limit</span>
+              <NumberInput
+                aria-label="FPS Limit"
+                value={playSettings.fpsLimit}
+                min={MIN_PLAY_FPS_LIMIT}
+                max={MAX_PLAY_FPS_LIMIT}
+                disabled={!playSettings.limitFps}
+                format={{ maximumFractionDigits: 0 }}
+                className="w-32 justify-between"
+                inputProps={{ className: "min-w-0 flex-1" }}
+                onValueChange={(value) => {
+                  if (
+                    value !== null &&
+                    Number.isInteger(value) &&
+                    value >= MIN_PLAY_FPS_LIMIT &&
+                    value <= MAX_PLAY_FPS_LIMIT
+                  ) {
+                    setPlaySettings({ fpsLimit: value });
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-secondary">
+            The browser usually renders at up to your display’s refresh rate.
+          </p>
+        </fieldset>
       </div>
     </div>
   );

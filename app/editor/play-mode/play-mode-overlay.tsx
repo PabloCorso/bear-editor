@@ -556,10 +556,9 @@ export function PlayModeOverlay() {
         if (paused && !viewChanged) return;
 
         if (viewChanged) nextRenderTime = timestamp;
-        const interval =
-          playSettings.fpsLimit === "off"
-            ? 0
-            : 1000 / Number(playSettings.fpsLimit);
+        const interval = playSettings.limitFps
+          ? 1000 / playSettings.fpsLimit
+          : 0;
 
         // Keep input and simulation on every animation callback. Carry the
         // render deadline forward so limits between refresh rates average out.
@@ -575,6 +574,7 @@ export function PlayModeOverlay() {
 
         if (
           playSettings.showFps !== lastRenderedSettings?.showFps ||
+          playSettings.limitFps !== lastRenderedSettings?.limitFps ||
           playSettings.fpsLimit !== lastRenderedSettings?.fpsLimit
         ) {
           resetFpsSample();
