@@ -150,7 +150,6 @@ export function PlayModeOverlay() {
     available: false,
     active: false,
   });
-  const activeStartName = useEditor((state) => activeTestStart(state).name);
   const playTimeTextRef = useRef<HTMLSpanElement>(null);
   const fpsTextRef = useRef<HTMLSpanElement>(null);
   const lastPlayTimeRef = useRef("00:00,00");
@@ -800,15 +799,12 @@ export function PlayModeOverlay() {
               className="font-mono text-sm text-primary tabular-nums"
             />
           ) : null}
-          <div className="text-right font-mono text-2xl font-bold text-primary tabular-nums">
-            <span ref={playTimeTextRef}>{lastPlayTimeRef.current}</span>
-            <div
-              aria-live="polite"
-              className="max-w-48 truncate text-xs font-normal text-secondary"
-            >
-              {activeStartName}
-            </div>
-          </div>
+          <span
+            ref={playTimeTextRef}
+            className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
+          >
+            {lastPlayTimeRef.current}
+          </span>
         </div>
       </div>
       <div className="pointer-events-none absolute right-4 bottom-4 z-10 flex items-center gap-2">
