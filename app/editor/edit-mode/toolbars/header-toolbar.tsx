@@ -773,7 +773,7 @@ function MainDropdownMenu({
               iconBefore={<LaptopIcon />}
               onClick={onDownloadDesktop}
             >
-              Download desktop app
+              Get desktop app
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
