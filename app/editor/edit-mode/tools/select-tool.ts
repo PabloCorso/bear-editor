@@ -36,6 +36,7 @@ import { getKuskiSelectionCircles } from "~/editor/kuski-geometry";
 import {
   SelectionClipboardController,
   getClipboardCenter,
+  placeClipboardAtAnchor,
   type SelectionClipboard,
   type PastedSelection,
 } from "./selection-clipboard";
@@ -2065,9 +2066,20 @@ export class SelectTool extends Tool<SelectToolState> {
     return false;
   }
 
-  private commitPaste(pasted: PastedSelection): boolean {
+  public importLevelContent(level: SelectionClipboard, anchor: Position): void {
+    const pasted = placeClipboardAtAnchor(level, anchor);
+    if (!pasted) throw new Error("This level has no content to import.");
+
+    this.store.getState().actions.activateTool(this.meta.id);
+    this.commitPaste(pasted, "level.import");
+  }
+
+  private commitPaste(
+    pasted: PastedSelection,
+    kind: EditorHistoryActionKind = "selection.paste",
+  ): boolean {
     const { state, setToolState } = this.getState();
-    this.edit("selection.paste", () => {
+    this.edit(kind, () => {
       if (pasted.polygons.length > 0) {
         state.actions.setPolygons([...state.polygons, ...pasted.polygons]);
       }

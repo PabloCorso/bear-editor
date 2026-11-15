@@ -98,6 +98,19 @@ async function start() {
   if (!devUrl)
     editorSession.protocol.handle("https", async (request) => {
       const url = new URL(request.url);
+      // The local HTTPS handler also sees outbound requests. Allow only
+      // Umami Cloud's tracker and collection endpoint through to the network.
+      if (
+        (url.href === "https://cloud.umami.is/script.js" &&
+          request.method === "GET") ||
+        (url.href === "https://gateway.umami.is/api/send" &&
+          ["OPTIONS", "POST"].includes(request.method))
+      ) {
+        return net.fetch(request, {
+          bypassCustomProtocolHandlers: true,
+          redirect: "error",
+        });
+      }
       if (url.origin !== origin || request.method !== "GET")
         return new Response(null, { status: 403 });
       try {

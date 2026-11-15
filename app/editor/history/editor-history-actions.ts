@@ -1,4 +1,5 @@
 export const editorHistoryActionLabels = {
+  "level.import": "Import level",
   "level.rename": "Rename level",
   "texture.change-lgr": "Change LGR",
   "texture.change-ground": "Change ground texture",

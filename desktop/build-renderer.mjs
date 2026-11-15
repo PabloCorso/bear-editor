@@ -9,7 +9,7 @@ const cli = path.join(
   "bin.js",
 );
 const build = spawnSync(process.execPath, [cli, "build"], {
-  env: { ...process.env, BEAR_DESKTOP: "1", VITE_UMAMI_WEBSITE_ID: "" },
+  env: { ...process.env, BEAR_DESKTOP: "1", VITE_BEAR_DESKTOP: "1" },
   stdio: "inherit",
 });
 if (build.error) throw build.error;

@@ -1,11 +1,22 @@
 export const analyticsWebsiteId = import.meta.env.VITE_UMAMI_WEBSITE_ID;
 export const analyticsScriptUrl =
   import.meta.env.VITE_UMAMI_SCRIPT_URL || "https://cloud.umami.is/script.js";
-export const analyticsDomains = "beareditor.com,www.beareditor.com";
+export const analyticsPlatform =
+  import.meta.env.VITE_BEAR_DESKTOP === "1" ? "desktop" : "web";
+export const analyticsDomains =
+  analyticsPlatform === "desktop"
+    ? "bear-editor.invalid"
+    : "beareditor.com,www.beareditor.com";
 export const analyticsEnabled =
   import.meta.env.PROD && Boolean(analyticsWebsiteId);
 
-type AnalyticsEvent = "first_edit" | "playtest_started" | "level_saved";
+type AnalyticsEvent =
+  | "first_edit"
+  | "playtest_started"
+  | "level_saved"
+  | "level_opened"
+  | "level_created"
+  | "level_folder_set";
 
 declare global {
   interface Window {

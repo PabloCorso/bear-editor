@@ -1,4 +1,5 @@
 export const GO_TO_PLAY_START_SHORTCUT = "Shift + Enter";
+export const FIT_TO_VIEW_SHORTCUT = "Z";
 export const OPEN_AI_PROMPT_LIBRARY_SHORTCUT = "Shift + A";
 export const OPEN_KEYBOARD_SHORTCUTS_SHORTCUT = "?";
 

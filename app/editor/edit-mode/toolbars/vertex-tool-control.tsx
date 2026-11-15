@@ -13,6 +13,7 @@ import {
   useEditorToolState,
 } from "~/editor/use-editor-store";
 import {
+  type VertexTool,
   type VertexToolState,
   type VertexToolVariant,
 } from "~/editor/edit-mode/tools/vertex-tool";
@@ -26,9 +27,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-export function getAutoGrassAllShortcut(modifier: string) {
-  return `${modifier} + Shift + G`;
-}
 
 const polygonOperations = [
   "union",
@@ -69,6 +67,7 @@ export function VertexToolControl(props: ToolControlButtonProps) {
       }
     >
       <VertexToolbar
+        isLoading={props.isLoading}
         onVariantChange={(variant: VertexToolVariant) => {
           activateTool(defaultTools.vertex.id, variant);
         }}
@@ -84,10 +83,16 @@ const polygonVariants = [
 ] as const satisfies readonly VertexToolVariant[];
 
 type VertexToolbarProps = ToolbarProps & {
+  isLoading?: boolean;
   onVariantChange: (variant: VertexToolVariant) => void;
 };
 
-function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
+function VertexToolbar({
+  isLoading,
+  onVariantChange,
+  ...props
+}: VertexToolbarProps) {
+  const { getTool } = useEditorActions();
   const activeToolId = useEditor((state) => state.activeToolId);
   const isVertexActive = activeToolId === defaultTools.vertex.id;
   const vertexTool = useEditorToolState<VertexToolState>(
@@ -132,6 +137,17 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         showLabel
         isActive={isVertexActive && vertexTool?.variant === "autoGrass"}
         onClick={() => onVariantChange("autoGrass")}
+      >
+        <VertexIcon {...getVertexIconProps("autoGrass")} />
+      </ToolControlButton>
+      <ToolControlButton
+        name="AutoGrass level"
+        size="sm"
+        showLabel
+        disabled={isLoading}
+        onClick={() =>
+          getTool<VertexTool>(defaultTools.vertex.id)?.autoGrassAll()
+        }
       >
         <VertexIcon {...getVertexIconProps("autoGrass")} />
       </ToolControlButton>

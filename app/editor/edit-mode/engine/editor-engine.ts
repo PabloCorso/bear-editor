@@ -52,7 +52,12 @@ import {
   screenToWorld,
   worldToScreen,
 } from "~/editor/helpers/coordinate-helpers";
-import { Clip, type Picture, type Position } from "~/editor/elma-types";
+import {
+  Clip,
+  type EditorLevel,
+  type Picture,
+  type Position,
+} from "~/editor/elma-types";
 import { getDefaultLevel } from "~/editor/helpers/level-parser";
 import { checkModifierKey } from "~/utils/misc";
 import {
@@ -94,6 +99,7 @@ import {
 import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
 import type { Polygon } from "~/editor/elma-types";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
+import { FIT_TO_VIEW_SHORTCUT } from "../toolbars/keyboard-shortcuts";
 
 type EditorEngineOptions = {
   initialDocument?: EditorDocumentInput;
@@ -967,6 +973,14 @@ export class EditorEngine {
       return;
     }
     if (isUserTyping()) return;
+    if (
+      event.target instanceof Element &&
+      (event.target.closest('[role="menu"]') ||
+        (event.target.closest('[aria-haspopup="menu"]') &&
+          ["Enter", " ", "ArrowUp", "ArrowDown"].includes(event.key)))
+    ) {
+      return;
+    }
 
     if (state.isPlayMode) {
       if (event.key === "Escape") {
@@ -979,18 +993,6 @@ export class EditorEngine {
     const keyboardContext = this.getKeyboardEventContext(state);
     const key = event.key.toUpperCase();
     const modifier = checkModifierKey(event);
-
-    if (
-      key === "G" &&
-      event.shiftKey &&
-      modifier &&
-      !event.altKey &&
-      !event.isComposing
-    ) {
-      if (!event.repeat) this.autoGrassAll(state);
-      event.preventDefault();
-      return;
-    }
 
     const vertexVariantShortcuts: Partial<Record<string, VertexToolVariant>> =
       event.shiftKey
@@ -1204,8 +1206,21 @@ export class EditorEngine {
       return;
     }
 
-    if (event.key === "0" && checkModifierKey(event)) {
-      this.fitToView();
+    if (
+      key === FIT_TO_VIEW_SHORTCUT &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !event.isComposing &&
+      !event.defaultPrevented &&
+      !(
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"]')
+      )
+    ) {
+      if (!event.repeat) this.fitToView();
+      event.preventDefault();
       return;
     }
 
@@ -1258,14 +1273,6 @@ export class EditorEngine {
     shortcuts[event.key]?.();
   };
 
-  private autoGrassAll(state: EditorState): boolean {
-    return (
-      state.actions
-        .getTool<VertexTool>(defaultTools.vertex.id)
-        ?.autoGrassAll() ?? false
-    );
-  }
-
   private handleKeyUp = (event: KeyboardEvent) => {
     this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
@@ -1302,6 +1309,15 @@ export class EditorEngine {
 
   public redo() {
     this.store.history.redo();
+  }
+
+  public importLevel(level: EditorLevel): void {
+    const state = this.store.getState();
+    if (state.isPlayMode) return;
+
+    state.actions
+      .getTool<SelectTool>("select")
+      ?.importLevelContent(level, this.getKeyboardEventContext(state).worldPos);
   }
 
   private selectAllVisible(): boolean {

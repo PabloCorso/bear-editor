@@ -1,5 +1,5 @@
+import { trackEvent } from "~/analytics";
 import { DesktopDownloadDialog } from "./desktop-download-dialog";
-import { GridMenu } from "./grid-menu";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { getLevelTopology } from "~/editor/helpers/level-topology";
@@ -35,10 +35,10 @@ import {
 } from "~/components/ui/dropdown-menu";
 import {
   LaptopIcon,
-  DotsThreeVerticalIcon,
   CaretRightIcon,
   CaretLeftIcon,
   CaretDownIcon,
+  FileArrowDownIcon,
   FilePlusIcon,
   FloppyDiskIcon,
   FolderOpenIcon,
@@ -93,12 +93,6 @@ import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import { ExportImageDialog } from "./export-image-dialog";
 import type { ImageExport } from "~/editor/helpers/image-export";
 
-import {
-  getAutoGrassAllShortcut,
-  VertexIcon,
-  getVertexIconProps,
-} from "./vertex-tool-control";
-import type { VertexTool } from "../tools/vertex-tool";
 import { DesktopUpdate } from "~/editor/desktop-update";
 
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
@@ -160,9 +154,17 @@ export function HeaderToolbar({
   const [highlightLevelFolder, setHighlightLevelFolder] = useState(false);
   const topologyOpen = useEditor((state) => state.topologyInspection !== null);
   const { setTopologyInspection } = useEditorActions();
+  const levelImportInput = useRef<HTMLInputElement>(null);
+  const importSessionId = useRef<string | null>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
   const menuActions = useMainMenuActions();
   const { handleNew, handleOpenFile, handleSave } = menuActions;
   const store = useEditorStore();
+  const openLevelImportPicker = () => {
+    importSessionId.current =
+      store.getState().documentSession.clipboardSessionId;
+    levelImportInput.current?.click();
+  };
 
   const [imageExport, setImageExport] = useState<{
     snapshot: ImageExport;
@@ -248,6 +250,57 @@ export function HeaderToolbar({
 
   return (
     <>
+      <input
+        ref={levelImportInput}
+        type="file"
+        accept=".lev"
+        hidden
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const sessionId = importSessionId.current;
+          try {
+            const level = await editorLevelFromFile(file);
+            if (
+              store.getState().documentSession.clipboardSessionId !== sessionId
+            )
+              return;
+            engineRef.current?.importLevel(level);
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Could not import this level.",
+            );
+          }
+        }}
+      />
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const canvas = document.querySelector("canvas");
+          if (!canvas) return;
+          try {
+            await importReferenceImage(store, file, {
+              width: canvas.clientWidth,
+              height: canvas.clientHeight,
+            });
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Could not import this image.",
+            );
+          }
+        }}
+      />
       {imageExport && (
         <ExportImageDialog
           snapshot={imageExport.snapshot}
@@ -258,6 +311,9 @@ export function HeaderToolbar({
       <div className={cn("relative z-10 col-span-full", className)} {...props}>
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
+            onImportLevel={openLevelImportPicker}
+            onImportImage={() => imageInput.current?.click()}
+            onOpenProperties={() => setPropertiesOpen(true)}
             actions={menuActions}
             onDownloadDesktop={
               isDesktop ? undefined : () => setDownloadOpen(true)
@@ -270,10 +326,6 @@ export function HeaderToolbar({
             }}
           />
           <LevelVisibilityControl />
-          <LevelOptionsMenu
-            isLoading={isLoading}
-            onOpenProperties={() => setPropertiesOpen(true)}
-          />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
           <TopologyCheck isLoading={isLoading} />
@@ -284,6 +336,9 @@ export function HeaderToolbar({
         <div className="hidden grid-cols-[120px_minmax(0,1fr)_120px] gap-4 sm:grid">
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
+              onImportLevel={openLevelImportPicker}
+              onImportImage={() => imageInput.current?.click()}
+              onOpenProperties={() => setPropertiesOpen(true)}
               actions={menuActions}
               onDownloadDesktop={
                 isDesktop ? undefined : () => setDownloadOpen(true)
@@ -296,10 +351,6 @@ export function HeaderToolbar({
               }}
             />
             <LevelVisibilityControl />
-            <LevelOptionsMenu
-              isLoading={isLoading}
-              onOpenProperties={() => setPropertiesOpen(true)}
-            />
           </Toolbar>
 
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
@@ -355,85 +406,6 @@ export function HeaderToolbar({
           if (!open) setHighlightLevelFolder(false);
         }}
       />
-    </>
-  );
-}
-
-function LevelOptionsMenu({
-  isLoading,
-  onOpenProperties,
-}: {
-  isLoading?: boolean;
-  onOpenProperties: () => void;
-}) {
-  const { getTool } = useEditorActions();
-  const store = useEditorStore();
-  const imageInput = useRef<HTMLInputElement>(null);
-  const modifier = useModifier();
-
-  return (
-    <>
-      <input
-        ref={imageInput}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        hidden
-        onChange={async (event) => {
-          const file = event.currentTarget.files?.[0];
-          event.currentTarget.value = "";
-          if (!file) return;
-          const canvas = document.querySelector("canvas");
-          if (!canvas) return;
-          try {
-            await importReferenceImage(store, file, {
-              width: canvas.clientWidth,
-              height: canvas.clientHeight,
-            });
-          } catch (error) {
-            alert(
-              error instanceof Error
-                ? error.message
-                : "Could not import this image.",
-            );
-          }
-        }}
-      />
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger>
-          <ToolButton name="Level options">
-            <DotsThreeVerticalIcon weight="bold" />
-          </ToolButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="min-w-64"
-          collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
-        >
-          <DropdownMenuItem
-            iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
-            shortcut={getAutoGrassAllShortcut(modifier)}
-            disabled={isLoading}
-            onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
-          >
-            AutoGrass level
-          </DropdownMenuItem>
-          <GridMenu />
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            iconBefore={<ImageIcon />}
-            disabled={isLoading}
-            onClick={() => imageInput.current?.click()}
-          >
-            Import image…
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            iconBefore={<InfoIcon />}
-            onClick={onOpenProperties}
-          >
-            Level properties
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </>
   );
 }
@@ -512,6 +484,7 @@ function useMainMenuActions() {
           displayName: fileName,
           hasExternalHandle: true,
         });
+        trackEvent("level_opened");
         triggerFitToView();
       } catch (error) {
         alert(
@@ -547,6 +520,7 @@ function useMainMenuActions() {
       displayName: title,
       hasExternalHandle: false,
     });
+    trackEvent("level_created");
     triggerFitToView();
   }, [
     activeTool,
@@ -678,12 +652,18 @@ function useMainMenuActions() {
 }
 
 function MainDropdownMenu({
+  onImportLevel,
+  onImportImage,
+  onOpenProperties,
   onDownloadDesktop,
   onOpenSettings,
   actions,
   onExportImage,
   isLoading,
 }: {
+  onImportLevel: () => void;
+  onImportImage: () => void;
+  onOpenProperties: () => void;
   onDownloadDesktop?: () => void;
   onOpenSettings: () => void;
   actions: ReturnType<typeof useMainMenuActions>;
@@ -729,7 +709,7 @@ function MainDropdownMenu({
               void handleOpenFile();
             }}
           >
-            Open
+            Open…
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -765,12 +745,35 @@ function MainDropdownMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<FileArrowDownIcon />}
+            disabled={isLoading}
+            onClick={onImportLevel}
+          >
+            Import level…
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<ImageIcon />}
+            disabled={isLoading}
+            onClick={onImportImage}
+          >
+            Import image…
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<InfoIcon />}
+            onClick={onOpenProperties}
+          >
+            Level properties
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
           {onDownloadDesktop && (
             <DropdownMenuItem
               iconBefore={<LaptopIcon />}
               onClick={onDownloadDesktop}
             >
-              Download desktop app…
+              Get desktop app
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
@@ -931,6 +934,7 @@ function LevelFileName({
         displayName: result.fileName,
         hasExternalHandle: true,
       });
+      trackEvent("level_opened");
       entrance.onNavigate();
       triggerFitToView();
     } catch (error) {
