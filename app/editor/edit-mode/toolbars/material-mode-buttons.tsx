@@ -1,4 +1,4 @@
-import { CursorIcon, PaintBucketIcon } from "@phosphor-icons/react";
+import { CrosshairIcon, PaintBucketIcon } from "@phosphor-icons/react";
 import { PickerOptionButton } from "./picker-option-button";
 
 export function MaterialModeButtons({
@@ -19,14 +19,14 @@ export function MaterialModeButtons({
         selected={!fillMode}
         onClick={() => onChange(false)}
       >
-        <CursorIcon aria-hidden="true" />
+        <CrosshairIcon className="h-4 w-4" aria-hidden="true" />
       </PickerOptionButton>
       <PickerOptionButton
         label="Fill"
         selected={fillMode}
         onClick={() => onChange(true)}
       >
-        <PaintBucketIcon aria-hidden="true" />
+        <PaintBucketIcon className="h-4 w-4" aria-hidden="true" />
       </PickerOptionButton>
     </div>
   );
