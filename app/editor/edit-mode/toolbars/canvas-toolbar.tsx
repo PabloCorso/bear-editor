@@ -1,5 +1,4 @@
 import { CanvasOptionsMenu } from "./canvas-options-menu";
-import { CanvasMinimap } from "./canvas-minimap";
 import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
@@ -25,7 +24,6 @@ import { ToolButton, type ToolButtonProps } from "~/components/tool-button";
 import { cn, useModifier } from "~/utils/misc";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import { useEffect, useState } from "react";
-import { useLocalStorage } from "@mantine/hooks";
 import { ToolbarButton } from "~/components/ui/toolbar";
 import {
   DropdownMenu,
@@ -40,13 +38,11 @@ import { OPEN_KEYBOARD_SHORTCUTS_SHORTCUT } from "./keyboard-shortcuts";
 
 type CanvasToolbarProps = ToolbarProps & {
   engineRef: React.RefObject<EditorEngine | null>;
-  canvasRef: React.RefObject<HTMLCanvasElement | null>;
 };
 
 export function CanvasToolbar({
   className,
   engineRef,
-  canvasRef,
   ...props
 }: CanvasToolbarProps) {
   const activeToolId = useEditor((state) => state.activeToolId);
@@ -63,10 +59,6 @@ export function CanvasToolbar({
         vertex?.variant === "draw" ||
         vertex?.variant === "brush" ||
         vertex?.previewAutoGrassAll));
-  const [minimapVisible, setMinimapVisible] = useLocalStorage({
-    key: "bear-editor-minimap-visible",
-    defaultValue: false,
-  });
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(function handleKeyboardShortcutsListener() {
@@ -98,12 +90,6 @@ export function CanvasToolbar({
         )}
         {...props}
       >
-        {minimapVisible && (
-          <CanvasMinimap
-            canvasRef={canvasRef}
-            onClose={() => setMinimapVisible(false)}
-          />
-        )}
         <Toolbar className="w-fit gap-2">
           <UndoToolButton />
           <RedoToolButton />
@@ -123,10 +109,7 @@ export function CanvasToolbar({
           >
             <PlusIcon />
           </ToolButton>
-          <CanvasOptionsMenu
-            minimapVisible={minimapVisible}
-            onMinimapVisibleChange={setMinimapVisible}
-          />
+          <CanvasOptionsMenu />
           <CanvasHelpMenu onOpenShortcuts={() => setShortcutsOpen(true)} />
         </Toolbar>
       </div>

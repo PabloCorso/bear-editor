@@ -14,7 +14,6 @@ import {
 } from "~/components/ui/tooltip";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -24,13 +23,7 @@ import { useEditorActions } from "~/editor/use-editor-store";
 import { GridMenuGroup } from "./grid-menu";
 import { FIT_TO_VIEW_SHORTCUT } from "./keyboard-shortcuts";
 
-export function CanvasOptionsMenu({
-  minimapVisible,
-  onMinimapVisibleChange,
-}: {
-  minimapVisible: boolean;
-  onMinimapVisibleChange: (visible: boolean) => void;
-}) {
+export function CanvasOptionsMenu() {
   const { triggerFitToView } = useEditorActions();
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenEnabled, setFullscreenEnabled] = useState(false);
@@ -85,20 +78,16 @@ export function CanvasOptionsMenu({
         className="min-w-48"
       >
         <GridMenuGroup />
-        <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem
-          checked={minimapVisible}
-          onCheckedChange={onMinimapVisibleChange}
-        >
-          Minimap
-        </DropdownMenuCheckboxItem>
         {(fullscreenEnabled || fullscreen) && (
-          <DropdownMenuItem
-            iconBefore={fullscreen ? <ArrowsInIcon /> : <ArrowsOutIcon />}
-            onClick={() => void toggleFullscreen()}
-          >
-            {fullscreen ? "Exit full screen" : "Enter full screen"}
-          </DropdownMenuItem>
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              iconBefore={fullscreen ? <ArrowsInIcon /> : <ArrowsOutIcon />}
+              onClick={() => void toggleFullscreen()}
+            >
+              {fullscreen ? "Exit full screen" : "Enter full screen"}
+            </DropdownMenuItem>
+          </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
