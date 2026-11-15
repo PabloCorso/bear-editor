@@ -31,11 +31,7 @@ import {
   useVertexEdgeClickPreference,
 } from "~/editor/use-editor-store";
 import { cn, useModifier } from "~/utils/misc";
-import {
-  getAutoGrassAllShortcut,
-  VertexIcon,
-  getVertexIconProps,
-} from "./vertex-tool-control";
+import { VertexIcon, getVertexIconProps } from "./vertex-tool-control";
 import {
   getNewLevelShortcut,
   formatShortcutCode,
@@ -515,25 +511,14 @@ function getShortcutGroups(
               className="h-6 w-6"
             />
           ),
-        },
-        {
-          shortcut: getAutoGrassAllShortcut(modifier),
-          label: "AutoGrass level",
-          icon: (
-            <VertexIcon
-              {...getVertexIconProps("autoGrass")}
-              className="h-6 w-6"
-            />
-          ),
           subItems: [
             {
               shortcut: ["-", "+"],
-              label: "Adjust height (AutoGrass tool or hovering All)",
+              label: "Adjust height",
             },
             {
               shortcut: ["[", "]"],
-              label:
-                "Decrease / increase end inset (AutoGrass tool or hovering All)",
+              label: "Decrease / increase end inset",
             },
           ],
         },

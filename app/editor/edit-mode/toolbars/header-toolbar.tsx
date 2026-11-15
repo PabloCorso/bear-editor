@@ -93,12 +93,6 @@ import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import { ExportImageDialog } from "./export-image-dialog";
 import type { ImageExport } from "~/editor/helpers/image-export";
 
-import {
-  getAutoGrassAllShortcut,
-  VertexIcon,
-  getVertexIconProps,
-} from "./vertex-tool-control";
-import type { VertexTool } from "../tools/vertex-tool";
 import { DesktopUpdate } from "~/editor/desktop-update";
 
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
@@ -332,7 +326,6 @@ export function HeaderToolbar({
             }}
           />
           <LevelVisibilityControl />
-          <AutoGrassLevelButton isLoading={isLoading} />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
           <TopologyCheck isLoading={isLoading} />
@@ -358,7 +351,6 @@ export function HeaderToolbar({
               }}
             />
             <LevelVisibilityControl />
-            <AutoGrassLevelButton isLoading={isLoading} />
           </Toolbar>
 
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
@@ -415,21 +407,6 @@ export function HeaderToolbar({
         }}
       />
     </>
-  );
-}
-
-function AutoGrassLevelButton({ isLoading }: { isLoading?: boolean }) {
-  const { getTool } = useEditorActions();
-  const modifier = useModifier();
-  return (
-    <ToolButton
-      name="AutoGrass level"
-      shortcut={getAutoGrassAllShortcut(modifier)}
-      disabled={isLoading}
-      onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
-    >
-      <VertexIcon {...getVertexIconProps("autoGrass")} />
-    </ToolButton>
   );
 }
 
@@ -732,7 +709,7 @@ function MainDropdownMenu({
               void handleOpenFile();
             }}
           >
-            Open
+            Open…
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -796,7 +773,7 @@ function MainDropdownMenu({
               iconBefore={<LaptopIcon />}
               onClick={onDownloadDesktop}
             >
-              Download desktop app…
+              Get desktop app
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
