@@ -1,9 +1,16 @@
+import { ClipboardIcon, ImageIcon } from "@phosphor-icons/react";
+import { SpriteIcon } from "~/components/sprite-icon";
+import { ToolbarSeparator } from "~/components/ui/toolbar";
+import { AppleArrowIcon } from "./apple-tool-control";
+import { ColorPaletteSwitch } from "./color-palette-switch";
+import { ColorToolIcon } from "./color-tool-control";
+import { PickerOptionButton } from "./picker-option-button";
+import { defaultTextureState } from "../tools/texture-tool";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -13,12 +20,10 @@ import {
   usePictureSprites,
   useTextureMaskSprites,
   useLgrAssets,
+  useLgrSprite,
+  useAppleSprites,
 } from "~/components/use-lgr-assets";
-import {
-  Gravity,
-  type AppleAnimation,
-  type Picture,
-} from "~/editor/elma-types";
+import { Gravity, type Picture } from "~/editor/elma-types";
 import type { SelectTool } from "../tools/select-tool";
 import {
   PictureTexturePicker,
@@ -36,8 +41,13 @@ type ReplacementKind =
   | "textures"
   | "colors"
   | "copied";
-const selectClass =
-  "h-9 rounded-md border border-default bg-screen px-2 text-sm";
+const gravityOptions = [
+  { gravity: Gravity.None, label: "No gravity" },
+  { gravity: Gravity.Down, label: "Gravity down" },
+  { gravity: Gravity.Left, label: "Gravity left" },
+  { gravity: Gravity.Up, label: "Gravity up" },
+  { gravity: Gravity.Right, label: "Gravity right" },
+];
 
 /** Local settings remain drafts until Replace is clicked. */
 export function ReplaceSelectionDialog({
@@ -58,8 +68,18 @@ export function ReplaceSelectionDialog({
   const pictureSprites = usePictureSprites();
   const textureSprites = useTextureMaskSprites();
   const { lgr, isLoaded } = useLgrAssets();
-  const colorSprites = useMemo(
-    () => getColorPalette(lgr.getColorSprites()).ordered,
+  const [showAllColors, setShowAllColors] = useState(false);
+  const appleSprites = useAppleSprites();
+  const appleIcon = useLgrSprite("qfood1");
+  const killerIcon = useLgrSprite("qkiller");
+  const flowerIcon = useLgrSprite("qexit");
+  const textureIcon = textureSprites.find(
+    ({ texture, mask }) =>
+      texture.texture === defaultTextureState.texture &&
+      mask === defaultTextureState.mask,
+  );
+  const { ordered, baseNames } = useMemo(
+    () => getColorPalette(lgr.getColorSprites()),
     // Assets load into the same LGR instance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lgr, isLoaded],
@@ -70,6 +90,12 @@ export function ReplaceSelectionDialog({
   const count = tool.getReplacementCount();
   const needsPicture =
     kind === "pictures" || kind === "textures" || kind === "colors";
+  const colorSprites = showAllColors
+    ? ordered
+    : ordered.filter(
+        ({ picture: color }) =>
+          baseNames.has(color.name) || color.name === picture?.name,
+      );
   const sprites =
     kind === "textures"
       ? textureSprites
@@ -112,6 +138,28 @@ export function ReplaceSelectionDialog({
             onActivate: () => setPicture({ ...asset, texture: "", mask: "" }),
           }));
 
+  function option(
+    value: ReplacementKind,
+    label: string,
+    icon: React.ReactNode,
+  ) {
+    return (
+      <PickerOptionButton
+        label={label}
+        selected={kind === value}
+        disabled={busy}
+        onClick={() => {
+          if (kind === value) return;
+          setKind(value);
+          setPicture(null);
+          setError(null);
+        }}
+      >
+        {icon}
+      </PickerOptionButton>
+    );
+  }
+
   function close() {
     pending.current?.abort();
     onClose();
@@ -129,7 +177,7 @@ export function ReplaceSelectionDialog({
           : needsPicture
             ? picture
               ? tool.replaceSelectionWithPicture(picture)
-              : "Choose a picture or texture."
+              : "Choose a replacement."
             : tool.replaceSelectionWithObject(
                 kind as "apples" | "killers" | "flowers",
                 apple,
@@ -154,94 +202,103 @@ export function ReplaceSelectionDialog({
     >
       <DialogContent>
         <DialogHeader showCloseButton>
-          <DialogTitle>Replace selection</DialogTitle>
+          <DialogTitle>Replace</DialogTitle>
         </DialogHeader>
-        <DialogBody className="gap-4">
-          <DialogDescription>
-            Place one replacement at each selected vertex or element position (
-            {count}). Selected originals are removed; the level start stays.
-          </DialogDescription>
-          <label className="flex items-center justify-between gap-3 text-sm">
-            Replace with
-            <select
-              className={selectClass}
-              value={kind}
-              disabled={busy}
-              onChange={(event) => {
-                setKind(event.target.value as ReplacementKind);
-                setPicture(null);
-                setError(null);
-              }}
+        <DialogBody className="gap-3">
+          <div
+            className="flex flex-wrap items-center gap-1"
+            role="group"
+            aria-label="Replace with"
+          >
+            <div
+              className="flex items-center gap-1"
+              role="group"
+              aria-label="Objects"
             >
-              <option value="apples">Apples</option>
-              <option value="killers">Killers</option>
-              <option value="flowers">Flowers</option>
-              <option value="pictures">Picture</option>
-              <option value="textures">Texture</option>
-              <option value="colors">Color tile</option>
-              <option value="copied">Copied content</option>
-            </select>
-          </label>
-          {kind === "apples" && (
-            <div className="flex flex-wrap gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                Variant
-                <select
-                  className={selectClass}
-                  value={apple.animation}
-                  onChange={(event) =>
-                    setApple({
-                      ...apple,
-                      animation: Number(event.target.value) as AppleAnimation,
-                    })
-                  }
-                >
-                  {Array.from({ length: 9 }, (_, i) => (
-                    <option key={i} value={i + 1}>
-                      {i + 1}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                Gravity
-                <select
-                  className={selectClass}
-                  value={apple.gravity}
-                  onChange={(event) =>
-                    setApple({
-                      ...apple,
-                      gravity: Number(event.target.value) as Gravity,
-                    })
-                  }
-                >
-                  {[
-                    [Gravity.None, "None"],
-                    [Gravity.Up, "Up"],
-                    [Gravity.Down, "Down"],
-                    [Gravity.Left, "Left"],
-                    [Gravity.Right, "Right"],
-                  ].map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {option("apples", "Apple", <SpriteIcon src={appleIcon.src} />)}
+              {option("killers", "Killer", <SpriteIcon src={killerIcon.src} />)}
+              {option("flowers", "Flower", <SpriteIcon src={flowerIcon.src} />)}
             </div>
+            <ToolbarSeparator />
+            {option("pictures", "Picture", <ImageIcon aria-hidden="true" />)}
+            {option(
+              "textures",
+              "Texture",
+              <SpriteIcon src={textureIcon?.maskedSrc ?? textureIcon?.src} />,
+            )}
+            {option("colors", "Color", <ColorToolIcon aria-hidden="true" />)}
+            <ToolbarSeparator />
+            {option(
+              "copied",
+              "Copied content",
+              <ClipboardIcon aria-hidden="true" />,
+            )}
+          </div>
+          {kind === "apples" && (
+            <>
+              <div
+                className="flex flex-wrap gap-1"
+                role="group"
+                aria-label="Apple animation"
+              >
+                {appleSprites.map(({ animation, src }) => (
+                  <PickerOptionButton
+                    key={animation}
+                    label={`Apple animation ${animation}`}
+                    selected={apple.animation === animation}
+                    onClick={() => setApple({ ...apple, animation })}
+                  >
+                    <SpriteIcon src={src} />
+                  </PickerOptionButton>
+                ))}
+              </div>
+              <div
+                className="flex flex-wrap gap-1"
+                role="group"
+                aria-label="Gravity"
+              >
+                {gravityOptions.map(({ gravity, label }) => (
+                  <PickerOptionButton
+                    key={gravity}
+                    label={label}
+                    selected={apple.gravity === gravity}
+                    onClick={() => setApple({ ...apple, gravity })}
+                  >
+                    <SpriteIcon src={appleIcon.src} />
+                    <AppleArrowIcon gravity={gravity} aria-hidden="true" />
+                  </PickerOptionButton>
+                ))}
+              </div>
+            </>
           )}
           {needsPicture && (
             <>
-              {kind === "colors" && (
-                <p className="text-xs text-secondary">
-                  Color tiles are ordinary LGR pictures placed at each selected
-                  position; this does not recolor polygon geometry.
-                </p>
-              )}
-              <div className="@container max-h-64 overflow-y-auto">
+              <div className="flex items-center gap-2">
+                {kind === "colors" && ordered.length > baseNames.size && (
+                  <ColorPaletteSwitch
+                    count={ordered.length}
+                    checked={showAllColors}
+                    onCheckedChange={setShowAllColors}
+                  />
+                )}
+                {picture && (
+                  <PicturePropertiesToolbar
+                    className="ml-auto w-auto"
+                    variant="summary-popover"
+                    distance={picture.distance}
+                    clip={picture.clip}
+                    onDistanceChange={(distance) =>
+                      setPicture({ ...picture, distance })
+                    }
+                    onClipChange={(clip) => setPicture({ ...picture, clip })}
+                  />
+                )}
+              </div>
+              <div className="max-h-64 overflow-y-auto">
                 <PictureTexturePicker
-                  compact
-                  maxColumns={4}
+                  embedded
+                  compact={kind === "colors"}
+                  maxColumns={showAllColors && kind === "colors" ? 6 : 4}
                   items={pickerItems}
                   maxSpriteDimension={Math.max(
                     1,
@@ -256,23 +313,7 @@ export function ReplaceSelectionDialog({
                   </p>
                 )}
               </div>
-              {picture && (
-                <PicturePropertiesToolbar
-                  distance={picture.distance}
-                  clip={picture.clip}
-                  onDistanceChange={(distance) =>
-                    setPicture({ ...picture, distance })
-                  }
-                  onClipChange={(clip) => setPicture({ ...picture, clip })}
-                />
-              )}
             </>
-          )}
-          {kind === "copied" && (
-            <p className="text-sm text-secondary">
-              Copy an item or group in Bear first. Each copy keeps its size and
-              layout, centred on a selected position.
-            </p>
           )}
           {error && (
             <p role="alert" className="text-sm">
@@ -281,7 +322,6 @@ export function ReplaceSelectionDialog({
           )}
         </DialogBody>
         <DialogFooter>
-          <Button onClick={close}>Cancel</Button>
           <Button
             variant="accent"
             disabled={busy || count === 0 || (needsPicture && !picture)}

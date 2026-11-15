@@ -1,3 +1,4 @@
+import { MaterialModeButtons } from "./material-mode-buttons";
 import {
   useEditorActions,
   useEditor,
@@ -103,31 +104,6 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     }
   }
 
-  const modePicker = (
-    <div
-      className="flex items-center gap-1 rounded-md border border-default p-0.5"
-      role="group"
-      aria-label="Picture application mode"
-    >
-      <button
-        type="button"
-        aria-pressed={!fillMode}
-        className={`rounded px-3 py-1 text-xs ${!fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
-        onClick={() => switchMode(false)}
-      >
-        Place
-      </button>
-      <button
-        type="button"
-        aria-pressed={fillMode}
-        className={`rounded px-3 py-1 text-xs ${fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
-        onClick={() => switchMode(true)}
-        title="Repeat pictures across a polygon. Boundary tiles may extend beyond it."
-      >
-        Fill
-      </button>
-    </div>
-  );
   const pickerItems = pictureSprites.map(({ picture, ...sprite }) => {
     const isSelected = picture.name === selectedPictureName;
     const distance = isSelected ? selectedDistance : picture.distance;
@@ -185,7 +161,9 @@ export function PictureToolControl(props: ToolControlButtonProps) {
       }
     >
       <PictureTexturePicker
-        header={modePicker}
+        header={
+          <MaterialModeButtons fillMode={fillMode} onChange={switchMode} />
+        }
         items={pickerItems}
         maxSpriteDimension={maxPictureSpriteDimension}
       />

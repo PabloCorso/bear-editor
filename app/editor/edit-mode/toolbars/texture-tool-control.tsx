@@ -1,3 +1,4 @@
+import { MaterialModeButtons } from "./material-mode-buttons";
 import { useState } from "react";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { PictureIcon } from "~/components/sprite-icon";
@@ -186,47 +187,24 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     };
   });
 
-  const modePicker = (
-    <div
-      className="flex items-center gap-1 rounded-md border border-default p-0.5"
-      role="group"
-      aria-label="Texture application mode"
-    >
-      <button
-        type="button"
-        aria-pressed={!fillMode}
-        className={`rounded px-3 py-1 text-xs ${!fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
-        onClick={() => {
-          setToolState<TextureToolState>(defaultTools.texture.id, {
-            texture: selectedTexture,
-            mask: selectedMask,
-            distance: selectedDistance,
-            clip: selectedClip,
-          });
-          activateTool(defaultTools.texture.id);
-          setToolMenuOpen(true, defaultTools.texture.id);
-        }}
-      >
-        Place
-      </button>
-      <button
-        type="button"
-        aria-pressed={fillMode}
-        className={`rounded px-3 py-1 text-xs ${fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
-        onClick={() => {
-          setToolState<TextureFillToolState>(defaultTools.textureFill.id, {
-            texture: selectedTexture,
-            distance: selectedDistance,
-            clip: selectedClip,
-          });
-          activateTool(defaultTools.textureFill.id);
-          setToolMenuOpen(true, defaultTools.texture.id);
-        }}
-      >
-        Fill
-      </button>
-    </div>
-  );
+  function switchMode(nextFill: boolean) {
+    const settings = {
+      texture: selectedTexture,
+      distance: selectedDistance,
+      clip: selectedClip,
+    };
+    if (nextFill) {
+      setToolState<TextureFillToolState>(defaultTools.textureFill.id, settings);
+      activateTool(defaultTools.textureFill.id);
+    } else {
+      setToolState<TextureToolState>(defaultTools.texture.id, {
+        ...settings,
+        mask: selectedMask,
+      });
+      activateTool(defaultTools.texture.id);
+    }
+    setToolMenuOpen(true, defaultTools.texture.id);
+  }
 
   return (
     <ToolControlMenu
@@ -247,7 +225,9 @@ export function TextureToolControl(props: ToolControlButtonProps) {
       }
     >
       <PictureTexturePicker
-        header={modePicker}
+        header={
+          <MaterialModeButtons fillMode={fillMode} onChange={switchMode} />
+        }
         maxColumns={4}
         rowHeaders={fillMode ? undefined : rowHeaders}
         items={fillMode ? fillItems : pickerItems}

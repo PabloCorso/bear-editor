@@ -1,6 +1,6 @@
 # Replace selection
 
-Open the selection toolbar's more-actions menu and choose **Replace selection…**.
+Open the selection toolbar's more-actions menu and choose **Replace**.
 Choose apples (variant and gravity), killers, flowers, a picture, a texture/mask,
 a color tile or copied content. Pictures, textures and color tiles use the active
 LGR. A color tile is an ordinary color picture placed at each anchor, **not**

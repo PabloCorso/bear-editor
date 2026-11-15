@@ -858,9 +858,7 @@ function SelectionActionsMenu({
         )}
         <DropdownMenuGroup>
           {canReplace && (
-            <DropdownMenuItem onClick={onReplace}>
-              Replace selection…
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onReplace}>Replace</DropdownMenuItem>
           )}
           {canConvertPicture && (
             <DropdownMenuItem onClick={onConvertPicture}>

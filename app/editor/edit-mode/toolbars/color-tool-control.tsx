@@ -1,3 +1,4 @@
+import { MaterialModeButtons } from "./material-mode-buttons";
 import { Clip } from "~/editor/elma-types";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { PaletteIcon } from "@phosphor-icons/react/dist/ssr";
@@ -5,7 +6,7 @@ import type { IconProps } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { useLgrAssets } from "~/components/use-lgr-assets";
-import { Switch } from "~/components/ui/switch";
+import { ColorPaletteSwitch } from "./color-palette-switch";
 import {
   useEditorActions,
   useEditorToolState,
@@ -146,31 +147,6 @@ function ColorListControl({
       setToolMenuOpen(true, defaultTools.color.id);
     }
   }
-  const modePicker = (
-    <div
-      className="flex items-center gap-1 rounded-md border border-default p-0.5"
-      role="group"
-      aria-label="Color application mode"
-    >
-      <button
-        type="button"
-        aria-pressed={!fillMode}
-        className={`rounded px-3 py-1 text-xs ${!fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
-        onClick={() => switchMode(false)}
-      >
-        Place
-      </button>
-      <button
-        type="button"
-        aria-pressed={fillMode}
-        className={`rounded px-3 py-1 text-xs ${fillMode ? "bg-primary-hover/50 text-primary" : "text-secondary hover:text-primary"}`}
-        onClick={() => switchMode(true)}
-        title="Repeat the selected color tile over a polygon; edges may extend beyond it."
-      >
-        Fill
-      </button>
-    </div>
-  );
 
   const items = visibleColors.map((color) => {
     const { picture } = color;
@@ -248,23 +224,19 @@ function ColorListControl({
               />
             }
             header={
-              <div className="flex w-full flex-wrap items-center justify-between gap-2">
-                {modePicker}
+              <>
+                <MaterialModeButtons
+                  fillMode={fillMode}
+                  onChange={switchMode}
+                />
                 {colors.length > baseNames.size && (
-                  <label
-                    title={`Show all ${colors.length} colors`}
-                    className="inline-flex cursor-pointer items-center gap-1.5 pl-1 text-[10px] text-secondary"
-                  >
-                    <Switch checked={showAll} onCheckedChange={setShowAll} />
-                    <span className="sr-only">
-                      Show all {colors.length} colors
-                    </span>
-                    <span aria-hidden="true" className="whitespace-nowrap">
-                      All {colors.length}
-                    </span>
-                  </label>
+                  <ColorPaletteSwitch
+                    count={colors.length}
+                    checked={showAll}
+                    onCheckedChange={setShowAll}
+                  />
                 )}
-              </div>
+              </>
             }
           />
         ) : (

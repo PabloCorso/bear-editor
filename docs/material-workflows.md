@@ -22,7 +22,7 @@ Elma .lev pictures remain editable, selectable and serializable.
 
 ## Replace selection
 
-Selection **More actions → Replace selection…** offers Apple/Killer/Flower,
+Selection **More actions → Replace** offers Apple/Killer/Flower,
 Picture, Texture, Color tile, and Copied content using the same asset
 presentation where applicable. Replacement occurs at each selected vertex or
 element anchor, not by resizing one item to the selection. Selection replacement
