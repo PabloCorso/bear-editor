@@ -50,7 +50,12 @@ import {
   screenToWorld,
   worldToScreen,
 } from "~/editor/helpers/coordinate-helpers";
-import { Clip, type Picture, type Position } from "~/editor/elma-types";
+import {
+  Clip,
+  type EditorLevel,
+  type Picture,
+  type Position,
+} from "~/editor/elma-types";
 import { getDefaultLevel } from "~/editor/helpers/level-parser";
 import { checkModifierKey } from "~/utils/misc";
 import {
@@ -1319,6 +1324,15 @@ export class EditorEngine {
 
   public redo() {
     this.store.history.redo();
+  }
+
+  public importLevel(level: EditorLevel): void {
+    const state = this.store.getState();
+    if (state.isPlayMode) return;
+
+    state.actions
+      .getTool<SelectTool>("select")
+      ?.importLevelContent(level, this.getKeyboardEventContext(state).worldPos);
   }
 
   private selectAllVisible(): boolean {
