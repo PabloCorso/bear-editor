@@ -97,13 +97,7 @@ export class SelectionClipboardController {
 
   private pasteAtAnchor(anchor: Position): PastedSelection | null {
     if (!this.clipboard) return null;
-    const center = getClipboardCenter(this.clipboard);
-    return center
-      ? translateClipboard(this.clipboard, {
-          x: anchor.x - center.x,
-          y: anchor.y - center.y,
-        })
-      : null;
+    return placeClipboardAtAnchor(this.clipboard, anchor);
   }
 }
 
@@ -200,6 +194,19 @@ export function translateClipboard(
     ],
     selectedPictures: pictures.map((picture) => picture.position),
   };
+}
+
+export function placeClipboardAtAnchor(
+  clipboard: SelectionClipboard,
+  anchor: Position,
+): PastedSelection | null {
+  const center = getClipboardCenter(clipboard);
+  return center
+    ? translateClipboard(clipboard, {
+        x: anchor.x - center.x,
+        y: anchor.y - center.y,
+      })
+    : null;
 }
 
 export function getClipboardCenter(
