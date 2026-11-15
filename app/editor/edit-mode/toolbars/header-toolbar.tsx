@@ -93,12 +93,6 @@ import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import { ExportImageDialog } from "./export-image-dialog";
 import type { ImageExport } from "~/editor/helpers/image-export";
 
-import {
-  getAutoGrassAllShortcut,
-  VertexIcon,
-  getVertexIconProps,
-} from "./vertex-tool-control";
-import type { VertexTool } from "../tools/vertex-tool";
 import { DesktopUpdate } from "~/editor/desktop-update";
 
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
@@ -677,7 +671,6 @@ function MainDropdownMenu({
   isLoading?: boolean;
 }) {
   const { handleNew, handleOpenFile, handleSave, handleSaveAs } = actions;
-  const { getTool } = useEditorActions();
   const modifier = useModifier();
 
   return (
@@ -771,14 +764,6 @@ function MainDropdownMenu({
             onClick={onOpenProperties}
           >
             Level properties
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
-            shortcut={getAutoGrassAllShortcut(modifier)}
-            disabled={isLoading}
-            onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
-          >
-            AutoGrass level
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

@@ -989,18 +989,6 @@ export class EditorEngine {
     const key = event.key.toUpperCase();
     const modifier = checkModifierKey(event);
 
-    if (
-      key === "G" &&
-      event.shiftKey &&
-      modifier &&
-      !event.altKey &&
-      !event.isComposing
-    ) {
-      if (!event.repeat) this.autoGrassAll(state);
-      event.preventDefault();
-      return;
-    }
-
     const vertexVariantShortcuts: Partial<Record<string, VertexToolVariant>> =
       event.shiftKey
         ? { P: "pipe", F: "frame", G: "autoGrass", S: "smooth" }
@@ -1279,14 +1267,6 @@ export class EditorEngine {
     };
     shortcuts[event.key]?.();
   };
-
-  private autoGrassAll(state: EditorState): boolean {
-    return (
-      state.actions
-        .getTool<VertexTool>(defaultTools.vertex.id)
-        ?.autoGrassAll() ?? false
-    );
-  }
 
   private handleKeyUp = (event: KeyboardEvent) => {
     this.store.getState().actions.setGridSnapBypassed(event.altKey);
