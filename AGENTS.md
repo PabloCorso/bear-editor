@@ -17,6 +17,18 @@ Domain language lives in the root `GLOSSARY.md`. Update it only when a concrete
 term needs to be shared across the project. Keep implementation decisions in
 code rather than creating architectural decision records.
 
+## Desktop releases
+
+Desktop releases are intentional and are not required for every change. When
+changes are ready to reach installed desktop users, ask the human whether to
+publish a desktop release. Never publish one without explicit approval.
+
+After approval, run `npm run desktop:release -- patch` (or `minor`/`major`) on a
+clean branch. This bumps `desktop/package.json` and `desktop/package-lock.json`,
+creates the version commit, and creates the matching `v<version>` tag. Push the
+commit and tag with `git push --follow-tags` to start the public GitHub release
+workflow.
+
 ## Verification
 
 Use proportional verification. Do not run checks for read-only work, and do not

@@ -106,6 +106,7 @@ export type SelectToolState = {
   };
   contextMenuType?: "selection";
   contextMenuPosition?: Position;
+  contextMenuWorldPosition?: Position;
 };
 
 type VertexSelection = { polygon: Polygon; vertex: Position };
@@ -267,6 +268,10 @@ export class SelectTool extends Tool<SelectToolState> {
       return true;
     }
 
+    if (this.clipboard.canPaste()) {
+      this.openContextMenu(context);
+      return true;
+    }
     setToolState({
       contextMenuType: undefined,
       contextMenuPosition: undefined,
@@ -287,6 +292,7 @@ export class SelectTool extends Tool<SelectToolState> {
     setToolState({
       contextMenuType: "selection",
       contextMenuPosition: { x: context.screenX, y: context.screenY },
+      contextMenuWorldPosition: { ...context.worldPos },
     });
   }
 
@@ -1696,7 +1702,7 @@ export class SelectTool extends Tool<SelectToolState> {
     );
   }
 
-  private async pasteFromSystemClipboard(anchor: Position): Promise<void> {
+  public async pasteFromSystemClipboard(anchor: Position): Promise<boolean> {
     const { state } = this.getState();
     const pasted = await this.clipboard.readForPaste(
       anchor,
@@ -1707,7 +1713,8 @@ export class SelectTool extends Tool<SelectToolState> {
       this.store.getState().documentSession.clipboardSessionId ===
         state.documentSession.clipboardSessionId
     )
-      this.commitPaste(pasted);
+      return this.commitPaste(pasted);
+    return false;
   }
 
   private commitPaste(pasted: PastedSelection): boolean {

@@ -4,6 +4,7 @@ import type { MotorState } from "../physics/motor-state";
 import type { Rigidbody } from "../physics/rigidbody";
 import type { GameState } from "./game-loop";
 import { updateCamera } from "./camera";
+import type { Position } from "../../../elma-types";
 
 type RideSnapshot = Pick<
   GameState,
@@ -26,8 +27,51 @@ type RideSnapshot = Pick<
 export class RideMoment {
   constructor(
     readonly snapshot: RideSnapshot,
-    readonly previous: RideMoment | null,
+    private readonly previous: RideMoment | null,
+    private readonly rewindOffset?: Vec2,
   ) {}
+
+  get canRewind(): boolean {
+    return this.previous !== null;
+  }
+
+  rewindStep(): RideMoment | null {
+    return this.rewindOffset
+      ? (this.previous?.translate(this.rewindOffset) ?? null)
+      : this.previous;
+  }
+
+  moveTo(position: Position): RideMoment {
+    const anchor = this.snapshot.motor.leftWheel.r;
+    // The editor and physics engine use opposite Y axes.
+    return this.translate(
+      new Vec2(position.x - anchor.x, -position.y - anchor.y),
+    );
+  }
+
+  private translate(offset: Vec2): RideMoment {
+    if (offset.x === 0 && offset.y === 0) return this;
+    const { motor } = this.snapshot;
+    return new RideMoment(
+      {
+        ...this.snapshot,
+        motor: {
+          ...motor,
+          bike: { ...motor.bike, r: motor.bike.r.add(offset) },
+          leftWheel: { ...motor.leftWheel, r: motor.leftWheel.r.add(offset) },
+          rightWheel: {
+            ...motor.rightWheel,
+            r: motor.rightWheel.r.add(offset),
+          },
+          headR: motor.headR.add(offset),
+          bodyR: motor.bodyR.add(offset),
+        },
+      },
+      this.previous,
+      // Share the saved path and translate each pose only when rewinding to it.
+      this.rewindOffset?.add(offset) ?? offset,
+    );
+  }
 
   valueOf(): object {
     return this;
@@ -154,7 +198,7 @@ export class RideHistory {
   }
 
   get canRewind(): boolean {
-    return this.moment.previous !== null;
+    return this.moment.canRewind;
   }
 
   record(state: GameState): void {
@@ -166,12 +210,11 @@ export class RideHistory {
   rewind(state: GameState, wallSeconds: number): void {
     this.rewindTime ??= this.moment.snapshot.gameTime;
     this.rewindTime -= Math.max(0, wallSeconds) * GAME_TIME_PER_SECOND;
-    while (
-      this.moment.previous &&
-      this.moment.snapshot.gameTime > this.rewindTime
-    ) {
+    while (this.moment.snapshot.gameTime > this.rewindTime) {
+      const previous = this.moment.rewindStep();
+      if (!previous) break;
       this.later = this.moment;
-      this.moment = this.moment.previous;
+      this.moment = previous;
     }
     this.rewindTime = Math.max(this.moment.snapshot.gameTime, this.rewindTime);
     restore(state, this.moment);

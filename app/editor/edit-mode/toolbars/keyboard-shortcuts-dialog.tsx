@@ -2,7 +2,6 @@ import type { DialogProps } from "~/components/ui/dialog";
 import {
   CursorIcon,
   HandIcon,
-  PaintBucketIcon,
   TextTIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -26,6 +25,7 @@ import {
   useTextureMaskSprites,
 } from "~/components/use-lgr-assets";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
+import { ColorToolIcon } from "./color-tool-control";
 import {
   usePlaySettings,
   useVertexEdgeClickPreference,
@@ -41,6 +41,7 @@ import {
   formatShortcutCode,
   FIT_TO_VIEW_SHORTCUT,
   GO_TO_PLAY_START_SHORTCUT,
+  OPEN_AI_PROMPT_LIBRARY_SHORTCUT,
   OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
 } from "./keyboard-shortcuts";
 
@@ -88,6 +89,9 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
       textureSprite,
       playKeyBindings: playSettings.keyBindings,
       showVertexInternalEdgeClickHint: vertexEdgeClickBehavior === "internal",
+      showDesktopDevelopmentShortcuts:
+        typeof window !== "undefined" &&
+        (window.bearDesktop?.development ?? false),
     },
   );
 
@@ -246,6 +250,7 @@ function getShortcutGroups(
     textureSprite?: string;
     playKeyBindings: ReturnType<typeof usePlaySettings>["keyBindings"];
     showVertexInternalEdgeClickHint?: boolean;
+    showDesktopDevelopmentShortcuts: boolean;
   },
 ): ShortcutGroup[] {
   return [
@@ -351,7 +356,6 @@ function getShortcutGroups(
             },
             { shortcut: ["-", "+"], label: "Ellipse vertices / star points" },
             { shortcut: ["[", "]"], label: "Star inner radius (%)" },
-            { shortcut: "Esc / Right click", label: "Cancel item or capture" },
             {
               shortcut: "+ tile",
               label:
@@ -387,10 +391,6 @@ function getShortcutGroups(
               shortcut: "Space",
               label: "Flip direction",
             },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
-            },
           ],
         },
         {
@@ -399,13 +399,7 @@ function getShortcutGroups(
           icon: (
             <VertexIcon {...getVertexIconProps("grass")} className="h-6 w-6" />
           ),
-          subItems: [
-            { shortcut: "Space", label: "Flip direction" },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
-            },
-          ],
+          subItems: [{ shortcut: "Space", label: "Flip direction" }],
         },
         {
           shortcut: defaultTools.vertex.variants.draw.shortcut,
@@ -417,10 +411,6 @@ function getShortcutGroups(
             {
               shortcut: ["-", "+"],
               label: "Adjust edge length",
-            },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
             },
           ],
         },
@@ -449,10 +439,6 @@ function getShortcutGroups(
             },
             { shortcut: "S", label: "Toggle start chamber and player" },
             { shortcut: "F", label: "Toggle end flower" },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish pipe",
-            },
           ],
         },
         {
@@ -467,7 +453,6 @@ function getShortcutGroups(
           subItems: [
             { shortcut: ["-", "+"], label: "Adjust width" },
             { shortcut: "Enter", label: "Apply at cursor" },
-            { shortcut: ["Esc", "Right click"], label: "Cancel stroke" },
           ],
         },
         {
@@ -483,10 +468,6 @@ function getShortcutGroups(
               label: "Cycle mode: Inside / Outside / Centered",
             },
           ],
-        },
-        {
-          shortcut: ["Esc", "Right click"],
-          label: "Cancel polygon operation",
         },
         {
           shortcut: defaultTools.vertex.variants.smooth.shortcut,
@@ -523,10 +504,6 @@ function getShortcutGroups(
             { shortcut: "0–250", label: "Type apple count in count mode" },
             { shortcut: "S", label: "Toggle start chamber and player" },
             { shortcut: "F", label: "Toggle end flower" },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish brush stroke",
-            },
           ],
         },
         {
@@ -565,6 +542,7 @@ function getShortcutGroups(
           label: defaultTools.apple.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.appleSprite} />,
           subItems: [
+            { shortcut: "Space", label: "Switch to Killer" },
             {
               shortcut: "1-9",
               label: "Change apple animation",
@@ -574,7 +552,7 @@ function getShortcutGroups(
               label: "Set no gravity",
             },
             {
-              shortcut: ["Shift + ↑", "Shift + ↓", "Shift + ←", "Shift + →"],
+              shortcut: "Shift + arrows",
               label: "Set directional gravity",
             },
           ],
@@ -583,11 +561,13 @@ function getShortcutGroups(
           shortcut: defaultTools.killer.shortcut,
           label: defaultTools.killer.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.killerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Flower" }],
         },
         {
           shortcut: defaultTools.flower.shortcut,
           label: defaultTools.flower.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.flowerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Apple" }],
         },
         {
           shortcut: defaultTools.picture.shortcut,
@@ -600,11 +580,6 @@ function getShortcutGroups(
           ),
         },
         {
-          shortcut: defaultTools.color.shortcut,
-          label: defaultTools.color.name,
-          icon: <PaintBucketIcon className="h-5 w-5" weight="fill" />,
-        },
-        {
           shortcut: defaultTools.texture.shortcut,
           label: defaultTools.texture.name,
           icon: (
@@ -615,61 +590,14 @@ function getShortcutGroups(
           ),
         },
         {
+          shortcut: defaultTools.color.shortcut,
+          label: defaultTools.color.name,
+          icon: <ColorToolIcon className="h-5 w-5" />,
+        },
+        {
           shortcut: defaultTools.text.shortcut,
           label: defaultTools.text.name,
           icon: <TextTIcon className="h-5 w-5" />,
-        },
-      ],
-    },
-    {
-      title: "Tool menus",
-      items: [
-        {
-          shortcut: ["A", "P", "T", "C", "Shift + T"],
-          label: "Activate and open options; press again to close",
-        },
-        {
-          shortcut: ["V", "G", "…"],
-          label: "Select the tool without opening the Vertex menu",
-        },
-        {
-          shortcut: "Enter",
-          label:
-            "Accept the focused choice or keep the current choice and close the panel",
-        },
-        {
-          shortcut: "Esc",
-          label: "Close the panel and keep the tool active",
-        },
-      ],
-    },
-    {
-      title: "Picture, texture, and color placement",
-      items: [
-        {
-          shortcut: "Right click",
-          label: "Open placement properties at the cursor",
-        },
-        {
-          shortcut: "Esc",
-          label: "Close placement properties and resume placement",
-        },
-      ],
-    },
-    {
-      title: "Picture distance field",
-      items: [
-        {
-          shortcut: ["↑", "↓"],
-          label: "Increase / decrease distance by 1 while focused",
-        },
-        {
-          shortcut: ["Home", "End"],
-          label: "Set distance to 0 / 999 while focused",
-        },
-        {
-          shortcut: "Enter",
-          label: "Commit distance and leave the field",
         },
       ],
     },
@@ -755,9 +683,21 @@ function getShortcutGroups(
           label: "Settings",
         },
         {
+          shortcut: OPEN_AI_PROMPT_LIBRARY_SHORTCUT,
+          label: "Open AI Prompt Library",
+        },
+        {
           shortcut: OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
           label: "Open keyboard shortcuts",
         },
+        ...(toolIcons.showDesktopDevelopmentShortcuts
+          ? [
+              {
+                shortcut: modifier === "⌘" ? "⌘ + ⌥ + I" : "Ctrl + Shift + I",
+                label: "Toggle developer tools",
+              },
+            ]
+          : []),
       ],
     },
     {

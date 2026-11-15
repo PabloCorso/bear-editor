@@ -28,9 +28,8 @@ export function transformSmoothPolygon(
     Math.min(MAX_SMOOTH_AMOUNT, Math.trunc(amount)),
   );
   if (amount === 0) return { polygon: source };
-  const minimumVertexCount = source.grass ? 2 : 3;
   if (
-    source.vertices.length < minimumVertexCount ||
+    source.vertices.length < 3 ||
     source.vertices.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))
   ) {
     return { polygon: source };
@@ -95,7 +94,7 @@ export function transformSmoothPolygon(
   }
   if (vertices === source.vertices) return { polygon: source };
   const polygon = { ...source, vertices };
-  if (vertices.length < minimumVertexCount) return { polygon: source };
+  if (vertices.length < 3) return { polygon: source };
   if (!source.grass) {
     const area = vertices.reduce((sum, p, i) => {
       const next = vertices[(i + 1) % vertices.length];

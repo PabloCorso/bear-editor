@@ -156,13 +156,10 @@ export function ShapeToolControl(props: ToolControlButtonProps) {
     >
       <Toolbar
         orientation="vertical"
-        className="w-[104px] gap-0.5 p-1"
+        className="w-[104px] gap-0.5 p-2"
         aria-label="Library"
       >
-        <ul className="flex w-full flex-col gap-0.5 [&>li+li]:border-t [&>li+li]:border-separator [&>li+li]:pt-0.5">
-          <li className="px-1.5 py-1 text-[10px] font-bold text-secondary">
-            Shapes
-          </li>
+        <ul className="flex w-full flex-col gap-1 [&>li+li]:border-t [&>li+li]:border-separator [&>li+li]:pt-0.5">
           {items.map((item) => (
             <li
               key={item.id}

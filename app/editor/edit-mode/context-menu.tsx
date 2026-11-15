@@ -1,3 +1,4 @@
+import { ImageOpacityControl } from "./toolbars/image-opacity-control";
 import { ShapeTool } from "./tools/shape-tool";
 import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
 import {
@@ -111,6 +112,7 @@ export function EditorContextMenu() {
   const flowers = useEditor((state) => state.flowers);
   const start = useEditor((state) => state.start);
   const sessionArtifacts = useEditor(getSessionArtifacts);
+  const referenceImages = useEditor((state) => state.referenceImages);
   const polygons = useEditor((state) => state.polygons);
   const pictures = useEditor((state) => state.pictures);
   const autoGrassOptions = useEditor((state) => state.autoGrassOptions);
@@ -234,6 +236,9 @@ export function EditorContextMenu() {
   }
 
   const propertyControlsStartIndex = toolbarSections.length;
+  const selectedImages = referenceImages.filter((image) =>
+    selectToolState.selectedObjects.includes(image.position),
+  );
   if (selectedApples.length > 0) {
     toolbarSections.push(
       <SelectedApplesMenu
@@ -324,6 +329,16 @@ export function EditorContextMenu() {
     );
   }
 
+  const imagePropertiesIndex = toolbarSections.length;
+  if (selectedImages.length > 0) {
+    toolbarSections.push(
+      <ImageOpacityControl
+        key={selectedImages.map((image) => image.id).join(",")}
+        images={selectedImages}
+      />,
+    );
+  }
+
   const canvas =
     typeof document === "undefined" ? null : document.querySelector("canvas");
   const collisionBoundary = canvas ?? undefined;
@@ -386,7 +401,15 @@ export function EditorContextMenu() {
     />,
   );
 
-  if (!hasSelection) return null;
+  if (!hasSelection)
+    return (
+      <CanvasPasteMenu
+        key={`${anchorPosition.x},${anchorPosition.y}`}
+        anchor={anchor}
+        selectTool={selectTool}
+        worldPosition={selectToolState.contextMenuWorldPosition}
+      />
+    );
   if (directMenu) return toolbarSections[selectionActionsIndex];
 
   return (
@@ -426,7 +449,8 @@ export function EditorContextMenu() {
               separated={
                 index > 0 &&
                 (index === propertyControlsStartIndex ||
-                  index === selectionActionsIndex)
+                  index === selectionActionsIndex ||
+                  (selectedImages.length > 0 && index === imagePropertiesIndex))
               }
             >
               {section}
@@ -699,6 +723,19 @@ function SelectionActionsMenu({
       ),
     );
   });
+  const singleStartSelected = useEditor((state) => {
+    const selection = state.actions.getToolState<SelectToolState>("select");
+    return Boolean(
+      selection &&
+      selection.selectedVertices.length === 0 &&
+      selection.selectedPictures.length === 0 &&
+      selection.selectedObjects.length === 1 &&
+      (selection.selectedObjects[0] === state.start ||
+        state.testStarts.items.some(
+          (item) => item.position === selection.selectedObjects[0],
+        )),
+    );
+  });
   const onlyTestStartActions =
     !canTransform &&
     !canDuplicate &&
@@ -831,14 +868,15 @@ function SelectionActionsMenu({
             </DropdownMenuGroup>
           </>
         )}
-        {onlyTestStartActions ? (
-          <TestStartMenuItems />
-        ) : (
-          <>
-            <DropdownMenuSeparator />
-            <TestStartSubmenu />
-          </>
-        )}
+        {singleStartSelected &&
+          (onlyTestStartActions ? (
+            <TestStartMenuItems />
+          ) : (
+            <>
+              <DropdownMenuSeparator />
+              <TestStartSubmenu />
+            </>
+          ))}
       </DropdownMenuContent>
     </MenuRoot>
   );
@@ -1132,4 +1170,62 @@ function createRectAnchor(
       });
     },
   };
+}
+
+function CanvasPasteMenu({
+  anchor,
+  selectTool,
+  worldPosition,
+}: {
+  anchor: PointAnchor;
+  selectTool: SelectTool | undefined;
+  worldPosition?: Position;
+}) {
+  const modifier = useModifier();
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function paste() {
+    if (!worldPosition || !selectTool) return;
+    setBusy(true);
+    try {
+      const pasted = await selectTool.pasteFromSystemClipboard(worldPosition);
+      if (pasted) selectTool.closeContextMenu();
+      else setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <ContextMenu.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) selectTool?.closeContextMenu();
+      }}
+    >
+      <DropdownMenuContent
+        anchor={anchor}
+        positionMethod="fixed"
+        finalFocus={false}
+        sideOffset={0}
+      >
+        <DropdownMenuItem
+          shortcut={`${modifier} + V`}
+          closeOnClick={false}
+          disabled={busy}
+          onClick={() => void paste()}
+        >
+          Paste
+        </DropdownMenuItem>
+        {failed && (
+          <p
+            role="status"
+            className="max-w-56 px-2 py-1 text-xs text-secondary"
+          >
+            No readable Bear Editor JSON. Copy valid JSON, or use {modifier} + V
+            if clipboard access is blocked.
+          </p>
+        )}
+      </DropdownMenuContent>
+    </ContextMenu.Root>
+  );
 }

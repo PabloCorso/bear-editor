@@ -24,8 +24,13 @@ import {
   SettingsPopoverFields,
 } from "./settings-popover";
 
-const MIN_DISTANCE = 0;
-const MAX_DISTANCE = 999;
+import {
+  MIN_PICTURE_DISTANCE as MIN_DISTANCE,
+  MAX_PICTURE_DISTANCE as MAX_DISTANCE,
+  PICTURE_DISTANCE_STEP,
+  normalizeDistance,
+} from "~/editor/helpers/picture-properties";
+export { normalizeDistance } from "~/editor/helpers/picture-properties";
 const MIXED_VALUE = "mixed";
 
 type PicturePropertyValue = number | typeof MIXED_VALUE;
@@ -251,9 +256,9 @@ function DistanceInput({
       value={draft.value}
       min={MIN_DISTANCE}
       max={MAX_DISTANCE}
-      step={10}
-      smallStep={10}
-      largeStep={10}
+      step={PICTURE_DISTANCE_STEP}
+      smallStep={PICTURE_DISTANCE_STEP}
+      largeStep={PICTURE_DISTANCE_STEP}
       keyboardStep={1}
       snapOnStep={false}
       format={{ maximumFractionDigits: 0, useGrouping: false }}
@@ -387,11 +392,6 @@ function ClipButtons({
       ))}
     </div>
   );
-}
-
-export function normalizeDistance(distance: number) {
-  if (!Number.isFinite(distance)) return MAX_DISTANCE;
-  return Math.min(MAX_DISTANCE, Math.max(MIN_DISTANCE, Math.round(distance)));
 }
 
 function getClipCode(clip: Clip | typeof MIXED_VALUE) {

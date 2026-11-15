@@ -1,6 +1,7 @@
 import { Clip } from "~/editor/elma-types";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { PaletteIcon } from "@phosphor-icons/react/dist/ssr";
+import type { IconProps } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { useLgrAssets } from "~/components/use-lgr-assets";
@@ -20,6 +21,10 @@ import {
 } from "./tool";
 
 type ColorSprite = ReturnType<LgrAssets["getColorSprites"]>[number];
+
+export function ColorToolIcon(props: IconProps) {
+  return <PaletteIcon {...props} />;
+}
 
 export function ColorToolControl(props: ToolControlButtonProps) {
   const { lgr, isLoaded } = useLgrAssets();
@@ -135,7 +140,7 @@ function ColorListControl({
               });
           }}
         >
-          <PaletteIcon />
+          <ColorToolIcon />
         </ToolControlButton>
       }
     >

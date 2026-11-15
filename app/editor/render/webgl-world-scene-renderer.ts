@@ -1,3 +1,4 @@
+import { DEFAULT_REFERENCE_IMAGE_OPACITY } from "../reference-images";
 import { referenceImagePoint } from "../reference-images";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { colors } from "~/editor/constants";
@@ -7,8 +8,6 @@ import { WebGLRenderContext } from "~/editor/render/webgl-render-context";
 import { WebGLWorldItemDrawer } from "~/editor/render/webgl-world-item-drawer";
 import type { WorldRenderScene } from "~/editor/render/world-scene";
 import type { WorldSceneRenderer } from "~/editor/render/world-scene-renderer";
-
-const REFERENCE_IMAGE_OPACITY = 0.65;
 
 export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
   readonly backend = "webgl" as const;
@@ -72,11 +71,13 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
         this.lgrAssets,
         colors.sky,
       );
-      this.polygonDrawer.drawDraftGroundPolygons(
+      this.polygonDrawer.drawDraftGroundSkyPolygons(
         scene,
         scene.ground,
+        scene.sky,
         this.lgrAssets,
         colors.ground,
+        colors.sky,
       );
       this.polygonDrawer.drawGrassPolygons(scene);
     }
@@ -120,7 +121,7 @@ export class WebGLWorldSceneRenderer implements WorldSceneRenderer {
       this.renderContext.drawVertices({
         vertices,
         scene,
-        color: [1, 1, 1, REFERENCE_IMAGE_OPACITY],
+        color: [1, 1, 1, image.opacity ?? DEFAULT_REFERENCE_IMAGE_OPACITY],
         texture: this.renderContext.getTexture(image.bitmap),
       });
     }

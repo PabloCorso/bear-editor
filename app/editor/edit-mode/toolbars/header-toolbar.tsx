@@ -1,3 +1,5 @@
+import { trackEvent } from "~/analytics";
+import { DesktopDownloadDialog } from "./desktop-download-dialog";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { getLevelTopology } from "~/editor/helpers/level-topology";
@@ -32,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
+  LaptopIcon,
   CaretRightIcon,
   CaretLeftIcon,
   CaretDownIcon,
@@ -83,7 +86,7 @@ import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
 import { LevelPropertiesDialog } from "./level-properties-dialog";
 import { LevelFolderTip } from "./level-folder-tip";
 import { ToolInfo } from "./tool-info";
-import { CanvasTips } from "./canvas-tip";
+import { CanvasTipSections, CanvasTips } from "./canvas-tip";
 import "./level-file-name.css";
 import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import { ExportImageDialog } from "./export-image-dialog";
@@ -95,6 +98,7 @@ import {
   getVertexIconProps,
 } from "./vertex-tool-control";
 import type { VertexTool } from "../tools/vertex-tool";
+import { DesktopUpdate } from "~/editor/desktop-update";
 
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
@@ -146,6 +150,9 @@ export function HeaderToolbar({
   engineRef,
   ...props
 }: HeaderToolbarProps) {
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => setIsDesktop(Boolean(window.bearDesktop)), []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [propertiesOpen, setPropertiesOpen] = useState(false);
@@ -273,18 +280,15 @@ export function HeaderToolbar({
           onClose={() => setImageExport(null)}
         />
       )}
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-4 top-4 z-10",
-          className,
-        )}
-        {...props}
-      >
+      <div className={cn("relative z-10 col-span-full", className)} {...props}>
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
             onImportImage={() => imageInput.current?.click()}
             onOpenProperties={() => setPropertiesOpen(true)}
             actions={menuActions}
+            onDownloadDesktop={
+              isDesktop ? undefined : () => setDownloadOpen(true)
+            }
             onExportImage={handleExportImage}
             isLoading={isLoading}
             onOpenSettings={() => {
@@ -307,6 +311,9 @@ export function HeaderToolbar({
               onImportImage={() => imageInput.current?.click()}
               onOpenProperties={() => setPropertiesOpen(true)}
               actions={menuActions}
+              onDownloadDesktop={
+                isDesktop ? undefined : () => setDownloadOpen(true)
+              }
               onExportImage={handleExportImage}
               isLoading={isLoading}
               onOpenSettings={() => {
@@ -337,20 +344,27 @@ export function HeaderToolbar({
           entrance={fileNameEntrance}
         />
 
-        <div className="pointer-events-none mt-2 flex justify-center">
+        <div className="absolute inset-x-0 top-full mt-2 flex justify-center">
           <TopologyResultPanel />
         </div>
       </div>
-      <CanvasTips>
-        <LevelFolderTip
-          onOpenSettings={() => {
-            setSettingsTab("general");
-            setHighlightLevelFolder(true);
-            setSettingsOpen(true);
-          }}
-        />
+      <CanvasTips className="row-start-3 self-end">
+        <CanvasTipSections>
+          <DesktopUpdate />
+          <LevelFolderTip
+            onOpenSettings={() => {
+              setSettingsTab("general");
+              setHighlightLevelFolder(true);
+              setSettingsOpen(true);
+            }}
+          />
+        </CanvasTipSections>
         <ToolInfo />
       </CanvasTips>
+      <DesktopDownloadDialog
+        open={downloadOpen}
+        onOpenChange={setDownloadOpen}
+      />
       <LevelPropertiesDialog
         open={propertiesOpen}
         onOpenChange={setPropertiesOpen}
@@ -457,6 +471,7 @@ function useMainMenuActions() {
           displayName: fileName,
           hasExternalHandle: true,
         });
+        trackEvent("level_opened");
         triggerFitToView();
       } catch (error) {
         alert(
@@ -492,6 +507,7 @@ function useMainMenuActions() {
       displayName: title,
       hasExternalHandle: false,
     });
+    trackEvent("level_created");
     triggerFitToView();
   }, [
     activeTool,
@@ -520,7 +536,7 @@ function useMainMenuActions() {
     // reported save failure. Inspection never mutates the document.
     try {
       const result = getLevelTopology(state, lgr);
-      if (result.issues.length || result.truncated) {
+      if (result.checks.some((check) => check.status !== "passed")) {
         state.actions.setTopologyInspection(
           state.topologyInspection ?? {
             activeIssueId: null,
@@ -625,6 +641,7 @@ function useMainMenuActions() {
 function MainDropdownMenu({
   onImportImage,
   onOpenProperties,
+  onDownloadDesktop,
   onOpenSettings,
   actions,
   onExportImage,
@@ -632,6 +649,7 @@ function MainDropdownMenu({
 }: {
   onImportImage: () => void;
   onOpenProperties: () => void;
+  onDownloadDesktop?: () => void;
   onOpenSettings: () => void;
   actions: ReturnType<typeof useMainMenuActions>;
   onExportImage: () => void;
@@ -728,6 +746,14 @@ function MainDropdownMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          {onDownloadDesktop && (
+            <DropdownMenuItem
+              iconBefore={<LaptopIcon />}
+              onClick={onDownloadDesktop}
+            >
+              Download desktop app…
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             iconBefore={<GearIcon />}
             shortcut={`${modifier} + ,`}
@@ -886,6 +912,7 @@ function LevelFileName({
         displayName: result.fileName,
         hasExternalHandle: true,
       });
+      trackEvent("level_opened");
       entrance.onNavigate();
       triggerFitToView();
     } catch (error) {

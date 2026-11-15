@@ -4,7 +4,6 @@ import {
   useEditorActions,
 } from "~/editor/use-editor-store";
 import { cn } from "~/utils/misc";
-import { FloatingViewportToolbar } from "./floating-toolbar";
 import { ToolButton, type ToolButtonProps } from "~/components/tool-button";
 import { createContext, useContext } from "react";
 import type { ToolMeta } from "../tools/default-tools";
@@ -65,10 +64,21 @@ export function ToolMenu({
 }: React.ComponentPropsWithoutRef<"div"> & {
   children: React.ReactNode;
 }) {
+  // Use the middle grid row as the containing block so the toolbar scroll
+  // does not clip the submenu.
   return (
-    <FloatingViewportToolbar className={className} {...props}>
-      {children}
-    </FloatingViewportToolbar>
+    // The menu container spans the canvas height; only its visible controls should intercept pointers.
+    <div className="pointer-events-none absolute inset-y-0 right-0 left-16 z-40 flex items-center">
+      <div
+        className={cn(
+          "pointer-events-auto max-h-full overflow-auto",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -76,12 +86,14 @@ type ToolControlMenuProps = {
   id: string;
   button: React.ReactNode;
   children: React.ReactNode;
+  closeOnSelect?: boolean;
 };
 
 export function ToolControlMenu({
   id,
   button,
   children,
+  closeOnSelect = true,
 }: ToolControlMenuProps) {
   const isOpen = useEditor((state) => state.openToolMenuId === id);
   const { setToolMenuOpen } = useEditorActions();
@@ -92,7 +104,9 @@ export function ToolControlMenu({
         {button}
       </ToolSelectionContext.Provider>
       {isOpen && (
-        <ToolSelectionContext.Provider value={() => setToolMenuOpen(false)}>
+        <ToolSelectionContext.Provider
+          value={() => setToolMenuOpen(!closeOnSelect, id)}
+        >
           <ToolMenu
             onKeyDown={(event) => {
               // Let Enter click the focused choice, without reaching canvas shortcuts.

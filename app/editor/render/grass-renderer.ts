@@ -119,10 +119,7 @@ function scaleQgrass(qgrass: ImageBitmap, scale: number): HTMLCanvasElement {
 function createGrassPolygonHeightmap(
   vertices: WorldPoint[],
 ): PolygonHeightmap | null {
-  if (vertices.length < 2) return null;
-
-  const lineHeightmap = createLineGrassPolygonHeightmap(vertices);
-  if (lineHeightmap) return lineHeightmap;
+  if (vertices.length < 3) return null;
 
   const xOriginPx = Math.floor(
     Math.min(
@@ -198,62 +195,6 @@ function createGrassPolygonHeightmap(
 
   const lengthPx = currentXPx - x0Px + 1;
 
-  return {
-    xOriginPx,
-    x0Px,
-    yByXPx,
-    lengthPx,
-    yAtLocalXPx(xPx) {
-      const localIndex = xPx - x0Px;
-      if (localIndex < 0 || localIndex >= lengthPx) return undefined;
-      return yByXPx[localIndex];
-    },
-  };
-}
-
-function createLineGrassPolygonHeightmap(
-  vertices: WorldPoint[],
-): PolygonHeightmap | null {
-  const last = vertices[vertices.length - 1]!;
-  const previous = vertices[vertices.length - 2]!;
-  const hasRepeatedEndpoint = last.x === previous.x && last.y === previous.y;
-  if (vertices.length !== 2 && !hasRepeatedEndpoint) return null;
-
-  const surfaceVertices = hasRepeatedEndpoint
-    ? vertices.slice(0, -1)
-    : [...vertices];
-  if (surfaceVertices.length < 2) return null;
-  if (surfaceVertices[0]!.x > surfaceVertices[surfaceVertices.length - 1]!.x) {
-    surfaceVertices.reverse();
-  }
-
-  const xOriginPx = Math.floor(
-    Math.min(
-      ...surfaceVertices.map((vertex) => vertex.x * ELMA_PIXELS_PER_WORLD_UNIT),
-    ),
-  );
-  let x0Px = -1;
-  let currentXPx = -1;
-  const yByXPx: number[] = [];
-
-  for (let index = 0; index < surfaceVertices.length - 1; index += 1) {
-    currentXPx = appendGrassLineHeightmap(
-      surfaceVertices[index]!,
-      surfaceVertices[index + 1]!,
-      xOriginPx,
-      x0Px,
-      currentXPx,
-      yByXPx,
-    );
-
-    if (x0Px < 0 && yByXPx.length > 0) {
-      x0Px = toLocalPixel(surfaceVertices[index]!.x, xOriginPx);
-    }
-  }
-
-  if (x0Px < 0 || yByXPx.length === 0) return null;
-
-  const lengthPx = currentXPx - x0Px + 1;
   return {
     xOriginPx,
     x0Px,

@@ -93,3 +93,5 @@ export const defaultToolOrder: string[] = [
   defaultTools.text.id,
   defaultTools.shape.id,
 ];
+
+export const objectToolIds: readonly string[] = ["apple", "killer", "flower"];

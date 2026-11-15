@@ -2,6 +2,8 @@ import type { Position } from "./elma-types";
 import type { EditorStore } from "./editor-store";
 import type { WorldRect } from "./render/world-geometry";
 
+export const DEFAULT_REFERENCE_IMAGE_OPACITY = 0.65;
+
 export type ReferenceImage = {
   id: string;
   name: string;
@@ -10,6 +12,7 @@ export type ReferenceImage = {
   width: number;
   height: number;
   rotation: number;
+  opacity?: number;
 };
 
 export function referenceImagePoint(
