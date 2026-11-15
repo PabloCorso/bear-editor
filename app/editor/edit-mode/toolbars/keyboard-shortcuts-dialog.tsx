@@ -563,6 +563,10 @@ function getShortcutGroups(
               src={toolIcons.pictureSprite}
             />
           ),
+          subItems: [
+            { shortcut: "Space", label: "Change clipping in either mode" },
+            { shortcut: "+ / -", label: "Adjust distance in either mode" },
+          ],
         },
         {
           shortcut: defaultTools.texture.shortcut,
@@ -573,11 +577,19 @@ function getShortcutGroups(
               src={toolIcons.textureSprite}
             />
           ),
+          subItems: [
+            { shortcut: "Space", label: "Change clipping in either mode" },
+            { shortcut: "+ / -", label: "Adjust distance in either mode" },
+          ],
         },
         {
           shortcut: defaultTools.color.shortcut,
           label: defaultTools.color.name,
           icon: <ColorToolIcon className="h-5 w-5" />,
+          subItems: [
+            { shortcut: "Space", label: "Change clipping in either mode" },
+            { shortcut: "+ / -", label: "Adjust distance in either mode" },
+          ],
         },
         {
           shortcut: defaultTools.text.shortcut,

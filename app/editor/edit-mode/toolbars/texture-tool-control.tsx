@@ -226,7 +226,11 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     >
       <PictureTexturePicker
         header={
-          <MaterialModeButtons fillMode={fillMode} onChange={switchMode} />
+          <MaterialModeButtons
+            toolLabel="Texture"
+            fillMode={fillMode}
+            onChange={switchMode}
+          />
         }
         maxColumns={4}
         rowHeaders={fillMode ? undefined : rowHeaders}

@@ -98,3 +98,12 @@ export const defaultToolOrder: string[] = [
 ];
 
 export const objectToolIds: readonly string[] = ["apple", "killer", "flower"];
+
+export const materialToolIds: readonly string[] = [
+  "picture",
+  "texture",
+  "color",
+  "pictureFill",
+  "textureFill",
+  "colorFill",
+];

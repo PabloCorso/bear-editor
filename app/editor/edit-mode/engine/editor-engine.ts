@@ -72,6 +72,7 @@ import {
 import {
   defaultTools,
   objectToolIds,
+  materialToolIds,
 } from "~/editor/edit-mode/tools/default-tools";
 import type { EditorDocumentInput } from "~/editor/editor-state";
 import { buildEditorWorldScene } from "~/editor/edit-mode/scene/editor-scene-builder";
@@ -1077,7 +1078,7 @@ export class EditorEngine {
         event.preventDefault();
         return;
       }
-      if (["picture", "texture", "color"].includes(state.activeToolId)) {
+      if (materialToolIds.includes(state.activeToolId)) {
         const placement = state.actions.getToolState<PictureToolState>(
           state.activeToolId,
         );

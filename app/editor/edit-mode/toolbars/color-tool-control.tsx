@@ -226,6 +226,7 @@ function ColorListControl({
             header={
               <>
                 <MaterialModeButtons
+                  toolLabel="Color"
                   fillMode={fillMode}
                   onChange={switchMode}
                 />

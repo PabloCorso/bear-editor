@@ -162,7 +162,11 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     >
       <PictureTexturePicker
         header={
-          <MaterialModeButtons fillMode={fillMode} onChange={switchMode} />
+          <MaterialModeButtons
+            toolLabel="Picture"
+            fillMode={fillMode}
+            onChange={switchMode}
+          />
         }
         items={pickerItems}
         maxSpriteDimension={maxPictureSpriteDimension}
