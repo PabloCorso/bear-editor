@@ -332,7 +332,6 @@ export function HeaderToolbar({
             }}
           />
           <LevelVisibilityControl />
-          <AutoGrassLevelButton isLoading={isLoading} />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
           <TopologyCheck isLoading={isLoading} />
@@ -358,7 +357,6 @@ export function HeaderToolbar({
               }}
             />
             <LevelVisibilityControl />
-            <AutoGrassLevelButton isLoading={isLoading} />
           </Toolbar>
 
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
@@ -415,21 +413,6 @@ export function HeaderToolbar({
         }}
       />
     </>
-  );
-}
-
-function AutoGrassLevelButton({ isLoading }: { isLoading?: boolean }) {
-  const { getTool } = useEditorActions();
-  const modifier = useModifier();
-  return (
-    <ToolButton
-      name="AutoGrass level"
-      shortcut={getAutoGrassAllShortcut(modifier)}
-      disabled={isLoading}
-      onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
-    >
-      <VertexIcon {...getVertexIconProps("autoGrass")} />
-    </ToolButton>
   );
 }
 
@@ -694,6 +677,7 @@ function MainDropdownMenu({
   isLoading?: boolean;
 }) {
   const { handleNew, handleOpenFile, handleSave, handleSaveAs } = actions;
+  const { getTool } = useEditorActions();
   const modifier = useModifier();
 
   return (
@@ -732,7 +716,7 @@ function MainDropdownMenu({
               void handleOpenFile();
             }}
           >
-            Open
+            Open…
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -788,6 +772,14 @@ function MainDropdownMenu({
           >
             Level properties
           </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<VertexIcon {...getVertexIconProps("autoGrass")} />}
+            shortcut={getAutoGrassAllShortcut(modifier)}
+            disabled={isLoading}
+            onClick={() => getTool<VertexTool>("vertex")?.autoGrassAll()}
+          >
+            AutoGrass level
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
@@ -796,7 +788,7 @@ function MainDropdownMenu({
               iconBefore={<LaptopIcon />}
               onClick={onDownloadDesktop}
             >
-              Download desktop app…
+              Download desktop app
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
