@@ -39,6 +39,7 @@ import {
 import {
   getNewLevelShortcut,
   formatShortcutCode,
+  FIT_TO_VIEW_SHORTCUT,
   GO_TO_PLAY_START_SHORTCUT,
   OPEN_AI_PROMPT_LIBRARY_SHORTCUT,
   OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
@@ -398,9 +399,7 @@ function getShortcutGroups(
           icon: (
             <VertexIcon {...getVertexIconProps("grass")} className="h-6 w-6" />
           ),
-          subItems: [
-            { shortcut: "Space", label: "Flip direction" },
-          ],
+          subItems: [{ shortcut: "Space", label: "Flip direction" }],
         },
         {
           shortcut: defaultTools.vertex.variants.draw.shortcut,
@@ -721,7 +720,7 @@ function getShortcutGroups(
           label: "Zoom out",
         },
         {
-          shortcut: `${modifier} + 0`,
+          shortcut: FIT_TO_VIEW_SHORTCUT,
           label: "Fit to view",
         },
         {

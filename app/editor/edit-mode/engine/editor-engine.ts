@@ -92,6 +92,7 @@ import {
 import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
 import type { Polygon } from "~/editor/elma-types";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
+import { FIT_TO_VIEW_SHORTCUT } from "../toolbars/keyboard-shortcuts";
 
 type EditorEngineOptions = {
   initialDocument?: EditorDocumentInput;
@@ -962,6 +963,14 @@ export class EditorEngine {
       return;
     }
     if (isUserTyping()) return;
+    if (
+      event.target instanceof Element &&
+      (event.target.closest('[role="menu"]') ||
+        (event.target.closest('[aria-haspopup="menu"]') &&
+          ["Enter", " ", "ArrowUp", "ArrowDown"].includes(event.key)))
+    ) {
+      return;
+    }
 
     if (state.isPlayMode) {
       if (event.key === "Escape") {
@@ -1199,8 +1208,21 @@ export class EditorEngine {
       return;
     }
 
-    if (event.key === "0" && checkModifierKey(event)) {
-      this.fitToView();
+    if (
+      key === FIT_TO_VIEW_SHORTCUT &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !event.isComposing &&
+      !event.defaultPrevented &&
+      !(
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"]')
+      )
+    ) {
+      if (!event.repeat) this.fitToView();
+      event.preventDefault();
       return;
     }
 
