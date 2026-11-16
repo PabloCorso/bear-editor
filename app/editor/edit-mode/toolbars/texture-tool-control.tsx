@@ -1,4 +1,3 @@
-import { MaterialModeButtons } from "./material-mode-buttons";
 import { useState } from "react";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { PictureIcon } from "~/components/sprite-icon";
@@ -12,12 +11,8 @@ import {
   type ToolControlButtonProps,
 } from "./tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
-import {
-  useTextureMaskSprites,
-  useTextureSprites,
-} from "~/components/use-lgr-assets";
+import { useTextureMaskSprites } from "~/components/use-lgr-assets";
 import { useEditorActiveTool } from "~/editor/use-editor-store";
-import type { TextureFillToolState } from "../tools/texture-fill-tool";
 import { standardSprites } from "~/components/standard-sprites";
 import { Mask } from "~/editor/elma-types";
 import {
@@ -33,17 +28,10 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   const textureTool = useEditorToolState<TextureToolState>(
     defaultTools.texture.id,
   );
-  const { setToolState, activateTool, setToolMenuOpen } = useEditorActions();
+  const { setToolState, activateTool } = useEditorActions();
   const activeTool = useEditorActiveTool();
-  const isActive =
-    activeTool?.meta.id === defaultTools.texture.id ||
-    activeTool?.meta.id === defaultTools.textureFill.id;
-  const fillMode = activeTool?.meta.id === defaultTools.textureFill.id;
-  const fillTool = useEditorToolState<TextureFillToolState>(
-    defaultTools.textureFill.id,
-  );
+  const isActive = activeTool?.meta.id === defaultTools.texture.id;
   const textureSprites = useTextureMaskSprites();
-  const fillSprites = useTextureSprites();
   const [rowSettings, setRowSettings] = useState<
     Record<string, Pick<TextureToolState, "distance" | "clip">>
   >({});
@@ -53,10 +41,7 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     ),
     1,
   );
-  const selectedTexture =
-    (fillMode ? fillTool?.texture : textureTool?.texture) ??
-    textureTool?.texture ??
-    defaultTextureState.texture;
+  const selectedTexture = textureTool?.texture ?? defaultTextureState.texture;
   const selectedMask = textureTool?.mask ?? standardSprites.textureMasks[0];
   const defaultTextureSprite = textureSprites.find(
     ({ texture, mask }) =>
@@ -66,10 +51,8 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   const textureSrc =
     defaultTextureSprite?.maskedSrc ?? defaultTextureSprite?.src;
   const selectedDistance =
-    (fillMode ? fillTool?.distance : textureTool?.distance) ??
-    defaultTextureState.distance;
-  const selectedClip =
-    (fillMode ? fillTool?.clip : textureTool?.clip) ?? defaultTextureState.clip;
+    textureTool?.distance ?? defaultTextureState.distance;
+  const selectedClip = textureTool?.clip ?? defaultTextureState.clip;
   const rowHeaders: Record<string, React.ReactNode> = {};
   const groupedTextures = new Set<string>();
   const settingsFor = (texture: (typeof textureSprites)[number]["texture"]) =>
@@ -91,18 +74,11 @@ export function TextureToolControl(props: ToolControlButtonProps) {
       [selectedTexture]: { distance: selectedDistance, clip: selectedClip },
       [texture.texture]: settings,
     }));
-    if (fillMode) {
-      setToolState<TextureFillToolState>(defaultTools.textureFill.id, {
-        texture: texture.texture,
-        ...settings,
-      });
-    } else {
-      setToolState<TextureToolState>(defaultTools.texture.id, {
-        texture: texture.texture,
-        mask,
-        ...settings,
-      });
-    }
+    setToolState<TextureToolState>(defaultTools.texture.id, {
+      texture: texture.texture,
+      mask,
+      ...settings,
+    });
   }
 
   const pickerItems = textureSprites.map(
@@ -155,57 +131,6 @@ export function TextureToolControl(props: ToolControlButtonProps) {
     },
   );
 
-  const fillItems = fillSprites.map(({ texture, src, width, height }) => {
-    const isSelected = texture.texture === selectedTexture;
-    const { distance, clip } = isSelected
-      ? { distance: selectedDistance, clip: selectedClip }
-      : texture;
-    const update = (patch: Partial<TextureFillToolState> = {}) => {
-      setToolState<TextureFillToolState>(defaultTools.textureFill.id, {
-        texture: texture.texture,
-        distance,
-        clip,
-        ...patch,
-      });
-    };
-    return {
-      key: texture.texture,
-      label: formatSpriteTitle(texture.texture),
-      previewSrc: src,
-      width,
-      height,
-      isSelected,
-      distance,
-      clip,
-      defaultDistance: texture.distance,
-      defaultClip: texture.clip,
-      onActivate: () => update(),
-      onDistanceChange: (distance: number) => update({ distance }),
-      onClipChange: (clip: TextureFillToolState["clip"]) => update({ clip }),
-      onResetDefaults: () =>
-        update({ distance: texture.distance, clip: texture.clip }),
-    };
-  });
-
-  function switchMode(nextFill: boolean) {
-    const settings = {
-      texture: selectedTexture,
-      distance: selectedDistance,
-      clip: selectedClip,
-    };
-    if (nextFill) {
-      setToolState<TextureFillToolState>(defaultTools.textureFill.id, settings);
-      activateTool(defaultTools.textureFill.id);
-    } else {
-      setToolState<TextureToolState>(defaultTools.texture.id, {
-        ...settings,
-        mask: selectedMask,
-      });
-      activateTool(defaultTools.texture.id);
-    }
-    setToolMenuOpen(true, defaultTools.texture.id);
-  }
-
   return (
     <ToolControlMenu
       id={defaultTools.texture.id}
@@ -225,26 +150,10 @@ export function TextureToolControl(props: ToolControlButtonProps) {
       }
     >
       <PictureTexturePicker
-        header={
-          <MaterialModeButtons
-            toolLabel="Texture"
-            fillMode={fillMode}
-            onChange={switchMode}
-          />
-        }
         maxColumns={4}
-        rowHeaders={fillMode ? undefined : rowHeaders}
-        items={fillMode ? fillItems : pickerItems}
-        maxSpriteDimension={
-          fillMode
-            ? Math.max(
-                1,
-                ...fillSprites.map((s) =>
-                  Math.max(s.width ?? 0, s.height ?? 0),
-                ),
-              )
-            : maxTextureSpriteDimension
-        }
+        rowHeaders={rowHeaders}
+        items={pickerItems}
+        maxSpriteDimension={maxTextureSpriteDimension}
       />
     </ToolControlMenu>
   );

@@ -564,8 +564,8 @@ function getShortcutGroups(
             />
           ),
           subItems: [
-            { shortcut: "Space", label: "Change clipping in either mode" },
-            { shortcut: "+ / -", label: "Adjust distance in either mode" },
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
           ],
         },
         {
@@ -578,8 +578,8 @@ function getShortcutGroups(
             />
           ),
           subItems: [
-            { shortcut: "Space", label: "Change clipping in either mode" },
-            { shortcut: "+ / -", label: "Adjust distance in either mode" },
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
           ],
         },
         {
@@ -587,8 +587,8 @@ function getShortcutGroups(
           label: defaultTools.color.name,
           icon: <ColorToolIcon className="h-5 w-5" />,
           subItems: [
-            { shortcut: "Space", label: "Change clipping in either mode" },
-            { shortcut: "+ / -", label: "Adjust distance in either mode" },
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
           ],
         },
         {

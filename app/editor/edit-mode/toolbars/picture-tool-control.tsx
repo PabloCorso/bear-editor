@@ -1,4 +1,3 @@
-import { MaterialModeButtons } from "./material-mode-buttons";
 import {
   useEditorActions,
   useEditor,
@@ -17,7 +16,6 @@ import {
   useLgrSprite,
   usePictureSprites,
 } from "~/components/use-lgr-assets";
-import type { SceneryFillToolState } from "../tools/scenery-fill-tool";
 import {
   defaultPictureState,
   type PictureToolState,
@@ -31,20 +29,13 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   const pictureTool = useEditorToolState<PictureToolState>(
     defaultTools.picture.id,
   );
-  const { setToolState, activateTool, setToolMenuOpen } = useEditorActions();
+  const { setToolState, activateTool } = useEditorActions();
   const activeTool = useEditorActiveTool();
-  const fillMode = activeTool?.meta.id === defaultTools.pictureFill.id;
-  const isActive = fillMode || activeTool?.meta.id === defaultTools.picture.id;
-  const fillTool = useEditorToolState<SceneryFillToolState>(
-    defaultTools.pictureFill.id,
-  );
+  const isActive = activeTool?.meta.id === defaultTools.picture.id;
   const pictures = useEditor((state) => state.pictures);
   const lgrAssets = useLgrAssets();
 
-  const selectedPictureName =
-    (fillMode ? fillTool?.name : pictureTool?.name) ??
-    pictureTool?.name ??
-    defaultPictureState.name;
+  const selectedPictureName = pictureTool?.name ?? defaultPictureState.name;
   const defaultSprite = useLgrSprite(defaultPictureState.name);
   const pictureSprites = [...usePictureSprites()];
   for (const picture of pictures) {
@@ -72,36 +63,13 @@ export function PictureToolControl(props: ToolControlButtonProps) {
     1,
   );
   const selectedDistance =
-    (fillMode ? fillTool?.distance : pictureTool?.distance) ??
-    defaultPictureState.distance;
-  const selectedClip =
-    (fillMode ? fillTool?.clip : pictureTool?.clip) ?? defaultPictureState.clip;
+    pictureTool?.distance ?? defaultPictureState.distance;
+  const selectedClip = pictureTool?.clip ?? defaultPictureState.clip;
 
   function updatePicture(
     next: Pick<PictureToolState, "name" | "distance" | "clip">,
   ) {
-    if (fillMode) {
-      setToolState<SceneryFillToolState>(defaultTools.pictureFill.id, next);
-    } else {
-      setToolState<PictureToolState>(defaultTools.picture.id, next);
-    }
-  }
-
-  function switchMode(nextFillMode: boolean) {
-    const next = {
-      name: selectedPictureName,
-      distance: selectedDistance,
-      clip: selectedClip,
-    };
-    if (nextFillMode) {
-      setToolState<SceneryFillToolState>(defaultTools.pictureFill.id, next);
-      activateTool(defaultTools.pictureFill.id);
-      setToolMenuOpen(true, defaultTools.picture.id);
-    } else {
-      setToolState<PictureToolState>(defaultTools.picture.id, next);
-      activateTool(defaultTools.picture.id);
-      setToolMenuOpen(true, defaultTools.picture.id);
-    }
+    setToolState<PictureToolState>(defaultTools.picture.id, next);
   }
 
   const pickerItems = pictureSprites.map(({ picture, ...sprite }) => {
@@ -161,13 +129,6 @@ export function PictureToolControl(props: ToolControlButtonProps) {
       }
     >
       <PictureTexturePicker
-        header={
-          <MaterialModeButtons
-            toolLabel="Picture"
-            fillMode={fillMode}
-            onChange={switchMode}
-          />
-        }
         items={pickerItems}
         maxSpriteDimension={maxPictureSpriteDimension}
       />

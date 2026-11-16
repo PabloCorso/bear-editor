@@ -1,4 +1,3 @@
-import { MaterialModeButtons } from "./material-mode-buttons";
 import { Clip } from "~/editor/elma-types";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { PaletteIcon } from "@phosphor-icons/react/dist/ssr";
@@ -14,7 +13,6 @@ import {
 } from "~/editor/use-editor-store";
 import { defaultTools } from "../tools/default-tools";
 import type { ColorToolState } from "../tools/color-tool";
-import type { SceneryFillToolState } from "../tools/scenery-fill-tool";
 import { getColorPalette } from "./color-palette";
 import { PictureTexturePicker } from "./picture-texture-picker";
 import {
@@ -64,14 +62,10 @@ function ColorListControl({
     [colors],
   );
   const state = useEditorToolState<ColorToolState>(defaultTools.color.id);
-  const fillState = useEditorToolState<SceneryFillToolState>(
-    defaultTools.colorFill.id,
-  );
   const activeTool = useEditorActiveTool();
-  const fillMode = activeTool?.meta.id === defaultTools.colorFill.id;
-  const isActive = fillMode || activeTool?.meta.id === defaultTools.color.id;
+  const isActive = activeTool?.meta.id === defaultTools.color.id;
   const { setToolState, activateTool, setToolMenuOpen } = useEditorActions();
-  const selectedName = fillMode ? fillState?.name : state?.name;
+  const selectedName = state?.name;
   const selectedColor =
     colors.find(({ picture }) => picture.name === selectedName) ??
     ordered.find(({ picture }) => baseNames.has(picture.name));
@@ -82,14 +76,8 @@ function ColorListControl({
           baseNames.has(picture.name) || picture.name === selectedName,
       );
 
-  const distance =
-    (fillMode ? fillState?.distance : state?.distance) ??
-    selectedColor?.picture.distance ??
-    0;
-  const clip =
-    (fillMode ? fillState?.clip : state?.clip) ??
-    selectedColor?.picture.clip ??
-    Clip.Unclipped;
+  const distance = state?.distance ?? selectedColor?.picture.distance ?? 0;
+  const clip = state?.clip ?? selectedColor?.picture.clip ?? Clip.Unclipped;
 
   // Keep the placement choice aligned with the colors available in the loaded LGR,
   // including when the tool is activated by keyboard without opening its picker.
@@ -115,37 +103,12 @@ function ColorListControl({
     [isLoaded, selectedColor, state?.name, distance, clip, setToolState],
   );
 
-  function updateColor(patch: Partial<SceneryFillToolState>) {
-    if (fillMode) {
-      setToolState<SceneryFillToolState>(defaultTools.colorFill.id, patch);
-    } else {
-      setToolState<ColorToolState>(defaultTools.color.id, patch);
-    }
+  function updateColor(patch: Partial<ColorToolState>) {
+    setToolState<ColorToolState>(defaultTools.color.id, patch);
   }
 
   function activate(color: ColorSprite) {
     updateColor({ name: color.picture.name, distance, clip });
-  }
-
-  function switchMode(nextFill: boolean) {
-    const name = selectedColor?.picture.name ?? "";
-    if (nextFill) {
-      setToolState<SceneryFillToolState>(defaultTools.colorFill.id, {
-        name,
-        distance,
-        clip,
-      });
-      activateTool(defaultTools.colorFill.id);
-      setToolMenuOpen(true, defaultTools.color.id);
-    } else {
-      setToolState<ColorToolState>(defaultTools.color.id, {
-        name,
-        distance,
-        clip,
-      });
-      activateTool(defaultTools.color.id);
-      setToolMenuOpen(true, defaultTools.color.id);
-    }
   }
 
   const items = visibleColors.map((color) => {
@@ -224,20 +187,13 @@ function ColorListControl({
               />
             }
             header={
-              <>
-                <MaterialModeButtons
-                  toolLabel="Color"
-                  fillMode={fillMode}
-                  onChange={switchMode}
+              colors.length > baseNames.size && (
+                <ColorPaletteSwitch
+                  count={colors.length}
+                  checked={showAll}
+                  onCheckedChange={setShowAll}
                 />
-                {colors.length > baseNames.size && (
-                  <ColorPaletteSwitch
-                    count={colors.length}
-                    checked={showAll}
-                    onCheckedChange={setShowAll}
-                  />
-                )}
-              </>
+              )
             }
           />
         ) : (
