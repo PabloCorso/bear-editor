@@ -38,23 +38,15 @@ import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { defaultAppleState } from "../tools/apple-tools";
 import { getColorPalette } from "./color-palette";
 
-type ReplacementKind =
-  | "apples"
-  | "killers"
-  | "flowers"
-  | "pictures"
-  | "textures"
-  | "colors"
-  | "copied";
+type ObjectKind = "apples" | "killers" | "flowers";
+type ReplacementKind = "object" | "pictures" | "textures" | "colors" | "copied";
 const materialKinds = [
   { value: "pictures", label: "Picture" },
   { value: "textures", label: "Texture" },
   { value: "colors", label: "Color" },
 ] as const;
 const replacementKinds: { value: ReplacementKind; label: string }[] = [
-  { value: "apples", label: "Apple" },
-  { value: "killers", label: "Killer" },
-  { value: "flowers", label: "Flower" },
+  { value: "object", label: "Object" },
   ...materialKinds,
   { value: "copied", label: "Clipboard" },
 ];
@@ -80,8 +72,9 @@ export function ReplaceSelectionDialog({
   const title = isFill ? "Fill" : "Replace";
   const kinds = isFill ? materialKinds : replacementKinds;
   const [kind, setKind] = useState<ReplacementKind>(
-    isFill ? "pictures" : "apples",
+    isFill ? "pictures" : "object",
   );
+  const [objectKind, setObjectKind] = useState<ObjectKind>("apples");
   const [apple, setApple] = useState(defaultAppleState);
   const [picture, setPicture] = useState<Omit<Picture, "position"> | null>(
     null,
@@ -95,6 +88,16 @@ export function ReplaceSelectionDialog({
   const [showAllColors, setShowAllColors] = useState(false);
   const appleSprites = useAppleSprites();
   const appleIcon = useLgrSprite("qfood1");
+  const killerIcon = useLgrSprite("qkiller");
+  const flowerIcon = useLgrSprite("qexit");
+  const selectedAppleSrc =
+    appleSprites.find(({ animation }) => animation === apple.animation)?.src ??
+    appleIcon.src;
+  const objects = [
+    { kind: "apples", label: "Apple", src: selectedAppleSrc },
+    { kind: "killers", label: "Killer", src: killerIcon.src },
+    { kind: "flowers", label: "Flower", src: flowerIcon.src },
+  ] as const;
   const fillTextures = useTextureSprites();
   const { ordered, baseNames } = useMemo(
     () => getColorPalette(lgr.getColorSprites()),
@@ -187,7 +190,7 @@ export function ReplaceSelectionDialog({
           : "Choose a material."
         : kind === "copied"
           ? await tool.replaceSelectionWithCopiedContent(controller.signal)
-          : tool.replaceSelectionWithObject(kind, apple);
+          : tool.replaceSelectionWithObject(objectKind, apple);
       if (controller.signal.aborted) return;
       if (result) setError(result);
       else onClose();
@@ -234,7 +237,28 @@ export function ReplaceSelectionDialog({
               ))}
             </SelectContent>
           </Select>
-          {kind === "apples" && (
+          {kind === "object" && (
+            <div
+              className="flex flex-wrap gap-1"
+              role="group"
+              aria-label="Object"
+            >
+              {objects.map(({ kind, label, src }) => (
+                <PickerOptionButton
+                  key={kind}
+                  label={label}
+                  selected={objectKind === kind}
+                  onClick={() => {
+                    setObjectKind(kind);
+                    setError(null);
+                  }}
+                >
+                  <SpriteIcon src={src} />
+                </PickerOptionButton>
+              ))}
+            </div>
+          )}
+          {kind === "object" && objectKind === "apples" && (
             <>
               <div
                 className="flex flex-wrap gap-1"
@@ -264,8 +288,13 @@ export function ReplaceSelectionDialog({
                     selected={apple.gravity === gravity}
                     onClick={() => setApple({ ...apple, gravity })}
                   >
-                    <SpriteIcon src={appleIcon.src} />
-                    <AppleArrowIcon gravity={gravity} aria-hidden="true" />
+                    <span className="relative block" aria-hidden="true">
+                      <SpriteIcon
+                        className="block h-full w-full"
+                        src={selectedAppleSrc}
+                      />
+                      <AppleArrowIcon gravity={gravity} />
+                    </span>
                   </PickerOptionButton>
                 ))}
               </div>
