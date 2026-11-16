@@ -1,3 +1,4 @@
+import { isPolygonClockwise } from "~/editor/helpers/polygon-helpers";
 import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
 import type { TextureFillTool } from "./texture-fill-tool";
 import type { SceneryFillTool } from "./scenery-fill-tool";
@@ -24,7 +25,7 @@ import {
   uiColors,
   uiStrokeWidths,
 } from "~/editor/constants";
-import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
+import { Clip, type Apple, type Picture, type Polygon, type Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
 import type { EditorStore } from "~/editor/editor-store";
 import type { HistoryTransaction } from "~/editor/history/transaction-history";
@@ -1443,15 +1444,33 @@ export class SelectTool extends Tool<SelectToolState> {
     ];
   }
 
+  private getFillPolygons() {
+    const { state, toolState } = this.getState();
+    return getCompleteSelectedPolygons(toolState, state.polygons).filter(
+      (polygon) => !polygon.grass && polygon.vertices.length >= 3,
+    );
+  }
+
+  private getPolygonFillClip(polygon: Polygon): Clip {
+    return isPolygonClockwise(polygon.vertices) ? Clip.Ground : Clip.Sky;
+  }
+
+  public getSelectedFillClip(): Clip | "mixed" {
+    const clips = this.getFillPolygons().map((polygon) =>
+      this.getPolygonFillClip(polygon),
+    );
+    const firstClip = clips[0] ?? Clip.Ground;
+    return clips.every((clip) => clip === firstClip) ? firstClip : "mixed";
+  }
+
   public fillSelectedPolygons(
     kind: "pictures" | "textures" | "colors",
-    picture: Omit<Picture, "position">,
+    picture: Pick<Picture, "name" | "texture" | "mask">,
+    distance: number,
+    clipOverride?: Clip,
   ): string | null {
-    const { state, toolState } = this.getState();
-    const polygons = getCompleteSelectedPolygons(
-      toolState,
-      state.polygons,
-    ).filter((polygon) => !polygon.grass && polygon.vertices.length >= 3);
+    const { state } = this.getState();
+    const polygons = this.getFillPolygons();
     if (!polygons.length) return "Select a polygon.";
 
     const toolId =
@@ -1467,7 +1486,11 @@ export class SelectTool extends Tool<SelectToolState> {
 
     const pictures: Picture[] = [];
     for (const polygon of polygons) {
-      const preview = fill.previewPolygon(polygon, picture);
+      const preview = fill.previewPolygon(polygon, {
+        ...picture,
+        distance,
+        clip: clipOverride ?? this.getPolygonFillClip(polygon),
+      });
       if (preview.error) return preview.error;
       if (
         state.pictures.length + pictures.length + preview.pictures.length >

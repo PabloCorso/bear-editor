@@ -18,6 +18,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogXClose,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import {
@@ -28,7 +29,7 @@ import {
   useLgrSprite,
   useAppleSprites,
 } from "~/components/use-lgr-assets";
-import { Gravity, type Picture } from "~/editor/elma-types";
+import { Gravity, type Clip, type Picture } from "~/editor/elma-types";
 import type { SelectTool } from "../tools/select-tool";
 import {
   PictureTexturePicker,
@@ -58,7 +59,7 @@ const gravityOptions = [
   { gravity: Gravity.Right, label: "Gravity right" },
 ];
 
-/** Local settings remain drafts until Replace is clicked. */
+/** Local settings remain drafts until Fill or Replace is clicked. */
 export function ReplaceSelectionDialog({
   tool,
   mode = "replace",
@@ -79,6 +80,8 @@ export function ReplaceSelectionDialog({
   const [picture, setPicture] = useState<Omit<Picture, "position"> | null>(
     null,
   );
+  const [fillDistance, setFillDistance] = useState(750);
+  const [fillClip, setFillClip] = useState<Clip>();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef<AbortController | null>(null);
@@ -185,7 +188,12 @@ export function ReplaceSelectionDialog({
       const result = needsPicture
         ? picture
           ? isFill
-            ? tool.fillSelectedPolygons(kind, picture)
+            ? tool.fillSelectedPolygons(
+                kind,
+                picture,
+                fillDistance,
+                fillClip,
+              )
             : tool.replaceSelectionWithPicture(picture)
           : "Choose a material."
         : kind === "copied"
@@ -210,8 +218,23 @@ export function ReplaceSelectionDialog({
       }}
     >
       <DialogContent>
-        <DialogHeader showCloseButton>
+        <DialogHeader showCloseButton={!isFill}>
           <DialogTitle>{title}</DialogTitle>
+          {isFill && (
+            <>
+              <PicturePropertiesToolbar
+                className="ml-auto w-auto"
+                variant="summary-popover"
+                propertiesTitle="Fill properties"
+                distance={fillDistance}
+                clip={fillClip ?? tool.getSelectedFillClip()}
+                onDistanceChange={setFillDistance}
+                onClipChange={setFillClip}
+                popoverContentProps={{ side: "bottom", align: "end" }}
+              />
+              <DialogXClose />
+            </>
+          )}
         </DialogHeader>
         <DialogBody className="gap-3">
           <Select
@@ -310,7 +333,7 @@ export function ReplaceSelectionDialog({
                     onCheckedChange={setShowAllColors}
                   />
                 )}
-                {picture && (
+                {!isFill && picture && (
                   <PicturePropertiesToolbar
                     className="ml-auto w-auto"
                     variant="summary-popover"
