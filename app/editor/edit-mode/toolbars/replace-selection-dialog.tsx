@@ -7,10 +7,9 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { SpriteIcon } from "~/components/sprite-icon";
-import { AppleArrowIcon } from "./apple-tool-control";
+import { AppleToolbar } from "./apple-tool-control";
 import { ColorPaletteSwitch } from "./color-palette-switch";
-import { PickerOptionButton } from "./picker-option-button";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogBody,
@@ -18,18 +17,18 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogXClose,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { Toolbar, ToolbarButton, ToolbarSeparator } from "~/components/ui/toolbar";
+import { cn } from "~/utils/misc";
 import {
   usePictureSprites,
   useTextureMaskSprites,
   useTextureSprites,
   useLgrAssets,
   useLgrSprite,
-  useAppleSprites,
 } from "~/components/use-lgr-assets";
-import { Gravity, type Clip, type Picture } from "~/editor/elma-types";
+import { Clip, type Picture } from "~/editor/elma-types";
 import type { SelectTool } from "../tools/select-tool";
 import {
   PictureTexturePicker,
@@ -37,6 +36,8 @@ import {
 } from "./picture-texture-picker";
 import { PicturePropertiesToolbar } from "./picture-properties-toolbar";
 import { defaultAppleState } from "../tools/apple-tools";
+import { defaultPictureState } from "../tools/picture-tool";
+import { defaultTextureState } from "../tools/texture-tool";
 import { getColorPalette } from "./color-palette";
 
 type ObjectKind = "apples" | "killers" | "flowers";
@@ -50,13 +51,6 @@ const replacementKinds: { value: ReplacementKind; label: string }[] = [
   { value: "object", label: "Object" },
   ...materialKinds,
   { value: "copied", label: "Clipboard" },
-];
-const gravityOptions = [
-  { gravity: Gravity.None, label: "No gravity" },
-  { gravity: Gravity.Down, label: "Gravity down" },
-  { gravity: Gravity.Left, label: "Gravity left" },
-  { gravity: Gravity.Up, label: "Gravity up" },
-  { gravity: Gravity.Right, label: "Gravity right" },
 ];
 
 /** Local settings remain drafts until Fill or Replace is clicked. */
@@ -82,6 +76,9 @@ export function ReplaceSelectionDialog({
   );
   const [fillDistance, setFillDistance] = useState(750);
   const [fillClip, setFillClip] = useState<Clip>();
+  const [replacementOverrides, setReplacementOverrides] = useState<
+    Partial<Pick<Picture, "distance" | "clip">>
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pending = useRef<AbortController | null>(null);
@@ -89,18 +86,8 @@ export function ReplaceSelectionDialog({
   const textureSprites = useTextureMaskSprites();
   const { lgr, isLoaded } = useLgrAssets();
   const [showAllColors, setShowAllColors] = useState(false);
-  const appleSprites = useAppleSprites();
-  const appleIcon = useLgrSprite("qfood1");
   const killerIcon = useLgrSprite("qkiller");
   const flowerIcon = useLgrSprite("qexit");
-  const selectedAppleSrc =
-    appleSprites.find(({ animation }) => animation === apple.animation)?.src ??
-    appleIcon.src;
-  const objects = [
-    { kind: "apples", label: "Apple", src: selectedAppleSrc },
-    { kind: "killers", label: "Killer", src: killerIcon.src },
-    { kind: "flowers", label: "Flower", src: flowerIcon.src },
-  ] as const;
   const fillTextures = useTextureSprites();
   const { ordered, baseNames } = useMemo(
     () => getColorPalette(lgr.getColorSprites()),
@@ -128,6 +115,20 @@ export function ReplaceSelectionDialog({
       : kind === "colors"
         ? colorSprites
         : pictureSprites;
+  const assetDefaults =
+    picture ??
+    (kind === "textures"
+      ? (textureSprites[0]?.texture ?? defaultTextureState)
+      : kind === "colors"
+        ? (colorSprites[0]?.picture ?? { distance: 0, clip: Clip.Unclipped })
+        : (pictureSprites[0]?.picture ?? defaultPictureState));
+  const properties = isFill
+    ? { distance: fillDistance, clip: fillClip ?? tool.getSelectedFillClip() }
+    : {
+        ...tool.getReplacementPictureDefaults(assetDefaults),
+        ...replacementOverrides,
+      };
+
   const pickerItems =
     kind === "textures"
       ? isFill
@@ -194,7 +195,7 @@ export function ReplaceSelectionDialog({
                 fillDistance,
                 fillClip,
               )
-            : tool.replaceSelectionWithPicture(picture)
+            : tool.replaceSelectionWithPicture(picture, replacementOverrides)
           : "Choose a material."
         : kind === "copied"
           ? await tool.replaceSelectionWithCopiedContent(controller.signal)
@@ -218,23 +219,8 @@ export function ReplaceSelectionDialog({
       }}
     >
       <DialogContent>
-        <DialogHeader showCloseButton={!isFill}>
+        <DialogHeader showCloseButton>
           <DialogTitle>{title}</DialogTitle>
-          {isFill && (
-            <>
-              <PicturePropertiesToolbar
-                className="ml-auto w-auto"
-                variant="summary-popover"
-                propertiesTitle="Fill properties"
-                distance={fillDistance}
-                clip={fillClip ?? tool.getSelectedFillClip()}
-                onDistanceChange={setFillDistance}
-                onClipChange={setFillClip}
-                popoverContentProps={{ side: "bottom", align: "end" }}
-              />
-              <DialogXClose />
-            </>
-          )}
         </DialogHeader>
         <DialogBody className="gap-3">
           <Select
@@ -244,6 +230,7 @@ export function ReplaceSelectionDialog({
               if (!value || value === kind) return;
               setKind(value);
               setPicture(null);
+              setReplacementOverrides({});
               setError(null);
             }}
             disabled={busy}
@@ -261,67 +248,47 @@ export function ReplaceSelectionDialog({
             </SelectContent>
           </Select>
           {kind === "object" && (
-            <div
-              className="flex flex-wrap gap-1"
-              role="group"
-              aria-label="Object"
-            >
-              {objects.map(({ kind, label, src }) => (
-                <PickerOptionButton
-                  key={kind}
-                  label={label}
-                  selected={objectKind === kind}
-                  onClick={() => {
-                    setObjectKind(kind);
-                    setError(null);
-                  }}
-                >
-                  <SpriteIcon src={src} />
-                </PickerOptionButton>
-              ))}
-            </div>
-          )}
-          {kind === "object" && objectKind === "apples" && (
-            <>
-              <div
-                className="flex flex-wrap gap-1"
-                role="group"
-                aria-label="Apple animation"
-              >
-                {appleSprites.map(({ animation, src }) => (
-                  <PickerOptionButton
-                    key={animation}
-                    label={`Apple animation ${animation}`}
-                    selected={apple.animation === animation}
-                    onClick={() => setApple({ ...apple, animation })}
+            <Toolbar aria-label="Objects" className="self-start flex-wrap">
+              <AppleToolbar
+                orientation="horizontal"
+                withShortcuts={false}
+                className="flex-wrap border-0 bg-transparent p-0 shadow-none"
+                isSelected={objectKind === "apples"}
+                currentAnimation={apple.animation}
+                currentGravity={apple.gravity}
+                onAnimationChange={(animation) => {
+                  setObjectKind("apples");
+                  setApple((current) => ({ ...current, animation }));
+                  setError(null);
+                }}
+                onGravityChange={(gravity) => {
+                  setObjectKind("apples");
+                  setApple((current) => ({ ...current, gravity }));
+                  setError(null);
+                }}
+              />
+              {([
+                { kind: "killers", label: "Killer", src: killerIcon.src },
+                { kind: "flowers", label: "Flower", src: flowerIcon.src },
+              ] as const).map(({ kind, label, src }) => (
+                <Fragment key={kind}>
+                  <ToolbarSeparator />
+                  <ToolbarButton
+                    size="sm"
+                    aria-label={label}
+                    aria-pressed={objectKind === kind}
+                    isLoading={!src}
+                    className={cn(objectKind === kind && "bg-primary-hover/50")}
+                    onClick={() => {
+                      setObjectKind(kind);
+                      setError(null);
+                    }}
                   >
                     <SpriteIcon src={src} />
-                  </PickerOptionButton>
-                ))}
-              </div>
-              <div
-                className="flex flex-wrap gap-1"
-                role="group"
-                aria-label="Gravity"
-              >
-                {gravityOptions.map(({ gravity, label }) => (
-                  <PickerOptionButton
-                    key={gravity}
-                    label={label}
-                    selected={apple.gravity === gravity}
-                    onClick={() => setApple({ ...apple, gravity })}
-                  >
-                    <span className="relative block" aria-hidden="true">
-                      <SpriteIcon
-                        className="block h-full w-full"
-                        src={selectedAppleSrc}
-                      />
-                      <AppleArrowIcon gravity={gravity} />
-                    </span>
-                  </PickerOptionButton>
-                ))}
-              </div>
-            </>
+                  </ToolbarButton>
+                </Fragment>
+              ))}
+            </Toolbar>
           )}
           {needsPicture && (
             <>
@@ -333,18 +300,23 @@ export function ReplaceSelectionDialog({
                     onCheckedChange={setShowAllColors}
                   />
                 )}
-                {!isFill && picture && (
-                  <PicturePropertiesToolbar
-                    className="ml-auto w-auto"
-                    variant="summary-popover"
-                    distance={picture.distance}
-                    clip={picture.clip}
-                    onDistanceChange={(distance) =>
-                      setPicture({ ...picture, distance })
-                    }
-                    onClipChange={(clip) => setPicture({ ...picture, clip })}
-                  />
-                )}
+                <PicturePropertiesToolbar
+                  className="ml-auto w-auto"
+                  variant="summary-popover"
+                  propertiesTitle={isFill ? "Fill properties" : undefined}
+                  distance={properties.distance}
+                  clip={properties.clip}
+                  onDistanceChange={(distance) => {
+                    if (isFill) setFillDistance(distance);
+                    else
+                      setReplacementOverrides((current) => ({ ...current, distance }));
+                  }}
+                  onClipChange={(clip) => {
+                    if (isFill) setFillClip(clip);
+                    else
+                      setReplacementOverrides((current) => ({ ...current, clip }));
+                  }}
+                />
               </div>
               <div className="max-h-64 overflow-y-auto">
                 <PictureTexturePicker

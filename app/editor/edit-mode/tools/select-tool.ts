@@ -1444,6 +1444,34 @@ export class SelectTool extends Tool<SelectToolState> {
     ];
   }
 
+  private getReplacementSourcePictures() {
+    const { state, toolState } = this.getState();
+    const selected = new Set(toolState?.selectedPictures);
+    return new Map(
+      state.pictures
+        .filter(({ position }) => selected.has(position))
+        .map((picture) => [picture.position, picture] as const),
+    );
+  }
+
+  public getReplacementPictureDefaults(
+    asset: Pick<Picture, "distance" | "clip">,
+  ): { distance: number | "mixed"; clip: Clip | "mixed" } {
+    const originals = this.getReplacementSourcePictures();
+    const properties = this.getReplacementTargets().map(
+      (target) => originals.get(target) ?? asset,
+    );
+    const first = properties[0] ?? asset;
+    return {
+      distance: properties.every(({ distance }) => distance === first.distance)
+        ? first.distance
+        : "mixed",
+      clip: properties.every(({ clip }) => clip === first.clip)
+        ? first.clip
+        : "mixed",
+    };
+  }
+
   private getFillPolygons() {
     const { state, toolState } = this.getState();
     return getCompleteSelectedPolygons(toolState, state.polygons).filter(
@@ -1529,14 +1557,18 @@ export class SelectTool extends Tool<SelectToolState> {
 
   public replaceSelectionWithPicture(
     picture: Omit<Picture, "position">,
+    overrides: Partial<Pick<Picture, "distance" | "clip">> = {},
   ): string | null {
-    return this.replaceSelectionWithContent({
-      polygons: [],
-      apples: [],
-      killers: [],
-      flowers: [],
-      pictures: [{ ...picture, position: { x: 0, y: 0 } }],
-    });
+    return this.replaceSelectionWithContent(
+      {
+        polygons: [],
+        apples: [],
+        killers: [],
+        flowers: [],
+        pictures: [{ ...picture, position: { x: 0, y: 0 } }],
+      },
+      overrides,
+    );
   }
 
   public async replaceSelectionWithCopiedContent(
@@ -1574,6 +1606,7 @@ export class SelectTool extends Tool<SelectToolState> {
 
   private replaceSelectionWithContent(
     content: SelectionClipboard,
+    pictureOverrides?: Partial<Pick<Picture, "distance" | "clip">>,
   ): string | null {
     this.pruneHiddenSelection();
     const { state, toolState, setToolState } = this.getState();
@@ -1604,7 +1637,11 @@ export class SelectTool extends Tool<SelectToolState> {
       x: point.x - center.x + target.x,
       y: point.y - center.y + target.y,
     });
+    const originalPictures = pictureOverrides
+      ? this.getReplacementSourcePictures()
+      : undefined;
     for (const target of targets) {
+      const original = originalPictures?.get(target);
       added.polygons.push(
         ...content.polygons.map((polygon) => ({
           ...polygon,
@@ -1626,6 +1663,9 @@ export class SelectTool extends Tool<SelectToolState> {
       added.pictures.push(
         ...content.pictures.map((picture) => ({
           ...picture,
+          distance:
+            pictureOverrides?.distance ?? original?.distance ?? picture.distance,
+          clip: pictureOverrides?.clip ?? original?.clip ?? picture.clip,
           position: atTarget(picture.position, target),
         })),
       );
