@@ -41,7 +41,6 @@ export function getKuskiPreview(lgr: LgrAssets, color: string) {
       ground: "",
       sky: "",
       animateSprites: false,
-      groundClipMode: "when-polygons-visible",
       viewport: {
         width: PREVIEW_SIZE,
         height: PREVIEW_SIZE,

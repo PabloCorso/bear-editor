@@ -16,11 +16,7 @@ import { LevelFolder } from "./helpers/level-folder";
 import type { LevelVisibilitySettings } from "./level-visibility";
 import type { VertexEdgeClickBehavior } from "./editor-preference-types";
 import type { AutoGrassOptions } from "./helpers/auto-grass";
-import type {
-  PlayRunEndBehavior,
-  PlayKeyBindings,
-  PlaySettings,
-} from "./play-mode/play-settings";
+import type { PlayKeyBindings, PlaySettings } from "./play-mode/play-settings";
 
 type EditorDocumentSnapshot = EditorLevel;
 
@@ -201,10 +197,11 @@ export type EditorState = EditorHistoryContent & {
     toggleAnimateSprites: () => void;
     toggleShowSprites: () => void;
     setLevelVisibility: (settings: Partial<LevelVisibilitySettings>) => void;
-    setPlaySettings: (settings: {
-      runEndBehavior?: PlayRunEndBehavior;
-      keyBindings?: Partial<PlayKeyBindings>;
-    }) => void;
+    setPlaySettings: (
+      settings: Partial<Omit<PlaySettings, "keyBindings">> & {
+        keyBindings?: Partial<PlayKeyBindings>;
+      },
+    ) => void;
     setPictureSelection: (settings: Partial<PictureSelectionSettings>) => void;
     setVertexEdgeClickBehavior: (behavior: VertexEdgeClickBehavior) => void;
     setGrid: (settings: Partial<GridSettings>) => void;

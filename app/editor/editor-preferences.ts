@@ -16,6 +16,8 @@ import {
   DEFAULT_PLAY_MODE_ZOOM,
   defaultPlaySettings,
   loadPlayKeyBindings,
+  MAX_PLAY_FPS_LIMIT,
+  MIN_PLAY_FPS_LIMIT,
 } from "./play-mode/play-settings";
 import type { EditorStore } from "./editor-store";
 import type {
@@ -31,7 +33,13 @@ const EDITOR_PREFERENCES_STORAGE_KEY = "elma-web-editor-preferences";
 
 type PersistedEditorPreferences = {
   version: 1;
-  preferences: EditorPreferences;
+  preferences: Omit<EditorPreferences, "playSettings"> & {
+    playSettings?: Partial<
+      Omit<EditorPreferences["playSettings"], "fpsLimit">
+    > & {
+      fpsLimit?: number | "off" | "60" | "100" | "144" | "240" | "500";
+    };
+  };
 };
 
 type PersistedLevelVisibilitySettings = Partial<
@@ -92,6 +100,13 @@ export function loadEditorPreferences(): EditorPreferences {
     EDITOR_PREFERENCES_STORAGE_KEY,
   );
   const preferences = persistedPreferences?.preferences;
+  const savedPlaySettings = preferences?.playSettings;
+  const savedFpsLimit = savedPlaySettings?.fpsLimit;
+  const fpsLimit = Number(savedFpsLimit);
+  const hasValidFpsLimit =
+    Number.isInteger(fpsLimit) &&
+    fpsLimit >= MIN_PLAY_FPS_LIMIT &&
+    fpsLimit <= MAX_PLAY_FPS_LIMIT;
 
   return {
     checkTopologyOnSave:
@@ -114,8 +129,14 @@ export function loadEditorPreferences(): EditorPreferences {
       preferences?.playModeZoom ?? defaultEditorPreferences.playModeZoom,
     playSettings: {
       ...defaultPlaySettings,
-      ...(preferences?.playSettings ?? {}),
-      keyBindings: loadPlayKeyBindings(preferences?.playSettings?.keyBindings),
+      ...savedPlaySettings,
+      videoDetail: savedPlaySettings?.videoDetail === "low" ? "low" : "high",
+      limitFps:
+        typeof savedPlaySettings?.limitFps === "boolean"
+          ? savedPlaySettings.limitFps
+          : typeof savedFpsLimit === "string" && hasValidFpsLimit,
+      fpsLimit: hasValidFpsLimit ? fpsLimit : defaultPlaySettings.fpsLimit,
+      keyBindings: loadPlayKeyBindings(savedPlaySettings?.keyBindings),
     },
     pictureSelection: normalizePictureSelectionSettings(
       preferences?.pictureSelection,

@@ -51,7 +51,7 @@ export function EditorShell({
         <TextEditorOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
-            <LazyPlayModeOverlay rendererBackend={rendererBackend} />
+            <LazyPlayModeOverlay />
           </Suspense>
         ) : null}
       </div>

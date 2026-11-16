@@ -7,8 +7,8 @@ in vec2 a_maskTexCoord;
 
 uniform vec4 u_viewRect;
 
-out mediump vec2 v_texCoord;
-out mediump vec2 v_maskTexCoord;
+out highp vec2 v_texCoord;
+out highp vec2 v_maskTexCoord;
 
 void main() {
   vec2 viewSize = max(u_viewRect.zw - u_viewRect.xy, vec2(0.0001));
@@ -25,20 +25,30 @@ precision mediump float;
 uniform bool u_useTexture;
 uniform bool u_useMaskTexture;
 uniform bool u_repeatTexture;
+uniform highp vec2 u_repeatTileSize;
 uniform vec4 u_color;
 uniform bool u_recolorKuski;
 uniform sampler2D u_texture;
 uniform sampler2D u_maskTexture;
 
-in mediump vec2 v_texCoord;
-in mediump vec2 v_maskTexCoord;
+in highp vec2 v_texCoord;
+in highp vec2 v_maskTexCoord;
 out vec4 fragColor;
 
 void main() {
   vec4 color = u_color;
   if (u_useTexture) {
     vec2 texCoord = u_repeatTexture ? fract(v_texCoord) : v_texCoord;
-    vec4 sprite = texture(u_texture, texCoord);
+    vec4 sprite;
+    if (u_repeatTileSize.y > 0.0) {
+      // Elma resizes the source in whole pixels before repeating it.
+      highp vec2 size = vec2(textureSize(u_texture, 0));
+      highp vec2 pixel = floor(texCoord * u_repeatTileSize);
+      ivec2 texel = ivec2(min(floor(pixel * size.y / u_repeatTileSize.y), size - 1.0));
+      sprite = texelFetch(u_texture, texel, 0);
+    } else {
+      sprite = texture(u_texture, texCoord);
+    }
     color = sprite * u_color;
     if (u_recolorKuski) {
       // Remove the original red/yellow hue before applying the identity color.
@@ -70,6 +80,7 @@ type ProgramInfo = {
   recolorKuskiUniform: WebGLUniformLocation;
   maskTextureUniform: WebGLUniformLocation;
   repeatTextureUniform: WebGLUniformLocation;
+  repeatTileSizeUniform: WebGLUniformLocation;
   useMaskTextureUniform: WebGLUniformLocation;
   useTextureUniform: WebGLUniformLocation;
   textureUniform: WebGLUniformLocation;
@@ -95,18 +106,24 @@ export class WebGLRenderContext {
   private vertexBuffer: WebGLBuffer;
   private vertices: WebGLVertexArrayObject;
   private maskedVertices: WebGLVertexArrayObject;
-  private textureCache = new WeakMap<ImageBitmap, WebGLTexture>();
+  private textureCache = new WeakMap<
+    ImageBitmap | HTMLCanvasElement,
+    WebGLTexture
+  >();
   private canvasTextureCache = new WeakMap<HTMLCanvasElement, WebGLTexture>();
   private textures = new Set<WebGLTexture>();
 
-  constructor(canvas: HTMLCanvasElement, { alpha = false } = {}) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    { alpha = false, antialias = true } = {},
+  ) {
     this.canvas = canvas;
     let gl: WebGL2RenderingContext | null = null;
 
     try {
       gl = canvas.getContext("webgl2", {
         alpha,
-        antialias: true,
+        antialias,
         preserveDrawingBuffer: import.meta.env.DEV,
         stencil: true,
       });
@@ -142,8 +159,10 @@ export class WebGLRenderContext {
     height: number;
     devicePixelRatio?: number;
   }) {
-    this.canvas.width = width * devicePixelRatio;
-    this.canvas.height = height * devicePixelRatio;
+    const pixelWidth = Math.round(width * devicePixelRatio);
+    const pixelHeight = Math.round(height * devicePixelRatio);
+    if (this.canvas.width !== pixelWidth) this.canvas.width = pixelWidth;
+    if (this.canvas.height !== pixelHeight) this.canvas.height = pixelHeight;
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
@@ -186,12 +205,36 @@ export class WebGLRenderContext {
     gl.activeTexture(gl.TEXTURE0);
   }
 
+  createStaticVertices(vertices: Float32Array) {
+    const gl = this.gl;
+    const buffer = gl.createBuffer();
+    if (!buffer) throw new Error("Could not allocate playfield geometry");
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+    const vao = createVertexArray(gl, this.programInfo, false);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+
+    return {
+      draw: (scene: WorldRenderScene) => {
+        gl.bindVertexArray(vao);
+        applyViewportUniforms(gl, this.programInfo, scene);
+        gl.uniform1i(this.programInfo.useTextureUniform, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 4);
+      },
+      destroy: () => {
+        gl.deleteVertexArray(vao);
+        gl.deleteBuffer(buffer);
+      },
+    };
+  }
+
   drawVertices({
     vertices,
     color,
     scene,
     texture = null,
     repeatTexture = false,
+    repeatTileSize,
     recolorKuski = false,
   }: {
     vertices: number[];
@@ -199,6 +242,7 @@ export class WebGLRenderContext {
     scene: WorldRenderScene;
     texture?: WebGLTexture | null;
     repeatTexture?: boolean;
+    repeatTileSize?: [width: number, height: number];
     recolorKuski?: boolean;
   }) {
     if (vertices.length === 0) return;
@@ -213,6 +257,11 @@ export class WebGLRenderContext {
     gl.uniform1i(programInfo.recolorKuskiUniform, recolorKuski ? 1 : 0);
     gl.uniform1i(programInfo.useMaskTextureUniform, 0);
     gl.uniform1i(programInfo.repeatTextureUniform, repeatTexture ? 1 : 0);
+    gl.uniform2f(
+      programInfo.repeatTileSizeUniform,
+      repeatTileSize?.[0] ?? 0,
+      repeatTileSize?.[1] ?? 0,
+    );
     if (texture) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -226,12 +275,14 @@ export class WebGLRenderContext {
     color,
     texture,
     maskTexture,
+    repeatTileSize,
     scene,
   }: {
     vertices: number[];
     color: WebGLColor;
     texture: WebGLTexture;
     maskTexture: WebGLTexture;
+    repeatTileSize?: [width: number, height: number];
     scene: WorldRenderScene;
   }) {
     if (vertices.length === 0) return;
@@ -246,6 +297,11 @@ export class WebGLRenderContext {
     gl.uniform1i(programInfo.recolorKuskiUniform, 0);
     gl.uniform1i(programInfo.useMaskTextureUniform, 1);
     gl.uniform1i(programInfo.repeatTextureUniform, 1);
+    gl.uniform2f(
+      programInfo.repeatTileSizeUniform,
+      repeatTileSize?.[0] ?? 0,
+      repeatTileSize?.[1] ?? 0,
+    );
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.activeTexture(gl.TEXTURE1);
@@ -254,8 +310,11 @@ export class WebGLRenderContext {
     gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 6);
   }
 
-  getTexture(sprite: ImageBitmap | HTMLCanvasElement) {
-    if (sprite instanceof HTMLCanvasElement) {
+  getTexture(
+    sprite: ImageBitmap | HTMLCanvasElement,
+    { immutable = false } = {},
+  ) {
+    if (sprite instanceof HTMLCanvasElement && !immutable) {
       return this.getCanvasTexture(sprite);
     }
 
@@ -268,7 +327,7 @@ export class WebGLRenderContext {
     return texture;
   }
 
-  releaseTexture(sprite: ImageBitmap) {
+  releaseTexture(sprite: ImageBitmap | HTMLCanvasElement) {
     const texture = this.textureCache.get(sprite);
     if (!texture) return;
     this.gl.deleteTexture(texture);
@@ -399,6 +458,10 @@ function createProgramInfo(gl: WebGL2RenderingContext): ProgramInfo {
     program,
     "u_repeatTexture",
   );
+  const repeatTileSizeUniform = gl.getUniformLocation(
+    program,
+    "u_repeatTileSize",
+  );
   const useMaskTextureUniform = gl.getUniformLocation(
     program,
     "u_useMaskTexture",
@@ -411,6 +474,7 @@ function createProgramInfo(gl: WebGL2RenderingContext): ProgramInfo {
     !colorUniform ||
     !maskTextureUniform ||
     !repeatTextureUniform ||
+    !repeatTileSizeUniform ||
     !useMaskTextureUniform ||
     !useTextureUniform ||
     !textureUniform ||
@@ -428,6 +492,7 @@ function createProgramInfo(gl: WebGL2RenderingContext): ProgramInfo {
     recolorKuskiUniform,
     maskTextureUniform,
     repeatTextureUniform,
+    repeatTileSizeUniform,
     useMaskTextureUniform,
     useTextureUniform,
     textureUniform,
