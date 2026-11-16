@@ -75,7 +75,13 @@ export abstract class SceneryFillTool extends Tool<SceneryFillToolState> {
         .filter((item) => isPointInPolygon(point, item.vertices))
         .sort((a, b) => polygonArea(a.vertices) - polygonArea(b.vertices))[0] ??
       findPolygonEdgeNearPosition(point, candidates);
-    if (!polygon) return null;
+    return polygon ? this.previewPolygon(polygon, toolState) : null;
+  }
+
+  previewPolygon(
+    polygon: Polygon,
+    toolState: SceneryFillToolState,
+  ): FillPreview {
     const assets = this.resolveAssets();
     if (!assets?.isReady())
       return { pictures: [], error: "LGR assets are loading." };

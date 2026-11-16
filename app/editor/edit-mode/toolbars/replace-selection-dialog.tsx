@@ -1,11 +1,15 @@
-import { ClipboardIcon, ImageIcon } from "@phosphor-icons/react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectTriggerIcon,
+  SelectValue,
+} from "~/components/ui/select";
 import { SpriteIcon } from "~/components/sprite-icon";
-import { ToolbarSeparator } from "~/components/ui/toolbar";
 import { AppleArrowIcon } from "./apple-tool-control";
 import { ColorPaletteSwitch } from "./color-palette-switch";
-import { ColorToolIcon } from "./color-tool-control";
 import { PickerOptionButton } from "./picker-option-button";
-import { defaultTextureState } from "../tools/texture-tool";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
@@ -19,6 +23,7 @@ import { Button } from "~/components/ui/button";
 import {
   usePictureSprites,
   useTextureMaskSprites,
+  useTextureSprites,
   useLgrAssets,
   useLgrSprite,
   useAppleSprites,
@@ -41,6 +46,18 @@ type ReplacementKind =
   | "textures"
   | "colors"
   | "copied";
+const materialKinds = [
+  { value: "pictures", label: "Picture" },
+  { value: "textures", label: "Texture" },
+  { value: "colors", label: "Color" },
+] as const;
+const replacementKinds: { value: ReplacementKind; label: string }[] = [
+  { value: "apples", label: "Apple" },
+  { value: "killers", label: "Killer" },
+  { value: "flowers", label: "Flower" },
+  ...materialKinds,
+  { value: "copied", label: "Clipboard" },
+];
 const gravityOptions = [
   { gravity: Gravity.None, label: "No gravity" },
   { gravity: Gravity.Down, label: "Gravity down" },
@@ -52,12 +69,19 @@ const gravityOptions = [
 /** Local settings remain drafts until Replace is clicked. */
 export function ReplaceSelectionDialog({
   tool,
+  mode = "replace",
   onClose,
 }: {
   tool: SelectTool;
+  mode?: "replace" | "fill";
   onClose: () => void;
 }) {
-  const [kind, setKind] = useState<ReplacementKind>("apples");
+  const isFill = mode === "fill";
+  const title = isFill ? "Fill" : "Replace";
+  const kinds = isFill ? materialKinds : replacementKinds;
+  const [kind, setKind] = useState<ReplacementKind>(
+    isFill ? "pictures" : "apples",
+  );
   const [apple, setApple] = useState(defaultAppleState);
   const [picture, setPicture] = useState<Omit<Picture, "position"> | null>(
     null,
@@ -71,13 +95,7 @@ export function ReplaceSelectionDialog({
   const [showAllColors, setShowAllColors] = useState(false);
   const appleSprites = useAppleSprites();
   const appleIcon = useLgrSprite("qfood1");
-  const killerIcon = useLgrSprite("qkiller");
-  const flowerIcon = useLgrSprite("qexit");
-  const textureIcon = textureSprites.find(
-    ({ texture, mask }) =>
-      texture.texture === defaultTextureState.texture &&
-      mask === defaultTextureState.mask,
-  );
+  const fillTextures = useTextureSprites();
   const { ordered, baseNames } = useMemo(
     () => getColorPalette(lgr.getColorSprites()),
     // Assets load into the same LGR instance.
@@ -98,22 +116,34 @@ export function ReplaceSelectionDialog({
       );
   const sprites =
     kind === "textures"
-      ? textureSprites
+      ? isFill
+        ? fillTextures
+        : textureSprites
       : kind === "colors"
         ? colorSprites
         : pictureSprites;
   const pickerItems =
     kind === "textures"
-      ? textureSprites.map(({ texture, mask, ...sprite }) => ({
-          key: `${texture.texture}-${mask}`,
-          label: `${formatSpriteTitle(texture.texture)} ${mask.replace("mask", "")}`,
-          previewSrc: sprite.maskedSrc ?? sprite.src,
-          width: sprite.width,
-          height: sprite.height,
-          isSelected:
-            picture?.texture === texture.texture && picture?.mask === mask,
-          onActivate: () => setPicture({ name: "", ...texture, mask }),
-        }))
+      ? isFill
+        ? fillTextures.map(({ texture, src, width, height }) => ({
+            key: texture.texture,
+            label: formatSpriteTitle(texture.texture),
+            previewSrc: src,
+            width,
+            height,
+            isSelected: picture?.texture === texture.texture,
+            onActivate: () => setPicture({ name: "", ...texture }),
+          }))
+        : textureSprites.map(({ texture, mask, ...sprite }) => ({
+            key: `${texture.texture}-${mask}`,
+            label: `${formatSpriteTitle(texture.texture)} ${mask.replace("mask", "")}`,
+            previewSrc: sprite.maskedSrc ?? sprite.src,
+            width: sprite.width,
+            height: sprite.height,
+            isSelected:
+              picture?.texture === texture.texture && picture?.mask === mask,
+            onActivate: () => setPicture({ name: "", ...texture, mask }),
+          }))
       : kind === "colors"
         ? colorSprites.map(({ picture: asset, rgb, width, height }) => ({
             key: asset.name,
@@ -138,28 +168,6 @@ export function ReplaceSelectionDialog({
             onActivate: () => setPicture({ ...asset, texture: "", mask: "" }),
           }));
 
-  function option(
-    value: ReplacementKind,
-    label: string,
-    icon: React.ReactNode,
-  ) {
-    return (
-      <PickerOptionButton
-        label={label}
-        selected={kind === value}
-        disabled={busy}
-        onClick={() => {
-          if (kind === value) return;
-          setKind(value);
-          setPicture(null);
-          setError(null);
-        }}
-      >
-        {icon}
-      </PickerOptionButton>
-    );
-  }
-
   function close() {
     pending.current?.abort();
     onClose();
@@ -171,23 +179,21 @@ export function ReplaceSelectionDialog({
     setBusy(true);
     setError(null);
     try {
-      const result =
-        kind === "copied"
+      const result = needsPicture
+        ? picture
+          ? isFill
+            ? tool.fillSelectedPolygons(kind, picture)
+            : tool.replaceSelectionWithPicture(picture)
+          : "Choose a material."
+        : kind === "copied"
           ? await tool.replaceSelectionWithCopiedContent(controller.signal)
-          : needsPicture
-            ? picture
-              ? tool.replaceSelectionWithPicture(picture)
-              : "Choose a replacement."
-            : tool.replaceSelectionWithObject(
-                kind as "apples" | "killers" | "flowers",
-                apple,
-              );
+          : tool.replaceSelectionWithObject(kind, apple);
       if (controller.signal.aborted) return;
       if (result) setError(result);
       else onClose();
     } catch {
       if (!controller.signal.aborted)
-        setError("Could not replace the selection. Try again.");
+        setError(`Could not ${mode} the selection. Try again.`);
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
@@ -202,38 +208,32 @@ export function ReplaceSelectionDialog({
     >
       <DialogContent>
         <DialogHeader showCloseButton>
-          <DialogTitle>Replace</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <DialogBody className="gap-3">
-          <div
-            className="flex flex-wrap items-center gap-1"
-            role="group"
-            aria-label="Replace with"
+          <Select
+            items={kinds}
+            value={kind}
+            onValueChange={(value) => {
+              if (!value || value === kind) return;
+              setKind(value);
+              setPicture(null);
+              setError(null);
+            }}
+            disabled={busy}
           >
-            <div
-              className="flex items-center gap-1"
-              role="group"
-              aria-label="Objects"
-            >
-              {option("apples", "Apple", <SpriteIcon src={appleIcon.src} />)}
-              {option("killers", "Killer", <SpriteIcon src={killerIcon.src} />)}
-              {option("flowers", "Flower", <SpriteIcon src={flowerIcon.src} />)}
-            </div>
-            <ToolbarSeparator />
-            {option("pictures", "Picture", <ImageIcon aria-hidden="true" />)}
-            {option(
-              "textures",
-              "Texture",
-              <SpriteIcon src={textureIcon?.maskedSrc ?? textureIcon?.src} />,
-            )}
-            {option("colors", "Color", <ColorToolIcon aria-hidden="true" />)}
-            <ToolbarSeparator />
-            {option(
-              "copied",
-              "Copied content",
-              <ClipboardIcon aria-hidden="true" />,
-            )}
-          </div>
+            <SelectTrigger aria-label="Type" className="self-start">
+              <SelectValue />
+              <SelectTriggerIcon />
+            </SelectTrigger>
+            <SelectContent>
+              {kinds.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {kind === "apples" && (
             <>
               <div
@@ -324,10 +324,12 @@ export function ReplaceSelectionDialog({
         <DialogFooter>
           <Button
             variant="accent"
-            disabled={busy || count === 0 || (needsPicture && !picture)}
+            disabled={
+              busy || (!isFill && count === 0) || (needsPicture && !picture)
+            }
             onClick={() => void replace()}
           >
-            {busy ? "Reading clipboard…" : "Replace"}
+            {busy && kind === "copied" ? "Reading clipboard…" : title}
           </Button>
         </DialogFooter>
       </DialogContent>

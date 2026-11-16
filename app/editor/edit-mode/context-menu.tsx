@@ -109,6 +109,8 @@ export function EditorContextMenu() {
     (state) => state.documentSession.clipboardSessionId,
   );
   const [replaceSession, setReplaceSession] = useState<string | null>(null);
+  const [fillSession, setFillSession] = useState<string | null>(null);
+  const filling = fillSession === sessionId && tool instanceof SelectTool;
   const [convertSession, setConvertSession] = useState<string | null>(null);
   const replacing = replaceSession === sessionId && tool instanceof SelectTool;
   const converting = convertSession === sessionId && tool instanceof SelectTool;
@@ -120,6 +122,10 @@ export function EditorContextMenu() {
           setConvertSession(sessionId);
           tool?.closeContextMenu();
         }}
+        onFill={() => {
+          setFillSession(sessionId);
+          tool?.closeContextMenu();
+        }}
         onReplace={() => {
           setReplaceSession(sessionId);
           tool?.closeContextMenu();
@@ -129,6 +135,13 @@ export function EditorContextMenu() {
         <ReplaceSelectionDialog
           tool={tool}
           onClose={() => setReplaceSession(null)}
+        />
+      )}
+      {filling && (
+        <ReplaceSelectionDialog
+          mode="fill"
+          tool={tool}
+          onClose={() => setFillSession(null)}
         />
       )}
       {converting && (
@@ -143,9 +156,11 @@ export function EditorContextMenu() {
 
 function SelectionContextToolbar({
   onReplace,
+  onFill,
   onConvertPicture,
 }: {
   onReplace: () => void;
+  onFill: () => void;
   onConvertPicture: () => void;
 }) {
   const { setApples, setPictures, setPolygons, getTool } = useEditorActions();
@@ -406,6 +421,10 @@ function SelectionContextToolbar({
       onConvertPicture={onConvertPicture}
       canReplace={(selectTool?.getReplacementCount() ?? 0) > 0}
       onReplace={onReplace}
+      canFill={completeSelectedPolygons.some(
+        (polygon) => !polygon.grass && polygon.vertices.length >= 3,
+      )}
+      onFill={onFill}
       direct={directMenu}
       anchor={anchor}
       onClose={() => selectTool?.closeContextMenu()}
@@ -721,7 +740,9 @@ function SelectionActionsMenu({
   canConvertPicture,
   onConvertPicture,
   canReplace,
+  canFill,
   onReplace,
+  onFill,
   direct,
   anchor,
   onClose,
@@ -745,7 +766,9 @@ function SelectionActionsMenu({
   canConvertPicture: boolean;
   onConvertPicture: () => void;
   canReplace: boolean;
+  canFill: boolean;
   onReplace: () => void;
+  onFill: () => void;
   direct: boolean;
   anchor: PointAnchor;
   onClose: () => void;
@@ -857,6 +880,9 @@ function SelectionActionsMenu({
           </>
         )}
         <DropdownMenuGroup>
+          {canFill && (
+            <DropdownMenuItem onClick={onFill}>Fill</DropdownMenuItem>
+          )}
           {canReplace && (
             <DropdownMenuItem onClick={onReplace}>Replace</DropdownMenuItem>
           )}

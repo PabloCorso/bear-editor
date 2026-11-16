@@ -1,3 +1,6 @@
+import { getCompleteSelectedPolygons } from "~/editor/helpers/shapes";
+import type { TextureFillTool } from "./texture-fill-tool";
+import type { SceneryFillTool } from "./scenery-fill-tool";
 import { EOL_LEVEL_LIMITS } from "~/editor/helpers/level-limits";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { standardSprites } from "~/components/standard-sprites";
@@ -1438,6 +1441,53 @@ export class SelectTool extends Tool<SelectToolState> {
         ),
       ]),
     ];
+  }
+
+  public fillSelectedPolygons(
+    kind: "pictures" | "textures" | "colors",
+    picture: Omit<Picture, "position">,
+  ): string | null {
+    const { state, toolState } = this.getState();
+    const polygons = getCompleteSelectedPolygons(
+      toolState,
+      state.polygons,
+    ).filter((polygon) => !polygon.grass && polygon.vertices.length >= 3);
+    if (!polygons.length) return "Select a polygon.";
+
+    const toolId =
+      kind === "textures"
+        ? "textureFill"
+        : kind === "colors"
+          ? "colorFill"
+          : "pictureFill";
+    const fill = state.actions.getTool<TextureFillTool | SceneryFillTool>(
+      toolId,
+    );
+    if (!fill) return "Fill is unavailable.";
+
+    const pictures: Picture[] = [];
+    for (const polygon of polygons) {
+      const preview = fill.previewPolygon(polygon, picture);
+      if (preview.error) return preview.error;
+      if (
+        state.pictures.length + pictures.length + preview.pictures.length >
+        EOL_LEVEL_LIMITS.pictures
+      ) {
+        return "This fill exceeds the level picture limit.";
+      }
+      for (const tile of preview.pictures) pictures.push(tile);
+    }
+    if (!pictures.length) return "No tiles fit the selection.";
+    const action =
+      kind === "textures"
+        ? "texture.fill"
+        : kind === "colors"
+          ? "color.fill"
+          : "picture.fill";
+    this.edit(action, () =>
+      state.actions.setPictures([...state.pictures, ...pictures]),
+    );
+    return null;
   }
 
   public replaceSelectionWithObject(

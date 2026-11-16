@@ -70,7 +70,13 @@ export class TextureFillTool extends Tool<TextureFillToolState> {
         .filter((p) => isPointInPolygon(point, p.vertices))
         .sort((a, b) => polygonArea(a.vertices) - polygonArea(b.vertices))[0] ??
       findPolygonEdgeNearPosition(point, candidates);
-    if (!polygon) return null;
+    return polygon ? this.previewPolygon(polygon, toolState) : null;
+  }
+
+  previewPolygon(
+    polygon: Polygon,
+    toolState: TextureFillToolState,
+  ): FillPreview {
     const assets = this.resolveAssets();
     if (!assets?.isReady())
       return { pictures: [], error: "Texture assets are loading." };
