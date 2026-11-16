@@ -469,14 +469,12 @@ function placePictures(
   const textureMapping = (sprite: ImageBitmap) =>
     getTextureTile(sprite, ppm, origin);
   return pictures.map(({ item, size }) => {
+    const nativeWidth = Math.round(size.width * PPM);
     const nativeHeight = Math.round(size.height * PPM);
+    const pixelWidth = Math.max(1, Math.floor(nativeWidth * zoom));
     const pixelHeight = Math.max(1, Math.floor(nativeHeight * zoom));
+    const width = pixelWidth / ppm;
     const height = pixelHeight / ppm;
-    const width =
-      Math.max(
-        1,
-        Math.floor((Math.round(size.width * PPM) * pixelHeight) / nativeHeight),
-      ) / ppm;
     const x = origin.x + Math.trunc((item.position.x - origin.x) * ppm) / ppm;
     const y =
       origin.y - (Math.trunc((origin.y - item.position.y) * ppm) + 1) / ppm;
