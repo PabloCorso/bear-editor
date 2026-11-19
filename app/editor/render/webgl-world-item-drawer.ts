@@ -27,6 +27,13 @@ import type {
   WorldRenderScene,
 } from "~/editor/render/world-scene";
 
+type TextureMapping = {
+  origin: WorldPoint;
+  tileWidth: number;
+  tileHeight: number;
+  repeatTileSize: [width: number, height: number];
+};
+
 const GRAVITY_ARROW_ROTATIONS = {
   [Gravity.Up]: 0,
   [Gravity.Down]: Math.PI,
@@ -86,7 +93,7 @@ export class WebGLWorldItemDrawer {
 
     if (
       item.clip !== Clip.Sky &&
-      (item.clip !== Clip.Ground || !shouldClipGroundToSkyPolygons(scene))
+      (item.clip !== Clip.Ground || !scene.visibility.showPolygons)
     ) {
       draw();
       return;
@@ -178,16 +185,21 @@ export class WebGLWorldItemDrawer {
     this.drawPictureOutlineBounds(item, scene);
   }
 
-  private drawPicture(
+  drawPicture(
     item: WorldRenderPictureItem,
     scene: WorldRenderScene,
     opacityOverride?: number,
     drawBounds = true,
+    placement?: {
+      width: number;
+      height: number;
+      textureMapping: (sprite: ImageBitmap) => TextureMapping;
+    },
   ) {
     if (!this.lgrAssets) return;
     const opacity = opacityOverride ?? item.opacity ?? 1;
     const picture = this.getPictureSprite(item, scene);
-    const dimensions = this.getPictureWorldDimensions(item);
+    const dimensions = placement ?? this.getPictureWorldDimensions(item);
     if (!picture && (!drawBounds || !item.showBounds || !dimensions)) return;
 
     if (picture?.kind === "masked") {
@@ -196,6 +208,7 @@ export class WebGLWorldItemDrawer {
       this.drawMaskedTexturedRect({
         textureSprite: picture.texture,
         maskSprite: picture.mask,
+        mapping: placement?.textureMapping(picture.texture),
         x: item.position.x,
         y: item.position.y,
         width,
@@ -333,10 +346,11 @@ export class WebGLWorldItemDrawer {
     };
   }
 
-  private drawObject(
+  drawObject(
     item: WorldRenderObjectItem,
     scene: WorldRenderScene,
     drawBounds = true,
+    frameOverride?: (sprite: ImageBitmap) => ReturnType<typeof getObjectFrame>,
   ) {
     if (!this.lgrAssets) return;
     const shouldShowBounds = item.showBounds ?? false;
@@ -355,10 +369,12 @@ export class WebGLWorldItemDrawer {
     if (scene.visibility.showObjects || item.forceVisible) {
       if (!sprite) return;
 
-      const frame = getObjectFrame(sprite, {
-        animate: scene.animateSprites && scene.visibility.showObjectAnimations,
-        now: scene.animationTime,
-      });
+      const frame =
+        frameOverride?.(sprite) ??
+        getObjectFrame(sprite, {
+          animate:
+            scene.animateSprites && scene.visibility.showObjectAnimations,
+        });
       this.drawTexturedRect({
         sprite,
         sourceX: frame.sourceX,
@@ -373,7 +389,7 @@ export class WebGLWorldItemDrawer {
         scene,
       });
 
-      if (item.gravity != null) {
+      if (item.gravity != null && item.gravity !== Gravity.None) {
         const gravityArrowOpacity =
           item.objectKind === "apple" && item.forceVisible
             ? 1
@@ -398,7 +414,7 @@ export class WebGLWorldItemDrawer {
     }
   }
 
-  private drawStart(
+  drawStart(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "start" }>,
     scene: WorldRenderScene,
     drawBounds = true,
@@ -502,7 +518,7 @@ export class WebGLWorldItemDrawer {
     this.shapes.drawCircle(fallback.head, 0.16, "#f5d0a9", scene, opacity);
   }
 
-  private drawBike(
+  drawBike(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "bike" }>,
     scene: WorldRenderScene,
   ) {
@@ -515,7 +531,11 @@ export class WebGLWorldItemDrawer {
       if (!kuskiSprites || !hasKuskiSprites) {
         this.drawBikeFallback(item, scene);
       } else {
-        this.drawKuski(item, scene, kuskiSprites as Record<string, ImageBitmap>);
+        this.drawKuski(
+          item,
+          scene,
+          kuskiSprites as Record<string, ImageBitmap>,
+        );
       }
     }
 
@@ -932,6 +952,7 @@ export class WebGLWorldItemDrawer {
   private drawMaskedTexturedRect({
     textureSprite,
     maskSprite,
+    mapping,
     x,
     y,
     width,
@@ -941,6 +962,7 @@ export class WebGLWorldItemDrawer {
   }: {
     textureSprite: ImageBitmap;
     maskSprite: ImageBitmap;
+    mapping?: TextureMapping;
     x: number;
     y: number;
     width: number;
@@ -950,53 +972,58 @@ export class WebGLWorldItemDrawer {
   }) {
     const texture = this.context.getTexture(textureSprite);
     const maskTexture = this.context.getTexture(maskSprite);
-    const { tileWidth, tileHeight } = getTextureTileSize(textureSprite, scene);
+    const { tileWidth, tileHeight } =
+      mapping ?? getTextureTileSize(textureSprite, scene);
+    const u = (x - (mapping?.origin.x ?? 0)) / tileWidth;
+    const v = (y - (mapping?.origin.y ?? 0)) / tileHeight;
+    const u1 = u + width / tileWidth;
+    const v1 = v + height / tileHeight;
     const points = [
       {
         x,
         y,
-        u: x / tileWidth,
-        v: y / tileHeight,
+        u: u,
+        v: v,
         maskU: 0,
         maskV: 0,
       },
       {
         x: x + width,
         y,
-        u: (x + width) / tileWidth,
-        v: y / tileHeight,
+        u: u1,
+        v: v,
         maskU: 1,
         maskV: 0,
       },
       {
         x,
         y: y + height,
-        u: x / tileWidth,
-        v: (y + height) / tileHeight,
+        u: u,
+        v: v1,
         maskU: 0,
         maskV: 1,
       },
       {
         x,
         y: y + height,
-        u: x / tileWidth,
-        v: (y + height) / tileHeight,
+        u: u,
+        v: v1,
         maskU: 0,
         maskV: 1,
       },
       {
         x: x + width,
         y,
-        u: (x + width) / tileWidth,
-        v: y / tileHeight,
+        u: u1,
+        v: v,
         maskU: 1,
         maskV: 0,
       },
       {
         x: x + width,
         y: y + height,
-        u: (x + width) / tileWidth,
-        v: (y + height) / tileHeight,
+        u: u1,
+        v: v1,
         maskU: 1,
         maskV: 1,
       },
@@ -1014,6 +1041,7 @@ export class WebGLWorldItemDrawer {
       color: [1, 1, 1, opacity],
       texture,
       maskTexture,
+      repeatTileSize: mapping?.repeatTileSize,
       scene,
     });
   }
@@ -1078,10 +1106,6 @@ function getTextureTileSize(
     tileWidth: sprite.width / Math.max(scene.viewport.zoom, 0.0001),
     tileHeight: sprite.height / Math.max(scene.viewport.zoom, 0.0001),
   };
-}
-
-function shouldClipGroundToSkyPolygons(scene: WorldRenderScene) {
-  return scene.groundClipMode === "always" || scene.visibility.showPolygons;
 }
 
 function elmaPixelsToWorldUnits(pixels: number) {

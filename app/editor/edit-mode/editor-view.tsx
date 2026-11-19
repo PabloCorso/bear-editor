@@ -25,6 +25,11 @@ import { ColorTool } from "~/editor/edit-mode/tools/color-tool";
 import { PictureTool } from "~/editor/edit-mode/tools/picture-tool";
 import { HandTool } from "~/editor/edit-mode/tools/hand-tool";
 import { TextureTool } from "~/editor/edit-mode/tools/texture-tool";
+import { TextureFillTool } from "~/editor/edit-mode/tools/texture-fill-tool";
+import {
+  PictureFillTool,
+  ColorFillTool,
+} from "~/editor/edit-mode/tools/scenery-fill-tool";
 import { cn } from "~/utils/misc";
 import type { EditorLevel } from "~/editor/elma-types";
 import type { EditorDocumentInput } from "~/editor/editor-state";
@@ -131,6 +136,9 @@ export function useEditorView({
         PictureTool,
         ColorTool,
         TextureTool,
+        TextureFillTool,
+        PictureFillTool,
+        ColorFillTool,
       ];
 
       engineRef.current = new EditorEngine(canvas, {

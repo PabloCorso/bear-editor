@@ -1,5 +1,6 @@
 import {
   useEditorActions,
+  useEditor,
   useEditorToolState,
 } from "~/editor/use-editor-store";
 import { SpriteIcon } from "~/components/sprite-icon";
@@ -26,13 +27,18 @@ import {
 } from "~/components/ui/toolbar";
 
 export function AppleToolControl(props: ToolControlButtonProps) {
-  const { setToolState } = useEditorActions();
+  const { setToolState, activateTool } = useEditorActions();
+  const activeToolId = useEditor((state) => state.activeToolId);
+  const killer = useLgrSprite("qkiller");
+  const flower = useLgrSprite("qexit");
 
   const handleAppleAnimationChange = (animation: AppleAnimation) => {
+    if (activeToolId !== "apple") activateTool("apple");
     setToolState<AppleToolState>(defaultTools.apple.id, { animation });
   };
 
   const handleGravityChange = (gravity: Gravity) => {
+    if (activeToolId !== "apple") activateTool("apple");
     setToolState<AppleToolState>(defaultTools.apple.id, { gravity });
   };
 
@@ -41,26 +47,48 @@ export function AppleToolControl(props: ToolControlButtonProps) {
   return (
     <ToolControlMenu
       id={defaultTools.apple.id}
+      closeOnSelect={false}
       button={
         <ToolControlButton
+          isActive={["apple", "killer", "flower"].includes(activeToolId)}
           isLoading={!apple.src}
           {...defaultTools.apple}
+          id={
+            ["apple", "killer", "flower"].includes(activeToolId)
+              ? activeToolId
+              : "apple"
+          }
+          name="Objects"
+          shortcut="A / K / F"
           {...props}
         >
           <SpriteIcon src={apple.src} />
         </ToolControlButton>
       }
     >
-      <AppleToolbar
-        onAnimationChange={handleAppleAnimationChange}
-        onGravityChange={handleGravityChange}
-      />
+      <Toolbar orientation="vertical" aria-label="Objects">
+        <AppleToolbar
+          className="border-0 bg-transparent p-0 shadow-none"
+          isSelected={activeToolId === "apple"}
+          onAnimationChange={handleAppleAnimationChange}
+          onGravityChange={handleGravityChange}
+        />
+        <ToolbarSeparator />
+        <ToolControlButton {...defaultTools.killer} isLoading={!killer.src}>
+          <SpriteIcon src={killer.src} />
+        </ToolControlButton>
+        <ToolbarSeparator />
+        <ToolControlButton {...defaultTools.flower} isLoading={!flower.src}>
+          <SpriteIcon src={flower.src} />
+        </ToolControlButton>
+      </Toolbar>
     </ToolControlMenu>
   );
 }
 
 type AppleToolbarProps = ToolbarProps & {
   withShortcuts?: boolean;
+  isSelected?: boolean;
   currentAnimation?: AppleAnimation | null;
   currentGravity?: Gravity | null;
   onAnimationChange: (animation: AppleAnimation) => void;
@@ -69,6 +97,7 @@ type AppleToolbarProps = ToolbarProps & {
 
 export function AppleToolbar({
   withShortcuts = true,
+  isSelected = true,
   currentAnimation: controlledAnimation,
   currentGravity: controlledGravity,
   onAnimationChange,
@@ -94,8 +123,9 @@ export function AppleToolbar({
       {appleSprites.map(({ animation, src }) => (
         <AppleButton
           key={animation}
+          aria-label={`Apple animation ${animation}`}
           shortcut={withShortcuts ? String(animation) : undefined}
-          isActive={currentAnimation === animation}
+          isActive={isSelected && currentAnimation === animation}
           iconBefore={<SpriteIcon src={src} />}
           onClick={() => onAnimationChange(animation)}
         />
@@ -103,30 +133,35 @@ export function AppleToolbar({
       <ToolbarSeparator />
       <AppleButton
         shortcut={withShortcuts ? "N" : undefined}
-        isActive={currentGravity === Gravity.None}
+        aria-label="No gravity"
+        isActive={isSelected && currentGravity === Gravity.None}
         iconBefore={<SpriteIcon src={apple.src} />}
         onClick={() => onGravityChange(Gravity.None)}
       />
       <AppleButton
-        isActive={currentGravity === Gravity.Down}
+        aria-label="Gravity down"
+        isActive={isSelected && currentGravity === Gravity.Down}
         onClick={() => onGravityChange(Gravity.Down)}
         iconBefore={<SpriteIcon src={apple.src} />}
         iconAfter={<AppleArrowIcon gravity={Gravity.Down} />}
       />
       <AppleButton
-        isActive={currentGravity === Gravity.Left}
+        aria-label="Gravity left"
+        isActive={isSelected && currentGravity === Gravity.Left}
         onClick={() => onGravityChange(Gravity.Left)}
         iconBefore={<SpriteIcon src={apple.src} />}
         iconAfter={<AppleArrowIcon gravity={Gravity.Left} />}
       />
       <AppleButton
-        isActive={currentGravity === Gravity.Up}
+        aria-label="Gravity up"
+        isActive={isSelected && currentGravity === Gravity.Up}
         onClick={() => onGravityChange(Gravity.Up)}
         iconBefore={<SpriteIcon src={apple.src} />}
         iconAfter={<AppleArrowIcon gravity={Gravity.Up} />}
       />
       <AppleButton
-        isActive={currentGravity === Gravity.Right}
+        aria-label="Gravity right"
+        isActive={isSelected && currentGravity === Gravity.Right}
         onClick={() => onGravityChange(Gravity.Right)}
         iconBefore={<SpriteIcon src={apple.src} />}
         iconAfter={<AppleArrowIcon gravity={Gravity.Right} />}
@@ -168,6 +203,7 @@ function AppleButton({
   return (
     <ToolbarButton
       size="sm"
+      aria-pressed={isActive}
       className={cn("relative", isActive && "bg-primary-hover/50", className)}
       iconAfter={shortcut && <ShortcutIndicator>{shortcut}</ShortcutIndicator>}
       {...props}

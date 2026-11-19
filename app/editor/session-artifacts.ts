@@ -2,7 +2,7 @@ import type { EditorState } from "./editor-state";
 import type { Position } from "./elma-types";
 import { getKuskiSelectionCircles } from "./kuski-geometry";
 import { isStartObjectHit } from "./helpers/selection-helpers";
-import { buildRideMomentBikeSceneItem } from "./play-mode/scene/play-mode-scene-builder";
+import { buildRideMomentBikeSceneItem } from "./play-mode/scene/live-bike";
 import {
   getReferenceImageCorners,
   getReferenceImageTransform,

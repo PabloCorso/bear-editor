@@ -13,3 +13,7 @@
 
 *storybook.log
 storybook-static
+
+desktop/build/
+desktop/dist/
+desktop/node_modules/

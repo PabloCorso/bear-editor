@@ -54,6 +54,7 @@ type PictureTexturePickerProps = {
   placementSettings?: React.ReactNode;
   rowHeaders?: Record<string, React.ReactNode>;
   maxColumns?: 4 | 6;
+  embedded?: boolean;
 };
 
 export function PictureTexturePicker({
@@ -64,6 +65,7 @@ export function PictureTexturePicker({
   placementSettings,
   rowHeaders,
   maxColumns = 6,
+  embedded = false,
 }: PictureTexturePickerProps) {
   const onSelect = useToolSelection();
 
@@ -93,7 +95,7 @@ export function PictureTexturePicker({
               className={cn(
                 "group flex cursor-pointer flex-col items-center rounded hover:bg-primary-hover/50 hover:text-primary",
                 compact
-                  ? `${pickerColumnClassName} gap-1`
+                  ? "w-full max-w-[96px] gap-1"
                   : `${pickerColumnClassName} pt-1`,
                 item.isSelected && "bg-primary-hover/50 text-primary",
               )}
@@ -110,6 +112,7 @@ export function PictureTexturePicker({
                 className={cn(
                   "flex items-baseline justify-between gap-1 text-[10px] leading-3",
                   pickerLabelClassName,
+                  compact && "max-w-full",
                 )}
               >
                 <span
@@ -134,7 +137,7 @@ export function PictureTexturePicker({
               <span
                 className={cn(
                   "inline-flex items-center justify-center rounded",
-                  compact && `${pickerColumnClassName} h-16`,
+                  compact && "h-16 w-full",
                   !compact && "h-[86px] w-[96px]",
                 )}
               >
@@ -192,6 +195,8 @@ export function PictureTexturePicker({
       groups.at(-1)?.items.push(item);
     }
   }
+
+  if (embedded) return <div className="@container">{renderGrid(items)}</div>;
 
   return (
     <Toolbar

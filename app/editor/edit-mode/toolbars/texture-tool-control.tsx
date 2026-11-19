@@ -12,6 +12,7 @@ import {
 } from "./tool";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import { useTextureMaskSprites } from "~/components/use-lgr-assets";
+import { useEditorActiveTool } from "~/editor/use-editor-store";
 import { standardSprites } from "~/components/standard-sprites";
 import { Mask } from "~/editor/elma-types";
 import {
@@ -27,7 +28,9 @@ export function TextureToolControl(props: ToolControlButtonProps) {
   const textureTool = useEditorToolState<TextureToolState>(
     defaultTools.texture.id,
   );
-  const { setToolState } = useEditorActions();
+  const { setToolState, activateTool } = useEditorActions();
+  const activeTool = useEditorActiveTool();
+  const isActive = activeTool?.meta.id === defaultTools.texture.id;
   const textureSprites = useTextureMaskSprites();
   const [rowSettings, setRowSettings] = useState<
     Record<string, Pick<TextureToolState, "distance" | "clip">>
@@ -136,6 +139,11 @@ export function TextureToolControl(props: ToolControlButtonProps) {
           isLoading={!textureSrc}
           {...defaultTools.texture}
           {...props}
+          id={undefined}
+          isActive={isActive}
+          onClick={() => {
+            if (!isActive) activateTool(defaultTools.texture.id);
+          }}
         >
           <PictureIcon src={textureSrc} />
         </ToolControlButton>

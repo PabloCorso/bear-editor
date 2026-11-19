@@ -44,8 +44,12 @@ export class ImageExport {
       canvas,
       lgrAssets: this.assets,
     });
+    const gl = canvas.getContext("webgl2")!;
+    const dispose = () => {
+      renderer.destroy();
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    };
     try {
-      const gl = canvas.getContext("webgl")!;
       const limit = Math.min(
         gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
         gl.getParameter(gl.MAX_TEXTURE_SIZE),
@@ -65,19 +69,9 @@ export class ImageExport {
           zoom: (scene.viewport.zoom * width) / scene.viewport.width,
         },
       });
-      return {
-        canvas,
-        dispose: () => {
-          renderer.destroy();
-          gl.getExtension("WEBGL_lose_context")?.loseContext();
-        },
-      };
+      return { canvas, dispose };
     } catch (error) {
-      renderer.destroy();
-      canvas
-        .getContext("webgl")
-        ?.getExtension("WEBGL_lose_context")
-        ?.loseContext();
+      dispose();
       throw error;
     }
   }

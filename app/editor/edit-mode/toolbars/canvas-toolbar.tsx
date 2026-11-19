@@ -1,7 +1,7 @@
+import { CanvasOptionsMenu } from "./canvas-options-menu";
 import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
-  useEditorActions,
   useEditorCanRedo,
   useEditorCanUndo,
   useEditorHistory,
@@ -11,7 +11,6 @@ import { Toolbar, type ToolbarProps } from "~/components/ui/toolbar";
 import {
   ArrowArcLeftIcon,
   ArrowArcRightIcon,
-  CornersOutIcon,
   ChatsCircleIcon,
   ClockCounterClockwiseIcon,
   ArrowUpRightIcon,
@@ -46,7 +45,6 @@ export function CanvasToolbar({
   engineRef,
   ...props
 }: CanvasToolbarProps) {
-  const { triggerFitToView } = useEditorActions();
   const activeToolId = useEditor((state) => state.activeToolId);
   const vertex = useEditorToolState<VertexToolState>("vertex");
   const shape = useEditorToolState<ShapeToolState>("shape");
@@ -61,7 +59,6 @@ export function CanvasToolbar({
         vertex?.variant === "draw" ||
         vertex?.variant === "brush" ||
         vertex?.previewAutoGrassAll));
-  const modifier = useModifier();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(function handleKeyboardShortcutsListener() {
@@ -99,26 +96,20 @@ export function CanvasToolbar({
         </Toolbar>
         <Toolbar className="pointer-events-auto shrink-0 gap-1 sm:gap-2">
           <ToolButton
-            name="Zoom In"
-            shortcut={usesSizeShortcuts ? undefined : "+"}
-            onClick={() => engineRef.current?.zoomIn()}
-          >
-            <PlusIcon />
-          </ToolButton>
-          <ToolButton
-            name="Zoom Out"
+            name="Zoom out"
             shortcut={usesSizeShortcuts ? undefined : "-"}
             onClick={() => engineRef.current?.zoomOut()}
           >
             <MinusIcon />
           </ToolButton>
           <ToolButton
-            name="Fit to view"
-            shortcut={`${modifier} + 0`}
-            onClick={triggerFitToView}
+            name="Zoom in"
+            shortcut={usesSizeShortcuts ? undefined : "+"}
+            onClick={() => engineRef.current?.zoomIn()}
           >
-            <CornersOutIcon />
+            <PlusIcon />
           </ToolButton>
+          <CanvasOptionsMenu />
           <CanvasHelpMenu onOpenShortcuts={() => setShortcutsOpen(true)} />
         </Toolbar>
       </div>

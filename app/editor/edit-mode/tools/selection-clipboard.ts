@@ -87,6 +87,20 @@ export class SelectionClipboardController {
     return sameCopy ? this.pasteWithMargin() : this.pasteAtAnchor(anchor);
   }
 
+  /** Read the source for Replace without consuming the clipboard or advancing
+   * normal Paste's offset. An accessible but invalid system clipboard is not
+   * silently replaced by stale in-memory content.
+   */
+  async readForReplacement(): Promise<SelectionClipboard | null> {
+    if (!canAccessSystemClipboard()) return this.clipboard;
+    try {
+      const text = await navigator.clipboard.readText();
+      return deserializeClipboard(text);
+    } catch {
+      return this.clipboard;
+    }
+  }
+
   private pasteWithMargin(): PastedSelection | null {
     if (!this.clipboard) return null;
     const step = this.pasteCount + 1;
@@ -97,13 +111,7 @@ export class SelectionClipboardController {
 
   private pasteAtAnchor(anchor: Position): PastedSelection | null {
     if (!this.clipboard) return null;
-    const center = getClipboardCenter(this.clipboard);
-    return center
-      ? translateClipboard(this.clipboard, {
-          x: anchor.x - center.x,
-          y: anchor.y - center.y,
-        })
-      : null;
+    return placeClipboardAtAnchor(this.clipboard, anchor);
   }
 }
 
@@ -208,6 +216,19 @@ export function translateClipboard(
     ],
     selectedPictures: pictures.map((picture) => picture.position),
   };
+}
+
+export function placeClipboardAtAnchor(
+  clipboard: SelectionClipboard,
+  anchor: Position,
+): PastedSelection | null {
+  const center = getClipboardCenter(clipboard);
+  return center
+    ? translateClipboard(clipboard, {
+        x: anchor.x - center.x,
+        y: anchor.y - center.y,
+      })
+    : null;
 }
 
 export function getClipboardCenter(
