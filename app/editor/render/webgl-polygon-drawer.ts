@@ -17,6 +17,7 @@ import type { WorldRenderScene } from "~/editor/render/world-scene";
 
 const MIN_ZOOM_EPSILON = 0.0001;
 const GRASS_COVERAGE_STENCIL_BIT = 0x02;
+const DRAFT_COVERAGE_STENCIL_BIT = 0x02;
 
 export class WebGLPolygonDrawer {
   private shapes: WebGLShapeDrawer;
@@ -37,6 +38,7 @@ export class WebGLPolygonDrawer {
     textureName: string,
     lgrAssets: LgrAssets | null,
     fallbackColor: string,
+    opacity = 1,
   ) {
     const textureSprite =
       scene.visibility.useGroundSkyTextures && lgrAssets
@@ -51,6 +53,7 @@ export class WebGLPolygonDrawer {
         scene.viewport.rect.maxY - scene.viewport.rect.minY,
         colors[textureName as keyof typeof colors] ?? fallbackColor,
         scene,
+        opacity,
       );
       return;
     }
@@ -99,7 +102,7 @@ export class WebGLPolygonDrawer {
 
     this.context.drawVertices({
       vertices: points.flatMap((point) => [point.x, point.y, point.u, point.v]),
-      color: [1, 1, 1, 1],
+      color: [1, 1, 1, opacity],
       texture,
       scene,
       repeatTexture: true,
@@ -117,7 +120,12 @@ export class WebGLPolygonDrawer {
     gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT);
 
     for (const polygon of scene.polygons) {
-      if (polygon.vertices.length < 3 || polygon.isGrass) continue;
+      if (
+        polygon.vertices.length < 3 ||
+        polygon.isGrass ||
+        (polygon.opacity ?? 1) < 1
+      )
+        continue;
       this.shapes.drawPolygon(polygon.vertices, "#ffffff", scene);
     }
 
@@ -140,9 +148,83 @@ export class WebGLPolygonDrawer {
     gl.disable(gl.STENCIL_TEST);
   }
 
+  drawDraftGroundSkyPolygons(
+    scene: WorldRenderScene,
+    groundTextureName: string,
+    skyTextureName: string,
+    lgrAssets: LgrAssets | null,
+    groundFallbackColor: string,
+    skyFallbackColor: string,
+  ) {
+    const draftsByOpacity = new Map<
+      number,
+      Array<WorldRenderScene["polygons"][number]>
+    >();
+    for (const polygon of scene.polygons) {
+      const opacity = polygon.opacity ?? 1;
+      if (polygon.isGrass || polygon.vertices.length < 3 || opacity >= 1)
+        continue;
+      const group = draftsByOpacity.get(opacity) ?? [];
+      group.push(polygon);
+      draftsByOpacity.set(opacity, group);
+    }
+    if (!draftsByOpacity.size) return;
+
+    const gl = this.context.gl;
+    gl.enable(gl.STENCIL_TEST);
+    for (const [opacity, polygons] of draftsByOpacity) {
+      gl.stencilMask(DRAFT_COVERAGE_STENCIL_BIT);
+      gl.clear(gl.STENCIL_BUFFER_BIT);
+      gl.colorMask(false, false, false, false);
+      gl.stencilFunc(gl.ALWAYS, DRAFT_COVERAGE_STENCIL_BIT, 0xff);
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.INVERT);
+      for (const polygon of polygons) {
+        this.shapes.drawPolygon(polygon.vertices, "#ffffff", scene);
+      }
+
+      gl.colorMask(true, true, true, true);
+      gl.stencilMask(0x00);
+      // Draft polygons invert the committed ground/sky topology. Render the
+      // resulting ground where both the committed sky bit and draft coverage
+      // bit are set, then render sky where only draft coverage is set.
+      gl.stencilFunc(
+        gl.EQUAL,
+        0x01 | DRAFT_COVERAGE_STENCIL_BIT,
+        0x01 | DRAFT_COVERAGE_STENCIL_BIT,
+      );
+      gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+      this.drawWorldFill(
+        scene,
+        groundTextureName,
+        lgrAssets,
+        groundFallbackColor,
+        opacity,
+      );
+      gl.stencilFunc(
+        gl.EQUAL,
+        DRAFT_COVERAGE_STENCIL_BIT,
+        0x01 | DRAFT_COVERAGE_STENCIL_BIT,
+      );
+      this.drawWorldFill(
+        scene,
+        skyTextureName,
+        lgrAssets,
+        skyFallbackColor,
+        opacity,
+      );
+    }
+
+    gl.stencilMask(DRAFT_COVERAGE_STENCIL_BIT);
+    gl.clear(gl.STENCIL_BUFFER_BIT);
+    gl.stencilMask(0x00);
+    gl.stencilFunc(gl.ALWAYS, 0, 0xff);
+    gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
+    gl.disable(gl.STENCIL_TEST);
+  }
+
   drawGrassPolygons(scene: WorldRenderScene) {
     for (const polygon of scene.polygons) {
-      if (!polygon.isGrass || polygon.vertices.length < 2) continue;
+      if (!polygon.isGrass || polygon.vertices.length < 3) continue;
       this.drawGrassPolygon(polygon, scene);
     }
   }

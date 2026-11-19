@@ -1,3 +1,9 @@
+import { trackEvent } from "~/analytics";
+import { DesktopDownloadDialog } from "./desktop-download-dialog";
+import { TestStartPicker } from "../test-start-controls";
+import { useLgrAssets } from "~/components/use-lgr-assets";
+import { getLevelTopology } from "~/editor/helpers/level-topology";
+import { importReferenceImage } from "~/editor/reference-images";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
@@ -25,23 +31,20 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
+  LaptopIcon,
   CaretRightIcon,
   CaretLeftIcon,
   CaretDownIcon,
-  CheckIcon,
-  ChecksIcon,
-  CursorClickIcon,
+  FileArrowDownIcon,
   FilePlusIcon,
   FloppyDiskIcon,
   FolderOpenIcon,
+  ImageIcon,
   GearIcon,
-  WarningDiamondIcon,
+  InfoIcon,
   XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -61,21 +64,17 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { supportsFilePickers } from "~/editor/helpers/file-session";
-import { SettingsDialog } from "~/editor/edit-mode/edit-settings";
+import {
+  SettingsDialog,
+  type SettingsTab,
+} from "~/editor/edit-mode/edit-settings";
 import { IconButton } from "~/components/ui/button";
 import { Icon } from "~/components/ui/icon";
 import { checkModifierKey, cn, getModifier, useModifier } from "~/utils/misc";
 import { LevelVisibilityControl } from "./level-visibility-control";
 import { LevelPropertiesControl } from "./level-properties-control";
 import type { EditorDocumentOrigin } from "~/editor/editor-state";
-import {
-  getTopologySelection,
-  type TopologyCheckResult,
-  type TopologyIssue,
-  validateLevelTopology,
-} from "~/editor/helpers/level-topology";
-import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
-import { focusPositionsInView } from "~/editor/helpers/camera-helpers";
+import { TopologyCheck, TopologyResultPanel } from "./topology-check";
 import { Logo } from "~/components/logo";
 import { ToolButton } from "~/components/tool-button";
 import {
@@ -85,35 +84,113 @@ import {
 } from "~/components/ui/tooltip.js";
 
 import { getNewLevelShortcut, isNewLevelShortcut } from "./keyboard-shortcuts";
+import { LevelPropertiesDialog } from "./level-properties-dialog";
 import { LevelFolderTip } from "./level-folder-tip";
 import { ToolInfo } from "./tool-info";
-import { CanvasTips } from "./canvas-tip";
+import { CanvasTipSections, CanvasTips } from "./canvas-tip";
 import "./level-file-name.css";
+import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
+import { ExportImageDialog } from "./export-image-dialog";
+import type { ImageExport } from "~/editor/helpers/image-export";
 
-const ISSUE_FOCUS_MIN_ZOOM = 0.2;
-const ISSUE_FOCUS_MAX_ZOOM = 10000;
+import { DesktopUpdate } from "~/editor/desktop-update";
+
 const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
-type HeaderToolbarProps = ToolbarProps & { isLoading?: boolean };
+type HeaderToolbarProps = ToolbarProps & {
+  isLoading?: boolean;
+  engineRef: React.RefObject<EditorEngine | null>;
+  fileNameEntrance: ReturnType<typeof useLevelFileNameEntrance>;
+};
+
+// Keep this state above the toolbars that unmount in play mode or with hidden UI.
+export function useLevelFileNameEntrance(isVisible: boolean) {
+  const store = useEditorStore();
+  const documentSession = useEditorDocumentSession();
+  const sessionId = documentSession.clipboardSessionId;
+  const [entrance, setEntrance] = useState({
+    sessionId,
+    isEntering: isVisible && documentSession.hasExternalHandle,
+  });
+
+  if (entrance.sessionId !== sessionId) {
+    setEntrance({
+      sessionId,
+      isEntering: isVisible && documentSession.hasExternalHandle,
+    });
+  } else if (!isVisible && entrance.isEntering) {
+    setEntrance({ sessionId, isEntering: false });
+  }
+
+  return {
+    sessionId,
+    isEntering: entrance.isEntering,
+    onEnd() {
+      setEntrance((current) => ({ ...current, isEntering: false }));
+    },
+    onNavigate() {
+      // Folder carets replace the document too, but should keep the label still.
+      setEntrance({
+        sessionId: store.getState().documentSession.clipboardSessionId,
+        isEntering: false,
+      });
+    },
+  };
+}
 
 export function HeaderToolbar({
   className,
   isLoading,
+  fileNameEntrance,
+  engineRef,
   ...props
 }: HeaderToolbarProps) {
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => setIsDesktop(Boolean(window.bearDesktop)), []);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [highlightLevelFolder, setHighlightLevelFolder] = useState(false);
-  const [topologyResult, setTopologyResult] =
-    useState<TopologyCheckResult | null>(null);
+  const topologyOpen = useEditor((state) => state.topologyInspection !== null);
+  const { setTopologyInspection } = useEditorActions();
+  const levelImportInput = useRef<HTMLInputElement>(null);
+  const importSessionId = useRef<string | null>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
   const menuActions = useMainMenuActions();
   const { handleNew, handleOpenFile, handleSave } = menuActions;
+  const store = useEditorStore();
+  const openLevelImportPicker = () => {
+    importSessionId.current =
+      store.getState().documentSession.clipboardSessionId;
+    levelImportInput.current?.click();
+  };
+
+  const [imageExport, setImageExport] = useState<{
+    snapshot: ImageExport;
+    fileName?: string;
+  } | null>(null);
+  const handleExportImage = () => {
+    try {
+      const engine = engineRef.current;
+      if (!engine)
+        throw new Error("The level is still loading. Please try again.");
+      const { fileSession, documentSession } = store.getState();
+      setImageExport({
+        snapshot: engine.createImageExport(),
+        fileName: fileSession.fileName ?? documentSession.displayName,
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to export image.");
+    }
+  };
 
   useEffect(
     function registerMainMenuHotkeys() {
       const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === "Escape" && topologyResult) {
+        if (event.key === "Escape" && topologyOpen) {
           event.preventDefault();
-          setTopologyResult(null);
+          setTopologyInspection(null);
           return;
         }
 
@@ -135,6 +212,7 @@ export function HeaderToolbar({
 
         if (key === ",") {
           event.preventDefault();
+          setSettingsTab("general");
           setSettingsOpen(true);
         }
       };
@@ -161,38 +239,116 @@ export function HeaderToolbar({
         window.removeEventListener("keydown", handleKeyDown);
       };
     },
-    [handleNew, handleOpenFile, handleSave, topologyResult],
+    [
+      handleNew,
+      handleOpenFile,
+      handleSave,
+      topologyOpen,
+      setTopologyInspection,
+    ],
   );
 
   return (
     <>
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-x-4 top-4 z-10",
-          className,
-        )}
-        {...props}
-      >
+      <input
+        ref={levelImportInput}
+        type="file"
+        accept=".lev"
+        hidden
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const sessionId = importSessionId.current;
+          try {
+            const level = await editorLevelFromFile(file);
+            if (
+              store.getState().documentSession.clipboardSessionId !== sessionId
+            )
+              return;
+            engineRef.current?.importLevel(level);
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Could not import this level.",
+            );
+          }
+        }}
+      />
+      <input
+        ref={imageInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        onChange={async (event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (!file) return;
+          const canvas = document.querySelector("canvas");
+          if (!canvas) return;
+          try {
+            await importReferenceImage(store, file, {
+              width: canvas.clientWidth,
+              height: canvas.clientHeight,
+            });
+          } catch (error) {
+            alert(
+              error instanceof Error
+                ? error.message
+                : "Could not import this image.",
+            );
+          }
+        }}
+      />
+      {imageExport && (
+        <ExportImageDialog
+          snapshot={imageExport.snapshot}
+          initialFileName={imageExport.fileName}
+          onClose={() => setImageExport(null)}
+        />
+      )}
+      <div className={cn("relative z-10 col-span-full", className)} {...props}>
         <Toolbar className="pointer-events-auto relative max-w-full gap-2 overflow-auto sm:hidden">
           <MainDropdownMenu
+            onImportLevel={openLevelImportPicker}
+            onImportImage={() => imageInput.current?.click()}
+            onOpenProperties={() => setPropertiesOpen(true)}
             actions={menuActions}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onDownloadDesktop={
+              isDesktop ? undefined : () => setDownloadOpen(true)
+            }
+            onExportImage={handleExportImage}
+            isLoading={isLoading}
+            onOpenSettings={() => {
+              setSettingsTab("general");
+              setSettingsOpen(true);
+            }}
           />
           <LevelVisibilityControl />
           <LevelPropertiesControl />
           <LevelNameControl isLoading={isLoading} />
-          <TopologyCheck
-            setTopologyResult={setTopologyResult}
-            isLoading={isLoading}
-          />
+          <TopologyCheck isLoading={isLoading} />
+          <TestStartPicker mobile />
           <PlayModeControl />
         </Toolbar>
 
         <div className="hidden grid-cols-[120px_minmax(0,1fr)_120px] gap-4 sm:grid">
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
+              onImportLevel={openLevelImportPicker}
+              onImportImage={() => imageInput.current?.click()}
+              onOpenProperties={() => setPropertiesOpen(true)}
               actions={menuActions}
-              onOpenSettings={() => setSettingsOpen(true)}
+              onDownloadDesktop={
+                isDesktop ? undefined : () => setDownloadOpen(true)
+              }
+              onExportImage={handleExportImage}
+              isLoading={isLoading}
+              onOpenSettings={() => {
+                setSettingsTab("general");
+                setSettingsOpen(true);
+              }}
             />
             <LevelVisibilityControl />
           </Toolbar>
@@ -200,38 +356,50 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto relative w-fit gap-2 justify-self-center">
             <LevelPropertiesControl />
             <LevelNameControl isLoading={isLoading} />
-            <TopologyCheck
-              setTopologyResult={setTopologyResult}
-              isLoading={isLoading}
-            />
+            <TopologyCheck isLoading={isLoading} />
           </Toolbar>
 
           <Toolbar className="pointer-events-auto w-fit gap-2 justify-self-end">
+            <TestStartPicker />
             <PlayModeControl />
           </Toolbar>
         </div>
 
-        <LevelFileName className="justify-center" isLoading={isLoading} />
+        <LevelFileName
+          key={fileNameEntrance.sessionId}
+          className="justify-center"
+          isLoading={isLoading}
+          entrance={fileNameEntrance}
+        />
 
-        <div className="pointer-events-none mt-2 flex justify-center">
-          <TopologyResultPanel
-            key={getTopologyResultKey(topologyResult)}
-            result={topologyResult}
-            onClose={() => setTopologyResult(null)}
-          />
+        <div className="absolute inset-x-0 top-full mt-2 flex justify-center">
+          <TopologyResultPanel />
         </div>
       </div>
-      <CanvasTips>
-        <LevelFolderTip
-          onOpenSettings={() => {
-            setHighlightLevelFolder(true);
-            setSettingsOpen(true);
-          }}
-        />
+      <CanvasTips className="row-start-3 self-end">
+        <CanvasTipSections>
+          <DesktopUpdate />
+          <LevelFolderTip
+            onOpenSettings={() => {
+              setSettingsTab("general");
+              setHighlightLevelFolder(true);
+              setSettingsOpen(true);
+            }}
+          />
+        </CanvasTipSections>
         <ToolInfo />
       </CanvasTips>
+      <DesktopDownloadDialog
+        open={downloadOpen}
+        onOpenChange={setDownloadOpen}
+      />
+      <LevelPropertiesDialog
+        open={propertiesOpen}
+        onOpenChange={setPropertiesOpen}
+      />
       <SettingsDialog
         open={settingsOpen}
+        initialTab={settingsTab}
         highlightLevelFolder={highlightLevelFolder}
         onOpenChange={(open) => {
           setSettingsOpen(open);
@@ -267,6 +435,7 @@ function useMainMenuActions() {
 
   const store = useEditorStore();
   const activeTool = useEditorActiveTool();
+  const { lgr } = useLgrAssets();
   const { confirmDiscardChanges } = useEditorDocumentGuard();
   const defaultLevelPreset = useDefaultLevelPreset();
   const customDefaultLevelTemplate = useCustomDefaultLevelTemplate();
@@ -315,6 +484,7 @@ function useMainMenuActions() {
           displayName: fileName,
           hasExternalHandle: true,
         });
+        trackEvent("level_opened");
         triggerFitToView();
       } catch (error) {
         alert(
@@ -350,6 +520,7 @@ function useMainMenuActions() {
       displayName: title,
       hasExternalHandle: false,
     });
+    trackEvent("level_created");
     triggerFitToView();
   }, [
     activeTool,
@@ -370,6 +541,28 @@ function useMainMenuActions() {
     const dirty = store.getState().documentSession.dirty;
     setDocumentSaveState(dirty ? "dirty" : "clean");
   }, [setDocumentSaveState, store]);
+
+  const checkSavedLevel = useCallback(() => {
+    const state = store.getState();
+    if (!state.checkTopologyOnSave) return;
+    // A diagnostic failure must not turn an already completed save into a
+    // reported save failure. Inspection never mutates the document.
+    try {
+      const result = getLevelTopology(state, lgr);
+      if (result.checks.some((check) => check.status !== "passed")) {
+        state.actions.setTopologyInspection(
+          state.topologyInspection ?? {
+            activeIssueId: null,
+            activeCheckId: null,
+            previewIssueId: null,
+            showBounds: false,
+          },
+        );
+      }
+    } catch (error) {
+      console.error("Topology check failed after saving:", error);
+    }
+  }, [store, lgr]);
 
   const handleSaveAs = useCallback(async () => {
     if (store.getState().documentSession.saveState === "saving") return;
@@ -396,6 +589,7 @@ function useMainMenuActions() {
             `${level.name}.lev`,
           hasExternalHandle,
         });
+        checkSavedLevel();
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to save level.";
@@ -404,6 +598,7 @@ function useMainMenuActions() {
       }
     });
   }, [
+    checkSavedLevel,
     markDocumentSaved,
     resetSaveState,
     runWithPickerGuard,
@@ -437,6 +632,7 @@ function useMainMenuActions() {
           `${store.getState().levelName || "Untitled"}.lev`,
         hasExternalHandle,
       });
+      checkSavedLevel();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to save level.";
@@ -444,6 +640,7 @@ function useMainMenuActions() {
       alert(message);
     }
   }, [
+    checkSavedLevel,
     handleSaveAs,
     markDocumentSaved,
     resetSaveState,
@@ -455,310 +652,141 @@ function useMainMenuActions() {
 }
 
 function MainDropdownMenu({
+  onImportLevel,
+  onImportImage,
+  onOpenProperties,
+  onDownloadDesktop,
   onOpenSettings,
   actions,
+  onExportImage,
+  isLoading,
 }: {
+  onImportLevel: () => void;
+  onImportImage: () => void;
+  onOpenProperties: () => void;
+  onDownloadDesktop?: () => void;
   onOpenSettings: () => void;
   actions: ReturnType<typeof useMainMenuActions>;
+  onExportImage: () => void;
+  isLoading?: boolean;
 }) {
   const { handleNew, handleOpenFile, handleSave, handleSaveAs } = actions;
   const modifier = useModifier();
-  const showSmartGuides = useEditor((state) => state.showSmartGuides);
-  const snapToSmartGuides = useEditor((state) => state.snapToSmartGuides);
-  const { toggleSmartGuides } = useEditorActions();
 
   return (
-    <>
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger>
-            <DropdownMenuTrigger>
-              <ToolbarButton
-                className="relative w-14 gap-0"
-                aria-label="Main menu"
-              >
-                <Logo className="isolate h-8 w-8" />
-                <Icon size="xs">
-                  <CaretDownIcon />
-                </Icon>
-              </ToolbarButton>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">Main menu</TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent
-          collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}
-        >
-          <DropdownMenuGroup>
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger>
+          <DropdownMenuTrigger>
+            <ToolbarButton
+              className="relative w-14 gap-0"
+              aria-label="Main menu"
+            >
+              <Logo className="isolate h-8 w-8" />
+              <Icon size="xs">
+                <CaretDownIcon />
+              </Icon>
+            </ToolbarButton>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Main menu</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent collisionPadding={HEADER_DROPDOWN_COLLISION_PADDING}>
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<FilePlusIcon />}
+            shortcut={getNewLevelShortcut(modifier === "⌘")}
+            onClick={() => {
+              void handleNew();
+            }}
+          >
+            New level
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<FolderOpenIcon />}
+            shortcut={`${modifier} + O`}
+            onClick={() => {
+              void handleOpenFile();
+            }}
+          >
+            Open…
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<FloppyDiskIcon />}
+            shortcut={`${modifier} + S`}
+            onClick={() => {
+              void handleSave();
+            }}
+          >
+            Save
+          </DropdownMenuItem>
+          {supportsFilePickers() && (
             <DropdownMenuItem
               iconBefore={<FilePlusIcon />}
-              shortcut={getNewLevelShortcut(modifier === "⌘")}
               onClick={() => {
-                void handleNew();
+                void handleSaveAs();
               }}
             >
-              New level
+              Save as…
             </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            iconBefore={<ImageIcon />}
+            disabled={isLoading}
+            onClick={() => {
+              void onExportImage();
+            }}
+          >
+            Export image…
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem
+            iconBefore={<FileArrowDownIcon />}
+            disabled={isLoading}
+            onClick={onImportLevel}
+          >
+            Import level…
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<ImageIcon />}
+            disabled={isLoading}
+            onClick={onImportImage}
+          >
+            Import image…
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            iconBefore={<InfoIcon />}
+            onClick={onOpenProperties}
+          >
+            Level properties
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          {onDownloadDesktop && (
             <DropdownMenuItem
-              iconBefore={<FolderOpenIcon />}
-              shortcut={`${modifier} + O`}
-              onClick={() => {
-                void handleOpenFile();
-              }}
+              iconBefore={<LaptopIcon />}
+              onClick={onDownloadDesktop}
             >
-              Open
+              Get desktop app
             </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem
-              iconBefore={<FloppyDiskIcon />}
-              shortcut={`${modifier} + S`}
-              onClick={() => {
-                void handleSave();
-              }}
-            >
-              Save
-            </DropdownMenuItem>
-            {supportsFilePickers() && (
-              <DropdownMenuItem
-                iconBefore={<FilePlusIcon />}
-                onClick={() => {
-                  void handleSaveAs();
-                }}
-              >
-                Save as…
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>View</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  role="menuitemcheckbox"
-                  aria-checked={showSmartGuides}
-                  iconAfter={showSmartGuides ? <CheckIcon /> : undefined}
-                  onClick={() => toggleSmartGuides("showSmartGuides")}
-                >
-                  Show smart guides
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  role="menuitemcheckbox"
-                  aria-checked={snapToSmartGuides}
-                  iconAfter={snapToSmartGuides ? <CheckIcon /> : undefined}
-                  onClick={() => toggleSmartGuides("snapToSmartGuides")}
-                >
-                  Snap to smart guides
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem
-              iconBefore={<GearIcon />}
-              shortcut={`${modifier} + ,`}
-              onClick={onOpenSettings}
-            >
-              Settings
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+          )}
+          <DropdownMenuItem
+            iconBefore={<GearIcon />}
+            shortcut={`${modifier} + ,`}
+            onClick={onOpenSettings}
+          >
+            Settings
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
-}
-
-function TopologyCheck({
-  setTopologyResult,
-  isLoading,
-  className,
-  ...props
-}: React.ComponentProps<typeof ToolbarButton> & {
-  setTopologyResult: React.Dispatch<
-    React.SetStateAction<TopologyCheckResult | null>
-  >;
-  isLoading?: boolean;
-}) {
-  const handleCheckTopology = useTopologyCheckAction(setTopologyResult);
-  return (
-    <Tooltip>
-      <TooltipTrigger>
-        <ToolbarButton
-          aria-label="Topology check"
-          onClick={handleCheckTopology}
-          disabled={isLoading || props.disabled}
-          className={cn({ "animate-pulse": isLoading }, className)}
-          {...props}
-        >
-          <CheckIcon className={cn({ invisible: isLoading })} />
-        </ToolbarButton>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">Typology check</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function useTopologyCheckAction(
-  setTopologyResult: React.Dispatch<
-    React.SetStateAction<TopologyCheckResult | null>
-  >,
-) {
-  const store = useEditorStore();
-
-  return useCallback(() => {
-    const state = store.getState();
-    const result = validateLevelTopology({
-      polygons: state.polygons,
-      flowers: state.flowers,
-    });
-    setTopologyResult(result);
-  }, [setTopologyResult, store]);
-}
-
-function useTopologyIssueSelection() {
-  const store = useEditorStore();
-  const { activateTool, setToolState } = useEditorActions();
-
-  return useCallback(
-    (issue: TopologyIssue) => {
-      const state = store.getState();
-      const selectedVertices = getTopologySelection(state.polygons, [issue]);
-      const canvas = document.querySelector("canvas");
-      const viewportWidth = canvas?.clientWidth ?? window.innerWidth;
-      const viewportHeight = canvas?.clientHeight ?? window.innerHeight;
-
-      activateTool("select");
-      setToolState<SelectToolState>("select", {
-        selectedVertices,
-        selectedObjects: [],
-        selectedPictures: [],
-        hoveredObject: undefined,
-        hoveredPictureBounds: undefined,
-        contextMenuType: undefined,
-      });
-
-      if (issue.vertices.length > 0) {
-        focusPositionsInView({
-          positions: issue.vertices,
-          viewportWidth,
-          viewportHeight,
-          minZoom: ISSUE_FOCUS_MIN_ZOOM,
-          maxZoom: ISSUE_FOCUS_MAX_ZOOM,
-          setCamera: state.actions.setCamera,
-          setZoom: state.actions.setZoom,
-        });
-      }
-    },
-    [activateTool, setToolState, store],
-  );
-}
-
-function TopologyResultPanel({
-  className,
-  result,
-  onClose,
-  ...props
-}: Omit<React.ComponentPropsWithRef<"section">, "children"> & {
-  result: TopologyCheckResult | null;
-  onClose: () => void;
-}) {
-  const selectIssue = useTopologyIssueSelection();
-  const [activeIssueIndex, setActiveIssueIndex] = useState<number | null>(null);
-
-  if (!result) return null;
-
-  const hasIssues = result.issues.length > 0;
-
-  return (
-    <section
-      className={cn(
-        "pointer-events-auto max-w-2xl rounded-xl bg-screen p-2 shadow-sm",
-        className,
-      )}
-      aria-live="polite"
-      {...props}
-    >
-      <header className="flex items-center gap-2 pl-2">
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            {hasIssues ? (
-              <Icon className="text-red-400">
-                <WarningDiamondIcon />
-              </Icon>
-            ) : (
-              <Icon className="text-green-400">
-                <ChecksIcon />
-              </Icon>
-            )}
-            {hasIssues
-              ? `Found ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"}`
-              : "Everything seems to be all right."}
-          </p>
-        </div>
-        <IconButton
-          size="sm"
-          className="text-secondary"
-          aria-label="Close topology results"
-          onClick={onClose}
-        >
-          <XIcon />
-        </IconButton>
-      </header>
-
-      {hasIssues && (
-        <div className="p-1.5 pt-2">
-          <div className="max-h-32 overflow-y-auto">
-            <ol className="flex flex-col gap-1.5">
-              {result.issues.map((issue, index) => {
-                const canSelectIssue = issue.vertices.length > 0;
-                return (
-                  <li
-                    key={`${issue.type}-${index}`}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg bg-white/5 p-1 pl-3",
-                      activeIssueIndex === index &&
-                        "bg-white/10 ring-1 ring-white/15",
-                    )}
-                  >
-                    <div className="min-w-0 flex-1 text-sm text-white/90">
-                      <span className="font-medium text-white">
-                        {index + 1}.
-                      </span>{" "}
-                      {issue.message}
-                    </div>
-                    {canSelectIssue && (
-                      <IconButton
-                        size="sm"
-                        onClick={() => {
-                          setActiveIssueIndex(index);
-                          selectIssue(issue);
-                        }}
-                        className="ml-auto"
-                        aria-label="View issue"
-                      >
-                        <CursorClickIcon />
-                      </IconButton>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function getTopologyResultKey(result: TopologyCheckResult | null) {
-  if (!result) return "topology:none";
-
-  return `topology:${result.issues
-    .map((issue) => `${issue.type}:${issue.message}`)
-    .join("|")}`;
 }
 
 function LevelTitleInput({
@@ -768,13 +796,33 @@ function LevelTitleInput({
 }: React.ComponentProps<typeof Input> & { isLoading?: boolean }) {
   const { setLevelName } = useEditorActions();
   const levelName = useLevelName();
+  const [draft, setDraft] = useState({ source: levelName, value: levelName });
+  const cancelled = useRef(false);
+  if (draft.source !== levelName)
+    setDraft({ source: levelName, value: levelName });
   return (
     <Input
       type="text"
       name="level-name"
       maxLength={LEVEL_TITLE_MAX_LENGTH}
-      value={isLoading ? "" : levelName}
-      onChange={(e) => setLevelName(e.target.value)}
+      value={isLoading ? "" : draft.value}
+      onFocus={() => {
+        cancelled.current = false;
+      }}
+      onBlur={(event) => {
+        if (!cancelled.current) setLevelName(event.currentTarget.value);
+        else setDraft({ source: levelName, value: levelName });
+        cancelled.current = false;
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          cancelled.current = true;
+          event.currentTarget.blur();
+        } else if (event.key === "Enter") event.currentTarget.blur();
+      }}
+      onChange={(event) =>
+        setDraft({ source: levelName, value: event.target.value })
+      }
       className={cn(
         "min-w-[12rem] flex-1 px-3",
         { "animate-pulse": isLoading },
@@ -799,8 +847,12 @@ function LevelNameControl({ isLoading }: { isLoading?: boolean }) {
 function LevelFileName({
   className,
   isLoading,
+  entrance,
   ...props
-}: React.ComponentPropsWithRef<"div"> & { isLoading?: boolean }) {
+}: React.ComponentPropsWithRef<"div"> & {
+  isLoading?: boolean;
+  entrance: ReturnType<typeof useLevelFileNameEntrance>;
+}) {
   const store = useEditorStore();
   const levelFolder = useEditor((state) => state.levelFolder);
   const folderRevision = useSyncExternalStore(
@@ -817,18 +869,6 @@ function LevelFileName({
   const fileName = documentSession.hasExternalHandle
     ? documentSession.displayName
     : null;
-  const [entrance, setEntrance] = useState({
-    fileName,
-    isEntering: Boolean(fileName),
-  });
-
-  if (entrance.fileName !== fileName) {
-    setEntrance({
-      fileName,
-      isEntering: !entrance.fileName && Boolean(fileName),
-    });
-  }
-
   useEffect(
     function syncLevelFolderFiles() {
       let cancelled = false;
@@ -894,6 +934,8 @@ function LevelFileName({
         displayName: result.fileName,
         hasExternalHandle: true,
       });
+      trackEvent("level_opened");
+      entrance.onNavigate();
       triggerFitToView();
     } catch (error) {
       alert(`Import failed: ${error instanceof Error ? error.message : error}`);
@@ -919,7 +961,7 @@ function LevelFileName({
           currentIndex >= 0 ? "level-file-name-next" : "level-file-name-label",
         );
         if (isLastPiece) {
-          setEntrance((current) => ({ ...current, isEntering: false }));
+          entrance.onEnd();
         }
       }}
       {...props}

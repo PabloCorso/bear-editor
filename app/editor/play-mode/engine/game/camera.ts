@@ -2,6 +2,7 @@
  * Camera follow with flip animation.
  * Handles smooth transitions when the bike turns direction.
  */
+import { LEFT_WHEEL_DX, LEFT_WHEEL_DY } from "../core/constants";
 
 export interface Camera {
   x: number;
@@ -23,6 +24,13 @@ export function createCamera(): Camera {
     maxY: 1000,
     zoom: 1.0,
   };
+}
+
+/** Frame the initial bike from its left-wheel start in physics coordinates. */
+export function createStartCamera(start: { x: number; y: number }): Camera {
+  const camera = createCamera();
+  updateCamera(camera, start.x - LEFT_WHEEL_DX, start.y - LEFT_WHEEL_DY);
+  return camera;
 }
 
 /** Follow the bike in physics coordinates (Y-up) */

@@ -1,3 +1,4 @@
+import type { ReferenceImage } from "../reference-images";
 import type { BikeCoords } from "~/editor/kuski-geometry";
 import type { Gravity } from "~/editor/elma-types";
 import type { WorldRect } from "~/editor/render/world-geometry";
@@ -37,6 +38,7 @@ export type WorldRenderPolygonItem = {
 };
 
 export type WorldRenderPictureItem = {
+  boundaryShape?: "outline" | "rectangle";
   type: "picture";
   name?: string;
   texture?: string;
@@ -72,6 +74,7 @@ export type WorldRenderObjectItem = {
 
 export type WorldRenderStartItem = {
   type: "start";
+  color?: string;
   position: WorldPoint;
   distance: number;
   clip: number;
@@ -84,6 +87,13 @@ export type WorldRenderStartItem = {
 
 export type WorldRenderBikeItem = {
   type: "bike";
+  color?: string;
+  opacity?: number;
+  forceVisible?: boolean;
+  showBounds?: boolean;
+  boundsLineWidth?: number;
+  boundsColor?: string;
+  boundsOpacity?: number;
   distance: number;
   start: WorldPoint;
   coords: BikeCoords;
@@ -154,14 +164,15 @@ export type WorldRenderDrawItem =
   | WorldRenderBikeItem;
 
 export type WorldRenderScene = {
+  referenceImages?: ReferenceImage[];
   clearColor: string;
   ground: string;
   sky: string;
   animateSprites: boolean;
-  groundClipMode: "always" | "when-polygons-visible";
   viewport: WorldRenderViewport;
   visibility: WorldRenderVisibility;
   polygons: WorldRenderPolygonItem[];
   drawItems: WorldRenderDrawItem[];
   overlays?: WorldRenderOverlayItem[];
+  backgroundOverlays?: WorldRenderOverlayItem[];
 };

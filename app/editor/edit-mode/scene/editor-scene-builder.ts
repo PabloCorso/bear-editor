@@ -1,9 +1,11 @@
+import { buildGridOverlays } from "~/editor/grid";
 import {
   DRAFT_PREVIEW_OPACITY,
   uiColors,
   uiStrokeWidths,
 } from "~/editor/constants";
 import type { EditorState } from "~/editor/editor-state";
+import { testStartGhostOpacity } from "~/editor/test-starts";
 import { Clip, type Picture } from "~/editor/elma-types";
 import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import {
@@ -12,6 +14,7 @@ import {
   type EditorWorldScene,
 } from "./editor-scene";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
+import { buildRideMomentBikeSceneItem } from "~/editor/play-mode/scene/live-bike";
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldPoint } from "~/editor/render/world-scene";
 import {
@@ -38,8 +41,10 @@ export function buildEditorWorldScene({
   viewportSize,
   viewportRect,
   resolvePictureDimensions,
+  includeDrafts = true,
 }: {
   state: EditorState;
+  includeDrafts?: boolean;
   viewportSize: { width: number; height: number };
   viewportRect: WorldRect;
   resolvePictureDimensions?: (picture: {
@@ -48,14 +53,15 @@ export function buildEditorWorldScene({
     mask?: string;
   }) => { width: number; height: number } | null;
 }): EditorWorldScene {
-  const scenePolygons = getScenePolygons(state);
+  const scenePolygons = getScenePolygons(state, includeDrafts);
 
   return {
+    referenceImages: includeDrafts ? state.referenceImages : undefined,
     clearColor: "#1a1a2e",
+    backgroundOverlays: buildGridOverlays(state.grid, viewportRect, state.zoom),
     ground: state.ground,
     sky: state.sky,
     animateSprites: state.animateSprites,
-    groundClipMode: "when-polygons-visible",
     visibility: {
       useGroundSkyTextures: state.levelVisibility.useGroundSkyTextures,
       useGrassTextures: state.levelVisibility.useGrassTextures,
@@ -90,17 +96,30 @@ export function buildEditorWorldScene({
           opacity: polygon.opacity,
         };
       }),
-    drawItems: getDrawItemQueue(state, viewportRect, resolvePictureDimensions),
+    drawItems: getDrawItemQueue(
+      state,
+      viewportRect,
+      resolvePictureDimensions,
+      includeDrafts,
+    ),
   };
 }
 
 export function getEditorHoverableItems(
   state: EditorState,
 ): EditorHoverableWorldItem[] {
-  const items = getDrawItemQueue(state);
-  return items.map((item) => {
+  const hoverableItems: EditorHoverableWorldItem[] = [];
+  for (const item of getDrawItemQueue(state)) {
+    // Recorded test starts are bikes in the draw queue, but session artifacts
+    // provide their stable selection identity and pose-aware hit area.
+    if (item.type === "bike") continue;
+    if (
+      item.type === "start" &&
+      state.testStarts.items.some((test) => test.position === item.position)
+    )
+      continue;
     if (item.type === "picture") {
-      return {
+      hoverableItems.push({
         kind: "picture",
         picture: {
           clip: item.clip,
@@ -110,15 +129,17 @@ export function getEditorHoverableItems(
           position: item.position,
           texture: item.texture ?? "",
         } as Picture,
-      };
+      });
+      continue;
     }
 
-    return {
+    hoverableItems.push({
       kind: "object",
       type: item.type === "start" ? "start" : item.objectKind,
       position: item.position,
-    };
-  });
+    });
+  }
+  return hoverableItems;
 }
 
 function getDrawItemQueue(
@@ -129,8 +150,9 @@ function getDrawItemQueue(
     texture?: string;
     mask?: string;
   }) => { width: number; height: number } | null,
+  includeDrafts = true,
 ): EditorWorldDrawItem[] {
-  const activeTool = state.actions.getActiveTool();
+  const activeTool = includeDrafts ? state.actions.getActiveTool() : undefined;
   const drafts = activeTool?.getDrafts?.() ?? {};
   const {
     showObjects,
@@ -163,9 +185,11 @@ function getDrawItemQueue(
             distance: picture.distance,
             clip: picture.clip,
             cacheKey: picture,
+            boundaryShape: state.pictureSelection.boundary,
             showBounds:
-              showPictureBounds ||
-              (Boolean(picture.texture) && showTextureBounds),
+              picture.texture && picture.mask
+                ? showTextureBounds
+                : showPictureBounds,
             boundsLineWidth: idleBoundsLineWidth,
             boundsColor: idleBoundsColor,
             boundsOpacity: idleBoundsOpacity,
@@ -181,7 +205,7 @@ function getDrawItemQueue(
       clip: picture.clip,
       draft: true,
       opacity: DRAFT_PREVIEW_OPACITY,
-      showBounds: true,
+      showBounds: drafts.showPictureBounds ?? true,
       boundsLineWidth: idleBoundsLineWidth,
       boundsColor: idleBoundsColor,
       boundsOpacity: idleBoundsOpacity,
@@ -283,7 +307,12 @@ function getDrawItemQueue(
             type: "start" as const,
             ...DEFAULT_DISTANCE_AND_CLIP,
             position: drafts.start ?? state.start,
-            opacity: drafts.start ? DRAFT_PREVIEW_OPACITY : undefined,
+            opacity: drafts.start
+              ? DRAFT_PREVIEW_OPACITY
+              : state.testStarts.activeId
+                ? testStartGhostOpacity.editor
+                : 1,
+            color: state.testStarts.levelColor,
             forceVisible: !!drafts.start,
             showBounds: showObjectBounds,
             boundsLineWidth: idleBoundsLineWidth,
@@ -292,17 +321,47 @@ function getDrawItemQueue(
           },
         ]
       : []),
+    ...(showAnyObjects
+      ? state.testStarts.items.map((item) => {
+          const appearance = {
+            color: item.color,
+            opacity:
+              item.id === state.testStarts.activeId
+                ? 1
+                : testStartGhostOpacity.editor,
+            showBounds: showObjectBounds,
+            boundsLineWidth: idleBoundsLineWidth,
+            boundsColor: idleBoundsColor,
+            boundsOpacity: idleBoundsOpacity,
+          };
+          return item.ride
+            ? {
+                ...buildRideMomentBikeSceneItem(item.ride),
+                ...appearance,
+              }
+            : {
+                type: "start" as const,
+                ...DEFAULT_DISTANCE_AND_CLIP,
+                position: item.position,
+                ...appearance,
+              };
+        })
+      : []),
   ].sort((a, b) => b.distance - a.distance);
 }
 
-function getScenePolygons(state: EditorState): ScenePolygon[] {
+function getScenePolygons(
+  state: EditorState,
+  includeDrafts: boolean,
+): ScenePolygon[] {
+  if (!includeDrafts) return state.polygons;
   const activeTool = state.actions.getActiveTool();
   const drafts = activeTool?.getDrafts?.();
   if (drafts?.replacementPolygons) return drafts.replacementPolygons;
   const draftPolygons: ScenePolygon[] =
     drafts?.polygons?.map((polygon) => ({
       ...polygon,
-      opacity: DRAFT_PREVIEW_OPACITY,
+      opacity: drafts.polygonOpacity,
     })) || [];
   const vertexToolState = state.actions.getToolState<VertexToolState>("vertex");
   const scenePolygons: ScenePolygon[] = vertexToolState?.editingPolygon

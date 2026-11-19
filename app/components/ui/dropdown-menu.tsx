@@ -1,4 +1,8 @@
-import { CaretDownIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  CaretDownIcon,
+  CaretRightIcon,
+  CheckIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { Menu as DropdownMenuPrimitive } from "@base-ui/react/menu";
 import { Icon } from "./icon";
 import { cn } from "~/utils/misc";
@@ -45,6 +49,27 @@ export function DropdownMenuItem({
       ) : null}
       {iconAfter ? <Icon className="ml-auto">{iconAfter}</Icon> : null}
     </DropdownMenuPrimitive.Item>
+  );
+}
+
+export function DropdownMenuCheckboxItem({
+  children,
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      className={cn(itemClassName, className)}
+      closeOnClick={false}
+      {...props}
+    >
+      <Icon className="w-4">
+        <DropdownMenuPrimitive.CheckboxItemIndicator>
+          <CheckIcon />
+        </DropdownMenuPrimitive.CheckboxItemIndicator>
+      </Icon>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
   );
 }
 

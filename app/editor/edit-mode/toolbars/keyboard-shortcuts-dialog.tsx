@@ -2,7 +2,7 @@ import type { DialogProps } from "~/components/ui/dialog";
 import {
   CursorIcon,
   HandIcon,
-  PaintBucketIcon,
+  TextTIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   Dialog,
@@ -25,18 +25,19 @@ import {
   useTextureMaskSprites,
 } from "~/components/use-lgr-assets";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
+import { ColorToolIcon } from "./color-tool-control";
 import {
   usePlaySettings,
   useVertexEdgeClickPreference,
 } from "~/editor/use-editor-store";
 import { cn, useModifier } from "~/utils/misc";
-import {
-  AUTO_GRASS_ALL_SHORTCUT,
-  VertexIcon,
-  getVertexIconProps,
-} from "./vertex-tool-control";
+import { VertexIcon, getVertexIconProps } from "./vertex-tool-control";
 import {
   getNewLevelShortcut,
+  formatShortcutCode,
+  FIT_TO_VIEW_SHORTCUT,
+  GO_TO_PLAY_START_SHORTCUT,
+  OPEN_AI_PROMPT_LIBRARY_SHORTCUT,
   OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
 } from "./keyboard-shortcuts";
 
@@ -84,6 +85,9 @@ export function KeyboardShortcutsDialog(props: DialogProps) {
       textureSprite,
       playKeyBindings: playSettings.keyBindings,
       showVertexInternalEdgeClickHint: vertexEdgeClickBehavior === "internal",
+      showDesktopDevelopmentShortcuts:
+        typeof window !== "undefined" &&
+        (window.bearDesktop?.development ?? false),
     },
   );
 
@@ -242,6 +246,7 @@ function getShortcutGroups(
     textureSprite?: string;
     playKeyBindings: ReturnType<typeof usePlaySettings>["keyBindings"];
     showVertexInternalEdgeClickHint?: boolean;
+    showDesktopDevelopmentShortcuts: boolean;
   },
 ): ShortcutGroup[] {
   return [
@@ -254,8 +259,16 @@ function getShortcutGroups(
           icon: <CursorIcon weight="light" />,
           subItems: [
             {
+              shortcut: "Right click",
+              label: "Complete area selection",
+            },
+            {
               shortcut: `${modifier} + A`,
               label: "Select all visible",
+            },
+            {
+              shortcut: `${modifier} + Click`,
+              label: "Add to or remove from selection",
             },
             {
               shortcut: ["Shift", "Alt"],
@@ -267,7 +280,7 @@ function getShortcutGroups(
             },
             {
               shortcut: `${modifier} + C`,
-              label: "Copy selection",
+              label: "Copy selection (excluding starts and session artifacts)",
             },
             {
               shortcut: `${modifier} + V`,
@@ -275,19 +288,24 @@ function getShortcutGroups(
             },
             {
               shortcut: `${modifier} + D`,
-              label: "Duplicate selection",
+              label:
+                "Duplicate selection (excluding starts and session artifacts)",
             },
             {
               shortcut: "Delete",
-              label: "Delete selection",
+              label: "Delete selection (including test players)",
             },
             {
               shortcut: "Shift + Drag",
               label: "Move selected vertices along an edge",
             },
             {
-              shortcut: "Alt + Drag",
-              label: "Temporarily bypass smart guides",
+              shortcut: ["←", "↑", "→", "↓"],
+              label: "Move selection by 0.1 units or one grid step",
+            },
+            {
+              shortcut: "Shift + ← ↑ → ↓",
+              label: "Move selection by 1 unit or 10 grid steps",
             },
             {
               shortcut: "R",
@@ -306,10 +324,6 @@ function getShortcutGroups(
               label: "Resize & rotate: snap rotation to 45°",
             },
             {
-              shortcut: "Esc",
-              label: "Resize & rotate: cancel drag / exit mode",
-            },
-            {
               shortcut: `${modifier} + ]`,
               label: "Bring picture forward",
             },
@@ -324,6 +338,28 @@ function getShortcutGroups(
             {
               shortcut: `${modifier} + Shift + [`,
               label: "Send picture to back",
+            },
+          ],
+        },
+        {
+          shortcut: defaultTools.shape.shortcut,
+          label: defaultTools.shape.name,
+          subItems: [
+            {
+              shortcut: "Shift",
+              label:
+                "Constrain proportions (saved polygons keep their original ratio)",
+            },
+            { shortcut: ["-", "+"], label: "Ellipse vertices / star points" },
+            { shortcut: ["[", "]"], label: "Star inner radius (%)" },
+            {
+              shortcut: "+ tile",
+              label:
+                "Click a polygon edge or marquee whole polygons to save to the library",
+            },
+            {
+              shortcut: "Selection menu",
+              label: "Save selected level content to the library",
             },
           ],
         },
@@ -351,10 +387,6 @@ function getShortcutGroups(
               shortcut: "Space",
               label: "Flip direction",
             },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
-            },
           ],
         },
         {
@@ -363,11 +395,18 @@ function getShortcutGroups(
           icon: (
             <VertexIcon {...getVertexIconProps("grass")} className="h-6 w-6" />
           ),
+          subItems: [{ shortcut: "Space", label: "Flip direction" }],
+        },
+        {
+          shortcut: defaultTools.vertex.variants.draw.shortcut,
+          label: "Select Draw tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("draw")} className="h-6 w-6" />
+          ),
           subItems: [
-            { shortcut: "Space", label: "Flip direction" },
             {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish polygon",
+              shortcut: ["-", "+"],
+              label: "Adjust edge length",
             },
           ],
         },
@@ -396,10 +435,6 @@ function getShortcutGroups(
             },
             { shortcut: "S", label: "Toggle start chamber and player" },
             { shortcut: "F", label: "Toggle end flower" },
-            {
-              shortcut: ["Enter", "Esc", "Right click"],
-              label: "Finish pipe",
-            },
           ],
         },
         {
@@ -412,13 +447,8 @@ function getShortcutGroups(
             />
           ),
           subItems: [
-            {
-              shortcut: "Drag / Click twice",
-              label: "Extend the starting sky or ground along the stroke",
-            },
             { shortcut: ["-", "+"], label: "Adjust width" },
             { shortcut: "Enter", label: "Apply at cursor" },
-            { shortcut: ["Esc", "Right click"], label: "Cancel stroke" },
           ],
         },
         {
@@ -433,12 +463,48 @@ function getShortcutGroups(
               shortcut: "Space",
               label: "Cycle mode: Inside / Outside / Centered",
             },
-            { shortcut: "Click", label: "Frame the hovered polygon" },
           ],
         },
         {
-          shortcut: AUTO_GRASS_ALL_SHORTCUT,
-          label: "AutoGrass all polygons",
+          shortcut: defaultTools.vertex.variants.smooth.shortcut,
+          label: "Smooth tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("smooth")} className="h-6 w-6" />
+          ),
+          subItems: [
+            {
+              shortcut: ["-", "+"],
+              label:
+                "Adjust amount: negative simplifies, positive rounds corners",
+            },
+            {
+              shortcut: ["[", "]"],
+              label: "Adjust offset",
+            },
+          ],
+        },
+        {
+          shortcut: defaultTools.vertex.variants.brush.shortcut,
+          label: "Select Brush tool",
+          icon: (
+            <VertexIcon {...getVertexIconProps("brush")} className="h-6 w-6" />
+          ),
+          subItems: [
+            { shortcut: ["-", "+"], label: "Adjust width" },
+            {
+              shortcut: [",", "."],
+              label: "Adjust centerline edge length",
+            },
+            { shortcut: "Space", label: "Cycle apple mode" },
+            { shortcut: ["[", "]"], label: "Adjust apple distance or count" },
+            { shortcut: "0–250", label: "Type apple count in count mode" },
+            { shortcut: "S", label: "Toggle start chamber and player" },
+            { shortcut: "F", label: "Toggle end flower" },
+          ],
+        },
+        {
+          shortcut: defaultTools.vertex.variants.autoGrass.shortcut,
+          label: "Select AutoGrass tool",
           icon: (
             <VertexIcon
               {...getVertexIconProps("autoGrass")}
@@ -448,12 +514,11 @@ function getShortcutGroups(
           subItems: [
             {
               shortcut: ["-", "+"],
-              label: "Adjust height (AutoGrass tool or hovering All)",
+              label: "Adjust height",
             },
             {
               shortcut: ["[", "]"],
-              label:
-                "Decrease / increase end inset (AutoGrass tool or hovering All)",
+              label: "Decrease / increase end inset",
             },
           ],
         },
@@ -462,6 +527,7 @@ function getShortcutGroups(
           label: defaultTools.apple.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.appleSprite} />,
           subItems: [
+            { shortcut: "Space", label: "Switch to Killer" },
             {
               shortcut: "1-9",
               label: "Change apple animation",
@@ -470,17 +536,23 @@ function getShortcutGroups(
               shortcut: "N",
               label: "Set no gravity",
             },
+            {
+              shortcut: "Shift + arrows",
+              label: "Set directional gravity",
+            },
           ],
         },
         {
           shortcut: defaultTools.killer.shortcut,
           label: defaultTools.killer.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.killerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Flower" }],
         },
         {
           shortcut: defaultTools.flower.shortcut,
           label: defaultTools.flower.name,
           icon: <SpriteIcon className="h-5 w-5" src={toolIcons.flowerSprite} />,
+          subItems: [{ shortcut: "Space", label: "Switch to Apple" }],
         },
         {
           shortcut: defaultTools.picture.shortcut,
@@ -491,11 +563,10 @@ function getShortcutGroups(
               src={toolIcons.pictureSprite}
             />
           ),
-        },
-        {
-          shortcut: defaultTools.color.shortcut,
-          label: defaultTools.color.name,
-          icon: <PaintBucketIcon className="h-5 w-5" weight="fill" />,
+          subItems: [
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
+          ],
         },
         {
           shortcut: defaultTools.texture.shortcut,
@@ -506,55 +577,24 @@ function getShortcutGroups(
               src={toolIcons.textureSprite}
             />
           ),
-        },
-      ],
-    },
-    {
-      title: "Tool panels",
-      items: [
-        {
-          shortcut: "Tool key",
-          label:
-            "Switch tools using the current choice; press again to toggle its panel",
+          subItems: [
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
+          ],
         },
         {
-          shortcut: "Enter",
-          label:
-            "Accept the focused choice or keep the current choice and close the panel",
+          shortcut: defaultTools.color.shortcut,
+          label: defaultTools.color.name,
+          icon: <ColorToolIcon className="h-5 w-5" />,
+          subItems: [
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
+          ],
         },
         {
-          shortcut: "Esc",
-          label: "Close the panel and keep the tool active",
-        },
-      ],
-    },
-    {
-      title: "Picture, texture, and color placement",
-      items: [
-        {
-          shortcut: "Right click",
-          label: "Open placement properties at the cursor",
-        },
-        {
-          shortcut: "Esc",
-          label: "Close placement properties and resume placement",
-        },
-      ],
-    },
-    {
-      title: "Picture distance field",
-      items: [
-        {
-          shortcut: ["↑", "↓"],
-          label: "Increase / decrease distance by 1 while focused",
-        },
-        {
-          shortcut: ["Home", "End"],
-          label: "Set distance to 0 / 999 while focused",
-        },
-        {
-          shortcut: "Enter",
-          label: "Commit distance and leave the field",
+          shortcut: defaultTools.text.shortcut,
+          label: defaultTools.text.name,
+          icon: <TextTIcon className="h-5 w-5" />,
         },
       ],
     },
@@ -564,6 +604,11 @@ function getShortcutGroups(
         {
           shortcut: "Enter",
           label: "Start / restart run (outside dialogs and tool panels)",
+        },
+        {
+          shortcut: "Enter",
+          label:
+            "With only one Kuski selected: use it as play start and start run",
         },
         {
           shortcut: formatShortcutCode(toolIcons.playKeyBindings.throttle),
@@ -590,6 +635,14 @@ function getShortcutGroups(
           label: "Alo volt",
         },
         {
+          shortcut: formatShortcutCode(toolIcons.playKeyBindings.rewind),
+          label: "Hold to rewind; release to continue",
+        },
+        {
+          shortcut: formatShortcutCode(toolIcons.playKeyBindings.captureStart),
+          label: "Capture ride and history as the active test start",
+        },
+        {
           shortcut: "Esc",
           label: "Exit play mode",
         },
@@ -598,6 +651,18 @@ function getShortcutGroups(
     {
       title: "General",
       items: [
+        {
+          shortcut: "Alt",
+          label: "Hold to bypass grid snapping and smart guides",
+        },
+        {
+          shortcut: "Enter",
+          label: "Save player name while renaming",
+        },
+        {
+          shortcut: "Esc",
+          label: "Cancel player rename",
+        },
         {
           shortcut: getNewLevelShortcut(modifier === "⌘"),
           label: "New level",
@@ -615,9 +680,21 @@ function getShortcutGroups(
           label: "Settings",
         },
         {
+          shortcut: OPEN_AI_PROMPT_LIBRARY_SHORTCUT,
+          label: "Open AI Prompt Library",
+        },
+        {
           shortcut: OPEN_KEYBOARD_SHORTCUTS_SHORTCUT,
           label: "Open keyboard shortcuts",
         },
+        ...(toolIcons.showDesktopDevelopmentShortcuts
+          ? [
+              {
+                shortcut: modifier === "⌘" ? "⌘ + ⌥ + I" : "Ctrl + Shift + I",
+                label: "Toggle developer tools",
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -640,26 +717,18 @@ function getShortcutGroups(
           label: "Zoom out",
         },
         {
-          shortcut: `${modifier} + 0`,
+          shortcut: FIT_TO_VIEW_SHORTCUT,
           label: "Fit to view",
         },
         {
           shortcut: ["←", "↑", "→", "↓"],
-          label: "Pan canvas",
+          label: "Pan canvas when nothing is selected",
+        },
+        {
+          shortcut: GO_TO_PLAY_START_SHORTCUT,
+          label: "Go to active play start (in edit mode)",
         },
       ],
     },
   ];
-}
-
-function formatShortcutCode(code: string): string {
-  if (code === "") return "Unassigned";
-  if (code === "ArrowLeft") return "←";
-  if (code === "ArrowUp") return "↑";
-  if (code === "ArrowRight") return "→";
-  if (code === "ArrowDown") return "↓";
-  if (code === "Equal") return "=";
-  if (code === "Minus") return "-";
-  if (code.startsWith("Key")) return code.slice(3);
-  return code;
 }

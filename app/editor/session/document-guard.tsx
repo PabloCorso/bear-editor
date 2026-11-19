@@ -6,7 +6,10 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useEditorDocumentSession } from "~/editor/use-editor-store";
+import {
+  useEditorDocumentSession,
+  useEditorStore,
+} from "~/editor/use-editor-store";
 import {
   Dialog,
   DialogBody,
@@ -35,6 +38,7 @@ export function EditorDocumentGuardProvider({
 }: {
   children: React.ReactNode;
 }) {
+  const store = useEditorStore();
   const documentSession = useEditorDocumentSession();
   const isDirty = documentSession.dirty;
   const blocker = useBlocker(isDirty);
@@ -44,11 +48,14 @@ export function EditorDocumentGuardProvider({
   useBeforeUnload(
     useCallback(
       (event) => {
-        if (!isDirty) return;
+        const session = store.getState().documentSession;
+        const saving = session.saveState === "saving";
+        if (!session.dirty && !(window.bearDesktop && saving)) return;
+        if (window.bearDesktop?.confirmClose(saving)) return;
         event.preventDefault();
         event.returnValue = "";
       },
-      [isDirty],
+      [store],
     ),
   );
 

@@ -1,9 +1,11 @@
+import { snapGridTranslation, snapToGrid } from "~/editor/grid";
 import type { EventContext } from "~/editor/helpers/event-handler";
 import type { EditorStore } from "~/editor/editor-store";
 import type { Apple, Picture, Polygon, Position } from "~/editor/elma-types";
 import type { WorldRect } from "~/editor/render/world-geometry";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import type { ToolMeta } from "./default-tools";
+import type { EditorHistoryActionKind } from "~/editor/history/editor-history-actions";
 
 export type ToolState<T = unknown> = Record<string, T>;
 export type ToolCursor = string;
@@ -29,6 +31,39 @@ export abstract class Tool<T extends ToolState = ToolState> {
     return { state, toolState, setToolState };
   }
 
+  /** Group all content and selection changes made by one completed action. */
+  protected edit<R>(kind: EditorHistoryActionKind, mutate: () => R): R {
+    return this.store.history.execute({ kind, toolId: this.meta.id }, mutate);
+  }
+
+  /** For live edits spanning events. Draft-only tools commit with edit(). */
+  protected beginEdit(kind: EditorHistoryActionKind) {
+    return this.store.history.begin({ kind, toolId: this.meta.id });
+  }
+
+  cancelInteraction(): void {
+    this.clear?.();
+  }
+
+  protected snapPosition(position: Position, bypass?: boolean): Position {
+    const state = this.store.getState();
+    return (bypass ?? state.gridSnapBypassed)
+      ? position
+      : snapToGrid(position, state.grid);
+  }
+
+  // Keep one anchor for the whole operation so relative geometry is preserved.
+  protected snapTranslation(
+    anchor: Position,
+    delta: Position,
+    bypass?: boolean,
+  ): Position {
+    const state = this.store.getState();
+    return (bypass ?? state.gridSnapBypassed)
+      ? delta
+      : snapGridTranslation(anchor, delta, state.grid);
+  }
+
   // Lifecycle
   onActivate?(variant?: string): void;
   onDeactivate?(): void;
@@ -38,6 +73,7 @@ export abstract class Tool<T extends ToolState = ToolState> {
   onPointerDown?(event: PointerEvent, context: EventContext): boolean;
   onPointerMove?(event: PointerEvent, context: EventContext): boolean;
   onPointerUp?(event: PointerEvent, context: EventContext): boolean;
+  onKeyUp?(event: KeyboardEvent, context: EventContext): boolean;
   onKeyDown?(event: KeyboardEvent, context: EventContext): boolean;
   onRightClick?(event: MouseEvent, context: EventContext): boolean;
   getCursor?(context: EventContext): ToolCursor | undefined;
@@ -51,6 +87,7 @@ export abstract class Tool<T extends ToolState = ToolState> {
   // Draft elements for previewing while using the tool
   getDrafts?(): {
     polygons?: Polygon[];
+    polygonOpacity?: number;
     // Complete terrain replacement for non-destructive boolean previews.
     replacementPolygons?: Polygon[];
     hiddenPolygons?: Polygon[];
@@ -59,5 +96,6 @@ export abstract class Tool<T extends ToolState = ToolState> {
     flowers?: Position[];
     start?: Position;
     pictures?: Picture[];
+    showPictureBounds?: boolean;
   };
 }

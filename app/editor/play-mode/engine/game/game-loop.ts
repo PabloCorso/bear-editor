@@ -5,6 +5,7 @@
 import { Vec2 } from "../core/vec2";
 import {
   PHYSICS_DT,
+  GAME_TIME_PER_SECOND,
   TIME_TO_CENTISECONDS,
   VOLT_DELAY,
 } from "../core/constants";
@@ -23,7 +24,7 @@ import {
 } from "../physics/stepper";
 import { EventBuffer, WavEvent } from "./event-buffer";
 import { InputManager, type KeyBindings, DEFAULT_KEYS } from "../input-manager";
-import { createCamera, updateCamera, type Camera } from "./camera";
+import { createStartCamera, updateCamera, type Camera } from "./camera";
 import type { LevelData, ObjectProperty } from "../level";
 import { sortObjects, initializeObjects } from "../level";
 
@@ -102,8 +103,7 @@ export function createGame(
   const segments = new Segments(gameLevel);
   segments.setupCollisionGrid(0.4); // max wheel radius
 
-  const camera = createCamera();
-  updateCamera(camera, motor.bike.r.x, motor.bike.r.y);
+  const camera = createStartCamera(motor.leftWheel.r);
 
   // Set camera bounds from level geometry
   let minX = Infinity,
@@ -249,7 +249,11 @@ function applyAppleProperty(motor: MotorState, property: ObjectProperty): void {
 }
 
 /** Main frame callback - called via requestAnimationFrame */
-export function gameFrame(state: GameState, timestamp: number): void {
+export function gameFrame(
+  state: GameState,
+  timestamp: number,
+  advancePhysics = true,
+): void {
   if (!state.running) return;
 
   // Initialize timestamp on first frame
@@ -262,22 +266,12 @@ export function gameFrame(state: GameState, timestamp: number): void {
   const wallDt = (timestamp - state.lastTimestamp) / 1000; // seconds
   state.lastTimestamp = timestamp;
 
-  // Don't run physics if game is over
-  if (state.result !== "playing") return;
-
   const { input, keys, motor } = state;
 
   // Handle escape
   if (input.isDown(keys.escape)) {
     state.result = "escaped";
     return;
-  }
-
-  // Handle turn
-  if (input.wasJustPressed(keys.turn)) {
-    motor.flippedBike = !motor.flippedBike;
-    state.lastTurnTime = state.gameTime;
-    calculateHeadPosition(motor);
   }
 
   if (input.isDown(keys.zoomIn)) {
@@ -295,6 +289,16 @@ export function gameFrame(state: GameState, timestamp: number): void {
     );
   }
 
+  // View controls and Escape remain available while dead or rewinding.
+  if (!advancePhysics || state.result !== "playing") return;
+
+  // Handle turn
+  if (input.wasJustPressed(keys.turn)) {
+    motor.flippedBike = !motor.flippedBike;
+    state.lastTurnTime = state.gameTime;
+    calculateHeadPosition(motor);
+  }
+
   // Cap max delta to prevent spiral of death (100ms max)
   const cappedDt = Math.min(wallDt, 0.1);
 
@@ -302,7 +306,7 @@ export function gameFrame(state: GameState, timestamp: number): void {
   // game_time = wall_seconds * 1000 * 0.182 * 0.0024
   // = wall_seconds * 1000 * 0.182 * 0.0024
   // = wall_seconds * 0.4368
-  const gameTimeDelta = cappedDt * 1000.0 * 0.182 * 0.0024;
+  const gameTimeDelta = cappedDt * GAME_TIME_PER_SECOND;
   state.accumulator += gameTimeDelta;
 
   // Fixed timestep physics loop

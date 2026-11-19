@@ -1,8 +1,13 @@
+import { Switch } from "~/components/ui/switch";
+import { defaultGridSettings } from "~/editor/grid";
+import { defaultPictureSelectionSettings } from "~/editor/helpers/picture-selection";
 import {
   DEFAULT_LEVEL_TITLE,
   LEVEL_TITLE_MAX_LENGTH,
 } from "~/editor/helpers/level-title";
+import { ToolSettingsPanel } from "./tool-settings";
 import { Input } from "~/components/ui/input";
+import { NumberInput } from "~/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -20,8 +25,9 @@ import {
 } from "react";
 import { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
 import {
-  useEditorLevelFolderName,
   useVertexEdgeClickPreference,
+  useEditorLevelFolderName,
+  usePlayModeZoom,
   usePlaySettings,
   useEditorStore,
   useEditor,
@@ -33,7 +39,6 @@ import {
   useSetDefaultLevelPreset,
   useSetCustomDefaultLevelTemplate,
 } from "~/editor/edit-mode/default-level-preset";
-import type { VertexEdgeClickBehavior } from "~/editor/editor-preference-types";
 import {
   editorLevelFromFile,
   getDefaultLevel,
@@ -59,11 +64,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "../../components/ui/tabs";
+import type { VertexEdgeClickBehavior } from "~/editor/editor-preference-types";
 import { cn, useModifier } from "~/utils/misc";
 import { useForceUpdate } from "@mantine/hooks";
 import {
   DEFAULT_PLAY_MODE_ZOOM,
+  PLAY_MODE_MAX_ZOOM,
+  PLAY_MODE_MIN_ZOOM,
   defaultPlaySettings,
+  MAX_PLAY_FPS_LIMIT,
+  MIN_PLAY_FPS_LIMIT,
   type PlayRunEndBehavior,
   type PlayKeyBindings,
 } from "~/editor/play-mode/play-settings";
@@ -106,10 +116,13 @@ const playRunEndBehaviors: Array<{
   },
 ];
 
+export type SettingsTab = "general" | "tools" | "play" | "default-level";
+
 export function SettingsDialog({
   highlightLevelFolder = false,
+  initialTab = "general",
   ...props
-}: DialogProps & { highlightLevelFolder?: boolean }) {
+}: DialogProps & { highlightLevelFolder?: boolean; initialTab?: SettingsTab }) {
   return (
     <Dialog {...props}>
       <DialogContent
@@ -121,7 +134,8 @@ export function SettingsDialog({
         }
       >
         <SettingsPanel
-          key={highlightLevelFolder ? "level-folder" : "settings"}
+          key={highlightLevelFolder ? "level-folder" : initialTab}
+          initialTab={initialTab}
           highlightLevelFolder={highlightLevelFolder}
         />
       </DialogContent>
@@ -149,38 +163,9 @@ export function PlaySettingsDialog(props: DialogProps) {
 
 export function SettingsPanel({
   highlightLevelFolder = false,
-}: { highlightLevelFolder?: boolean } = {}) {
-  const modifier = useModifier();
-  const [activeTab, setActiveTab] = useState("general");
-  const vertexEdgeClickBehaviors: Array<{
-    id: VertexEdgeClickBehavior;
-    label: string;
-    description: ReactNode;
-  }> = [
-    {
-      id: "default",
-      label: "Default",
-      description: "Edit polygons by clicking on vertices or edges.",
-    },
-    {
-      id: "internal",
-      label: "Internal Editor",
-      description: (
-        <>
-          Edit polygons by clicking on vertices.
-          <br />(
-          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
-            {modifier}
-          </code>{" "}
-          +{" "}
-          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
-            Click
-          </code>{" "}
-          to edit from edges)
-        </>
-      ),
-    },
-  ];
+  initialTab = "general",
+}: { highlightLevelFolder?: boolean; initialTab?: SettingsTab } = {}) {
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
@@ -197,6 +182,9 @@ export function SettingsPanel({
             <TabsTrigger value="default-level" className="max-[360px]:text-xs">
               Preferences
             </TabsTrigger>
+            <TabsTrigger value="tools" className="max-[360px]:text-xs">
+              Tools
+            </TabsTrigger>
           </TabsList>
         </DialogHeader>
         <DialogDescription className="sr-only">
@@ -211,9 +199,10 @@ export function SettingsPanel({
             <PlaySettingsPanel />
           </TabsContent>
 
-          <PreferencesSettingsPanel
-            vertexEdgeClickBehaviors={vertexEdgeClickBehaviors}
-          />
+          <PreferencesSettingsPanel />
+          <TabsContent value="tools">
+            <ToolSettingsPanel />
+          </TabsContent>
         </DialogBody>
       </>
     </Tabs>
@@ -255,6 +244,10 @@ function GeneralSettingsPanel({
   const levelFolderName = useEditorLevelFolderName();
   const lgrAssets = useLgrAssets();
   const forceUpdate = useForceUpdate();
+  const [desktopVersion, setDesktopVersion] = useState<string | null>(null);
+  useEffect(() => {
+    void window.bearDesktop?.appVersion().then(setDesktopVersion);
+  }, []);
   const canPickFolder =
     supportsFilePickers() && "showDirectoryPicker" in window;
 
@@ -398,6 +391,7 @@ function GeneralSettingsPanel({
       <footer className="-mr-2.5 flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
         <p className="flex items-center gap-1.5 text-sm whitespace-nowrap text-secondary">
           <span className="font-medium text-primary">Bear Level Editor</span>
+          {desktopVersion && <span>{desktopVersion}</span>}
           <span>by Pab</span>
           <img src={datGif} alt="" className="h-3 w-auto shrink-0 rounded-sm" />
         </p>
@@ -406,15 +400,38 @@ function GeneralSettingsPanel({
   );
 }
 
-function PreferencesSettingsPanel({
-  vertexEdgeClickBehaviors,
-}: {
-  vertexEdgeClickBehaviors: Array<{
+function PreferencesSettingsPanel() {
+  const modifier = useModifier();
+  const vertexEdgeClickBehaviors: Array<{
     id: VertexEdgeClickBehavior;
     label: string;
     description: ReactNode;
-  }>;
-}) {
+  }> = [
+    {
+      id: "default",
+      label: "Default",
+      description: "Edit polygons by clicking on vertices or edges.",
+    },
+    {
+      id: "internal",
+      label: "Internal Editor",
+      description: (
+        <>
+          Edit polygons by clicking on vertices.
+          <br />(
+          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
+            {modifier}
+          </code>{" "}
+          +{" "}
+          <code className="rounded-lg bg-primary px-1 font-mono text-xs">
+            Click
+          </code>{" "}
+          to edit from edges)
+        </>
+      ),
+    },
+  ];
+
   const store = useEditorStore();
   const defaultLevelTitle = useEditor((state) => state.defaultLevelTitle);
   const defaultLevelPreset = useDefaultLevelPreset();
@@ -488,6 +505,9 @@ function PreferencesSettingsPanel({
               setCustomDefaultLevelTemplate(null);
               setCustomTemplateError(null);
               setEditorVertexEdgeClickBehavior("default");
+              store
+                .getState()
+                .actions.setPictureSelection(defaultPictureSelectionSettings);
             }}
             className="ml-auto h-6 px-2"
             size="sm"
@@ -638,14 +658,112 @@ function PreferencesSettingsPanel({
           })}
         </div>
       </section>
+      <PictureSelectionPreferences />
     </TabsContent>
   );
 }
 
+function PictureSelectionPreferences() {
+  const settings = useEditor((state) => state.pictureSelection);
+  const checkTopologyOnSave = useEditor((state) => state.checkTopologyOnSave);
+  const store = useEditorStore();
+  const { setPictureSelection } = store.getState().actions;
+  const fields = [
+    {
+      key: "boundary",
+      label: "Boundary shape",
+      options: [
+        { value: "outline", label: "Visible outline" },
+        { value: "rectangle", label: "Image rectangle" },
+      ],
+    },
+    {
+      key: "click",
+      label: "Click to select",
+      options: [
+        { value: "interior", label: "Inside boundary" },
+        { value: "border", label: "Border only" },
+        { value: "anchor", label: "Top-left point only" },
+      ],
+    },
+    {
+      key: "area",
+      label: "Area selection",
+      options: [
+        { value: "bounds", label: "Touch bounds" },
+        { value: "anchor", label: "Enclose anchor" },
+      ],
+    },
+  ] as const;
+  return (
+    <div className="grid gap-6 sm:grid-cols-2">
+      <section className="flex flex-col gap-3">
+        <SettingsSectionHeading
+          title="Picture selection"
+          description="Choose how pictures and textures are selected."
+        />
+        <div className="flex flex-col gap-3">
+          {fields.map((field) => (
+            <label
+              key={field.key}
+              className="flex items-center justify-between gap-4 text-sm"
+            >
+              <span>{field.label}</span>
+              <Select
+                value={settings[field.key]}
+                items={[...field.options]}
+                onValueChange={(value) => {
+                  if (value) setPictureSelection({ [field.key]: value });
+                }}
+              >
+                <SelectTrigger className="h-9 w-48 px-3 font-normal">
+                  <SelectValue />
+                  <SelectTriggerIcon />
+                </SelectTrigger>
+                <SelectContent>
+                  {field.options.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          ))}
+        </div>
+      </section>
+      <section className="flex flex-col gap-3" aria-labelledby="saving-heading">
+        <SettingsSectionHeading
+          id="saving-heading"
+          title="Saving"
+          description="Choose when to check for level issues."
+        />
+        <label className="flex items-center justify-between gap-4 text-sm">
+          <span>Check topology on save</span>
+          <Switch
+            checked={checkTopologyOnSave}
+            onCheckedChange={(checked) =>
+              store.getState().actions.setCheckTopologyOnSave(checked)
+            }
+          />
+        </label>
+      </section>
+    </div>
+  );
+}
+
+const playViewToggles = [
+  { key: "animatedObjects", label: "Animated Objects" },
+  { key: "stillObjects", label: "Still Objects" },
+  { key: "gravityArrows", label: "Gravity Arrows" },
+  { key: "picturesInBackground", label: "Pics In Background" },
+] as const;
+
 export function PlaySettingsPanel() {
   const store = useEditorStore();
+  const playModeZoom = usePlayModeZoom();
   const playSettings = usePlaySettings();
-  const { setPlaySettings } = store.getState().actions;
+  const { setPlayModeZoom, setPlaySettings } = store.getState().actions;
   const setPlayKeyBinding = (
     binding: keyof PlayKeyBindings,
     nextValue: string,
@@ -672,12 +790,15 @@ export function PlaySettingsPanel() {
         >
           <Button
             type="button"
-            onClick={() => setPlaySettings(defaultPlaySettings)}
+            onClick={() => {
+              setPlaySettings(defaultPlaySettings);
+              setPlayModeZoom(DEFAULT_PLAY_MODE_ZOOM);
+            }}
             className="ml-auto h-6 px-2"
             size="sm"
             iconBefore={<ArrowCounterClockwiseIcon />}
           >
-            Reset
+            Reset all
           </Button>
         </SettingsSectionHeading>
         <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
@@ -710,6 +831,16 @@ export function PlaySettingsPanel() {
             label="Alo volt"
             value={playSettings.keyBindings.aloVolt}
             onChange={(value) => setPlayKeyBinding("aloVolt", value)}
+          />
+          <PlayKeyField
+            label="Rewind (hold)"
+            value={playSettings.keyBindings.rewind}
+            onChange={(value) => setPlayKeyBinding("rewind", value)}
+          />
+          <PlayKeyField
+            label="Capture test start"
+            value={playSettings.keyBindings.captureStart}
+            onChange={(value) => setPlayKeyBinding("captureStart", value)}
           />
         </div>
       </div>
@@ -745,6 +876,128 @@ export function PlaySettingsPanel() {
             </Select>
           </label>
         </div>
+      </div>
+      <div className="flex flex-col gap-3">
+        <SettingsSectionHeading
+          title="View"
+          description="Adjust graphics, zoom, and frame rate."
+        />
+        <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+          <label className="flex items-center justify-between">
+            <span className="text-sm">Video Detail</span>
+            <Select
+              value={playSettings.videoDetail}
+              items={[
+                { value: "high", label: "High" },
+                { value: "low", label: "Low" },
+              ]}
+              onValueChange={(value) => {
+                if (value === "high" || value === "low") {
+                  setPlaySettings({ videoDetail: value });
+                }
+              }}
+            >
+              <SelectTrigger
+                aria-label="Video Detail"
+                className="h-9 w-32 shrink-0 px-3 font-normal"
+              >
+                <SelectValue />
+                <SelectTriggerIcon />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+          {playViewToggles.map(({ key, label }) => (
+            <label
+              key={key}
+              className="flex items-center justify-between gap-3 text-sm"
+            >
+              <span>{label}</span>
+              <Switch
+                checked={playSettings[key]}
+                disabled={
+                  key === "stillObjects" && !playSettings.animatedObjects
+                }
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ [key]: checked })
+                }
+              />
+            </label>
+          ))}
+          <label className="flex items-center justify-between">
+            <span className="flex min-w-24 flex-col text-sm">
+              Zoom
+              <span className="text-xs text-secondary">Default: 1.6</span>
+            </span>
+            <NumberInput
+              aria-label="Play mode zoom"
+              value={playModeZoom}
+              min={PLAY_MODE_MIN_ZOOM}
+              max={PLAY_MODE_MAX_ZOOM}
+              step={0.05}
+              format={{ maximumFractionDigits: 2 }}
+              className="w-32 justify-between"
+              inputProps={{ className: "min-w-0 flex-1" }}
+              onValueChange={(value) => {
+                if (value !== null && Number.isFinite(value)) {
+                  setPlayModeZoom(value);
+                }
+              }}
+            />
+          </label>
+        </div>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-medium">Frame rate</legend>
+          <div className="grid gap-y-2 sm:grid-cols-2 sm:gap-x-32">
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Show FPS</span>
+              <Switch
+                checked={playSettings.showFps}
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ showFps: checked })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm">
+              <span>Limit FPS</span>
+              <Switch
+                checked={playSettings.limitFps}
+                onCheckedChange={(checked) =>
+                  setPlaySettings({ limitFps: checked })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm sm:col-start-2">
+              <span>FPS Limit</span>
+              <NumberInput
+                aria-label="FPS Limit"
+                value={playSettings.fpsLimit}
+                min={MIN_PLAY_FPS_LIMIT}
+                max={MAX_PLAY_FPS_LIMIT}
+                disabled={!playSettings.limitFps}
+                format={{ maximumFractionDigits: 0 }}
+                className="w-32 justify-between"
+                inputProps={{ className: "min-w-0 flex-1" }}
+                onValueChange={(value) => {
+                  if (
+                    value !== null &&
+                    Number.isInteger(value) &&
+                    value >= MIN_PLAY_FPS_LIMIT &&
+                    value <= MAX_PLAY_FPS_LIMIT
+                  ) {
+                    setPlaySettings({ fpsLimit: value });
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-secondary">
+            FPS is limited by your display’s refresh rate.
+          </p>
+        </fieldset>
       </div>
     </div>
   );
@@ -864,6 +1117,8 @@ function LevelPresetPreview({
               defaultLevelTitle: DEFAULT_LEVEL_TITLE,
               showSmartGuides: false,
               snapToSmartGuides: false,
+              checkTopologyOnSave: false,
+              customShapes: [],
               animateSprites: false,
               isUIVisible: true,
               levelVisibility: {
@@ -873,7 +1128,9 @@ function LevelPresetPreview({
               playModeZoom: DEFAULT_PLAY_MODE_ZOOM,
               playSettings: defaultPlaySettings,
               vertexEdgeClickBehavior: "default",
+              pictureSelection: defaultPictureSelectionSettings,
               autoGrassOptions: defaultAutoGrassOptions,
+              grid: defaultGridSettings,
             },
           }),
           initialDocument: {

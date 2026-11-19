@@ -1,8 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@plugin "@tailwindcss/typography";
 
-@source "../node_modules/streamdown/dist/index.js";
+@keyframes text-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
 
 @font-face {
   font-family: "Inter";

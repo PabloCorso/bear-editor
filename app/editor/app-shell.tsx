@@ -1,7 +1,11 @@
+import { TestStartContextMenu } from "~/editor/edit-mode/test-start-controls";
 import { lazy, Suspense } from "react";
 import { useHotkeys } from "@mantine/hooks";
 import { ControlToolbar } from "~/editor/edit-mode/toolbars/control-toolbar";
-import { HeaderToolbar } from "~/editor/edit-mode/toolbars/header-toolbar";
+import {
+  HeaderToolbar,
+  useLevelFileNameEntrance,
+} from "~/editor/edit-mode/toolbars/header-toolbar";
 import { CanvasToolbar } from "~/editor/edit-mode/toolbars/canvas-toolbar";
 import { EditorContextMenu } from "~/editor/edit-mode/context-menu";
 import { PlacementPropertiesMenu } from "~/editor/edit-mode/placement-properties-menu";
@@ -17,6 +21,7 @@ import {
   useInitialLevel,
 } from "~/editor/edit-mode/editor-view";
 import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
+import { TextEditorOverlay } from "~/editor/edit-mode/text-editor-overlay";
 
 const LazyPlayModeOverlay = lazy(async () => {
   const module = await import("~/editor/play-mode/play-mode-overlay");
@@ -25,19 +30,16 @@ const LazyPlayModeOverlay = lazy(async () => {
 
 type EditorShellProps = {
   initialLevelName?: string;
-  isOpenAIEnabled?: boolean;
   rendererBackend?: WorldSceneRendererBackend;
 };
 
 export function EditorShell({
   initialLevelName,
-  isOpenAIEnabled,
   rendererBackend = "webgl",
 }: EditorShellProps) {
   const initialDocument = useInitialLevel(initialLevelName);
   const { canvasRef, engineRef } = useEditorView({
     initialDocument,
-    isOpenAIEnabled,
     rendererBackend,
   });
   const isPlayMode = useEditorIsPlayMode();
@@ -46,9 +48,10 @@ export function EditorShell({
     <>
       <div className="relative flex-1">
         <EditorView ref={canvasRef} />
+        <TextEditorOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
-            <LazyPlayModeOverlay rendererBackend={rendererBackend} />
+            <LazyPlayModeOverlay />
           </Suspense>
         ) : null}
       </div>
@@ -58,6 +61,7 @@ export function EditorShell({
       />
       <EditorContextMenu />
       <PlacementPropertiesMenu />
+      <TestStartContextMenu />
     </>
   );
 }
@@ -85,12 +89,23 @@ function EditorToolbars({
   const isPlayMode = useEditorIsPlayMode();
   useHotkeys([["mod + .", () => toggleUIVisibility()]]);
 
+  const fileNameEntrance = useLevelFileNameEntrance(isUIVisible && !isPlayMode);
+
   if (!isUIVisible || isPlayMode) return null;
   return (
-    <>
-      <HeaderToolbar isLoading={isLoading} />
-      <ControlToolbar />
-      <CanvasToolbar engineRef={engineRef} />
-    </>
+    <div className="pointer-events-none absolute inset-4 grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:grid-rows-[auto_minmax(0,1fr)_auto] sm:gap-x-4">
+      <HeaderToolbar
+        engineRef={engineRef}
+        isLoading={isLoading}
+        fileNameEntrance={fileNameEntrance}
+      />
+      <div className="relative col-span-full row-start-2 flex min-h-0 items-center">
+        <ControlToolbar />
+      </div>
+      <CanvasToolbar
+        className="row-start-4 self-end justify-self-end sm:col-start-2 sm:row-start-3"
+        engineRef={engineRef}
+      />
+    </div>
   );
 }

@@ -1,5 +1,8 @@
-import { HandIcon, SparkleIcon } from "@phosphor-icons/react/dist/ssr";
-import { SpriteIcon } from "~/components/sprite-icon";
+import { AiGuideControl } from "./ai-guide-dialog";
+import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
+import { HandIcon } from "@phosphor-icons/react/dist/ssr";
+import { ShapeToolControl } from "./shape-tool-control";
+import { TextToolControl } from "./text-tool-control";
 import { ToolControlButton, type ToolControlButtonProps } from "./tool";
 import {
   defaultToolOrder,
@@ -11,7 +14,7 @@ import {
   ToolbarSeparator,
   type ToolbarProps,
 } from "~/components/ui/toolbar";
-import { useLgrAssets, useLgrSprite } from "~/components/use-lgr-assets";
+import { useLgrAssets } from "~/components/use-lgr-assets";
 import { AppleToolControl } from "./apple-tool-control";
 import { ColorToolControl } from "./color-tool-control";
 import { PictureToolControl } from "./picture-tool-control";
@@ -28,17 +31,14 @@ const SPRITE_TOOL_IDS = new Set<string>([
   defaultTools.picture.id,
   defaultTools.color.id,
   defaultTools.texture.id,
+  defaultTools.textureFill.id,
+  defaultTools.pictureFill.id,
+  defaultTools.colorFill.id,
 ]);
 
-type ControlToolbarProps = ToolbarProps & {
-  isOpenAIEnabled?: boolean;
-};
+type ControlToolbarProps = ToolbarProps;
 
-export function ControlToolbar({
-  className,
-  isOpenAIEnabled,
-  ...props
-}: ControlToolbarProps) {
+export function ControlToolbar({ className, ...props }: ControlToolbarProps) {
   const toolMetas = useEditorRegisteredTools();
   const { isLoaded: areSpritesReady } = useLgrAssets();
   const orderedTools = sortToolMetas(
@@ -53,44 +53,48 @@ export function ControlToolbar({
   );
   const drawingTools = orderedTools.filter(
     (tool) =>
-      !navigationTools.some((navigationTool) => navigationTool.id === tool.id),
+      !navigationTools.some(
+        (navigationTool) => navigationTool.id === tool.id,
+      ) &&
+      !isPolygonBooleanTool(tool.id) &&
+      tool.id !== "killer" &&
+      tool.id !== "flower" &&
+      tool.id !== defaultTools.textureFill.id &&
+      tool.id !== defaultTools.pictureFill.id &&
+      tool.id !== defaultTools.colorFill.id,
   );
 
   return (
-    <div
-      className={cn("absolute inset-y-0 left-4 grid", className)}
-      style={{
-        gridTemplateRows:
-          "minmax(var(--toolbar-space), 1fr) auto minmax(1rem, 1fr)",
-      }}
+    <Toolbar
+      orientation="vertical"
+      className={cn(
+        "pointer-events-auto max-h-full gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:thin]",
+        className,
+      )}
+      {...props}
     >
-      <Toolbar
-        orientation="vertical"
-        className="row-start-2 flex h-fit max-h-full flex-col gap-2 self-center overflow-auto"
-        {...props}
-      >
-        {navigationTools.map((tool) => (
-          <RegisteredToolControl
-            key={tool.id}
-            meta={tool}
-            tooltipSide="right"
-            disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
-          />
-        ))}
+      {navigationTools.map((tool) => (
+        <RegisteredToolControl
+          key={tool.id}
+          meta={tool}
+          tooltipSide="right"
+          disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
+        />
+      ))}
 
-        {drawingTools.length > 0 && <ToolbarSeparator />}
+      {drawingTools.length > 0 && <ToolbarSeparator />}
 
-        {drawingTools.map((tool) => (
-          <RegisteredToolControl
-            key={tool.id}
-            meta={tool}
-            tooltipSide="right"
-            disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
-          />
-        ))}
-        {isOpenAIEnabled && <AIChatToolControl tooltipSide="right" />}
-      </Toolbar>
-    </div>
+      {drawingTools.map((tool) => (
+        <RegisteredToolControl
+          key={tool.id}
+          meta={tool}
+          tooltipSide="right"
+          disabled={SPRITE_TOOL_IDS.has(tool.id) && !areSpritesReady}
+        />
+      ))}
+      <ToolbarSeparator />
+      <AiGuideControl />
+    </Toolbar>
   );
 }
 
@@ -107,14 +111,10 @@ function RegisteredToolControl({
   if (meta.id === defaultTools.vertex.id) {
     return <VertexToolControl {...props} />;
   }
+  if (meta.id === defaultTools.text.id) return <TextToolControl {...props} />;
+  if (meta.id === defaultTools.shape.id) return <ShapeToolControl {...props} />;
   if (meta.id === defaultTools.apple.id) {
     return <AppleToolControl {...props} />;
-  }
-  if (meta.id === defaultTools.killer.id) {
-    return <KillerToolControl {...props} />;
-  }
-  if (meta.id === defaultTools.flower.id) {
-    return <FlowerToolControl {...props} />;
   }
   if (meta.id === defaultTools.picture.id) {
     return <PictureToolControl {...props} />;
@@ -142,40 +142,6 @@ function HandToolControl(props: ToolControlButtonProps) {
   return (
     <ToolControlButton {...defaultTools.hand} {...props}>
       <HandIcon weight="light" />
-    </ToolControlButton>
-  );
-}
-
-function KillerToolControl(props: ToolControlButtonProps) {
-  const killerSprite = useLgrSprite("qkiller");
-  return (
-    <ToolControlButton
-      isLoading={!killerSprite.src}
-      {...defaultTools.killer}
-      {...props}
-    >
-      <SpriteIcon src={killerSprite.src} />
-    </ToolControlButton>
-  );
-}
-
-function FlowerToolControl(props: ToolControlButtonProps) {
-  const flowerSprite = useLgrSprite("qexit");
-  return (
-    <ToolControlButton
-      isLoading={!flowerSprite.src}
-      {...defaultTools.flower}
-      {...props}
-    >
-      <SpriteIcon src={flowerSprite.src} />
-    </ToolControlButton>
-  );
-}
-
-function AIChatToolControl(props: ToolControlButtonProps) {
-  return (
-    <ToolControlButton id="ai-chat" name="AI Assistant" shortcut="I" {...props}>
-      <SparkleIcon weight="fill" />
     </ToolControlButton>
   );
 }

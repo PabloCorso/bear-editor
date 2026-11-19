@@ -4,30 +4,21 @@ Planned features and feedback for Bear Editor.
 
 ## Planned features
 
-- AI Assistant
-
-- Explore a consistent pattern for tool settings access and reset; AutoGrass has an accessible settings panel, while Pipe has none.
+- @Tarogato i concern that being able to move polys by edge without selection could interfere with grabbing pictures and masks
+  - hotkeys to toggle select only poly / only pic / only mask / only fans / grass / object
 
 - More vertex tool options or new polygon tools
-  - Roller coaster tool
-  - Frame tool
-  - Shapes
-  - Cut/connect
-  - Smoothen
-  - Draw
-  - Text
-  - Merge/subtract polygons
-  - Image to polygon
+  - Continuable pipes: automatically join a new pipe when it starts close enough to an existing pipe. @iCS
+  - Experimental
+    - Text number sequence tool.
+    - Roller coaster tool
 
-- Topology check improvements and completeness
-  - Polygons, vertices and object limits
-  - Help find objects inside polygons as warnings
-  - Show level maximum boundaries
-  - Automatic or action to fix issue when possible
+- Further topology repair options
+  - Explore previewed simplification, polygon-operation repairs and object relocation where the intended result is clear.
 
 - Faster loads
-  - Prioritize the initial HTML response delay. [Investigation](docs/elmajs-bundling.md#priority-relative-to-server-response-time) measured 8.7 s to first byte on the initial request versus 1.0 s on the next; confirm whether SSR function cold starts are responsible, then evaluate a static/prerendered editor shell or HTML caching. The cause and any connection to Netlify's free tier remain unconfirmed.
-  - Smaller follow-up: use the existing `elmajs` ESM build to enable tree shaking. [Bundle measurements](docs/elmajs-bundling.md#measured-production-output) showed a 24.6 kB minified / 7.2 kB gzip reduction in the main editor chunk. Implementation and browser validation remain; this does not address the initial HTML response delay.
+  - Investigate the initial HTML response delay, then evaluate a static or prerendered editor shell or HTML caching.
+  - Use the existing `elmajs` ESM build to enable tree shaking, with browser and SSR validation.
 
 ## Known issues
 
@@ -36,22 +27,11 @@ Planned features and feedback for Bear Editor.
 ## Other
 
 - Custom lev folder management with preview thumbnails
-- Switch Level / Graphics design modes (toggle pics/grass visibility and show different toolbar)
 - Multi-player level editor
   - Follow a designer's view while editing; explore following them in play mode too.
   - Chain level working areas: let different designers build separate parts, with optional locks to prevent edits by others and optional hiding to keep parts secret until revealed.
-- Version history info
-- Export to SVG
-- Smart Texture Fill: fill a polygon with a texture using an optimized mix of picture sizes and ground clipping, minimizing picture count and overflow onto neighbouring polygons.
-- Save start position
-  - Checkpoints: create, move, select for play mode, and delete multiple translucent, distinctly colored bike markers without moving the actual level start. Editor-only and session-local (not stored in Elma level files), with per-designer test starts in the future multiplayer editor.
 - Import level
-- Grid
-  - Snap to grid
-- Replace selection
-  - Replace with copied content
 - History playback: scrub backward and forward through the existing undo/redo history with a slider, or press play to replay edits sequentially for fun. Could also help show who changed what in multiplayer editing.
 - Desktop build
   - Bundle the shared editor with Electron for offline use and native file access; download updates in the background and offer Restart to update when the user is ready, protecting unsaved work.
   - Keep shortcuts consistent with the web, with a few platform-specific overrides for standard desktop actions such as Cmd/Ctrl+N for a new level; show the appropriate shortcuts in menus and shortcut help.
-- Add LGR folder

@@ -1,3 +1,8 @@
+import type { TopologyInspection } from "./helpers/level-topology";
+import type { GridSettings } from "./grid";
+import type { CustomShape } from "./helpers/shapes";
+import type { ReferenceImage } from "./reference-images";
+import type { PictureSelectionSettings } from "./helpers/picture-selection";
 import type { Tool, ToolState } from "./edit-mode/tools/tool-interface";
 import type {
   Apple,
@@ -6,31 +11,23 @@ import type {
   Polygon,
   Position,
 } from "./elma-types";
-import type { Widget } from "./edit-mode/widgets/widget-interface";
 import { FileSession } from "./helpers/file-session";
 import { LevelFolder } from "./helpers/level-folder";
 import type { LevelVisibilitySettings } from "./level-visibility";
 import type { VertexEdgeClickBehavior } from "./editor-preference-types";
 import type { AutoGrassOptions } from "./helpers/auto-grass";
-import type {
-  PlayRunEndBehavior,
-  PlayKeyBindings,
-  PlaySettings,
-} from "./play-mode/play-settings";
+import type { PlayKeyBindings, PlaySettings } from "./play-mode/play-settings";
 
-type EditorDocumentSnapshot = Pick<
-  EditorLevel,
-  | "levelName"
-  | "lgr"
-  | "ground"
-  | "sky"
-  | "polygons"
-  | "apples"
-  | "killers"
-  | "flowers"
-  | "start"
-  | "pictures"
->;
+type EditorDocumentSnapshot = EditorLevel;
+
+/**
+ * The complete undoable editor state. Adding content here makes history
+ * capture and restore fail type-checking until they handle the new field.
+ */
+export type EditorHistoryContent = EditorLevel & {
+  testStarts: import("./test-starts").TestStartSession;
+  referenceImages: ReferenceImage[];
+};
 
 export type EditorDocumentOriginKind =
   | "default"
@@ -70,10 +67,21 @@ export type EditorDocumentInput = {
   pendingRecovery?: boolean;
 };
 
-export type EditorState = EditorLevel & {
+export type EditorState = EditorHistoryContent & {
+  testStartRename: {
+    id: string | null;
+    name: string;
+  } | null;
+  testStartMenu: {
+    selectionMenu?: boolean;
+    x: number;
+    y: number;
+    position: Position;
+    id?: string | null;
+  } | null;
   documentSession: EditorDocumentSession;
-
   // Editor state
+  topologyInspection: TopologyInspection | null;
   activeToolId: string;
   openToolMenuId: string | null;
   mousePosition: Position;
@@ -85,6 +93,11 @@ export type EditorState = EditorLevel & {
   playModeZoom: number;
 
   defaultLevelTitle: string;
+  checkTopologyOnSave: boolean;
+
+  grid: GridSettings;
+  gridSnapBypassed: boolean;
+  customShapes: CustomShape[];
 
   // View settings
   showSmartGuides: boolean;
@@ -94,6 +107,7 @@ export type EditorState = EditorLevel & {
   levelVisibility: LevelVisibilitySettings;
   playSettings: PlaySettings;
   vertexEdgeClickBehavior: VertexEdgeClickBehavior;
+  pictureSelection: PictureSelectionSettings;
   autoGrassOptions: AutoGrassOptions;
   isUIVisible: boolean;
   isPlayMode: boolean;
@@ -106,15 +120,35 @@ export type EditorState = EditorLevel & {
   toolsMap: Map<string, Tool>;
   toolState: ToolState;
 
-  // Widgets
-  widgetsMap: Map<string, Widget>;
-
   // File system access
   fileSession: FileSession;
   levelFolder: LevelFolder;
 
   actions: {
+    addTestStart: (
+      position: Position,
+      ride?: import("./play-mode/engine/game/ride-history").RideMoment,
+      options?: { select?: boolean },
+    ) => void;
+    moveTestStart: (id: string, position: Position) => void;
+    clearTestStartRide: (id: string) => void;
+    renameTestStart: (id: string | null, name: string) => void;
+    activateTestStart: (id: string | null) => void;
+    deleteTestStart: (id: string) => void;
+    promoteTestStart: (id: string) => void;
+    addReferenceImage: (image: ReferenceImage) => void;
+    updateReferenceImage: (
+      id: string,
+      patch: Partial<
+        Pick<
+          ReferenceImage,
+          "position" | "width" | "height" | "rotation" | "opacity"
+        >
+      >,
+    ) => void;
+    removeReferenceImage: (id: string) => void;
     // Level data operations
+    setTopologyInspection: (inspection: TopologyInspection | null) => void;
     setStart: (position: Position) => void;
     addApple: (apple: Apple) => void;
     updateApple: (apple: Partial<Apple>) => void;
@@ -130,6 +164,8 @@ export type EditorState = EditorLevel & {
     setFlowers: (flowers: Position[]) => void;
     setPictures: (pictures: Picture[]) => void;
 
+    setCheckTopologyOnSave: (enabled: boolean) => void;
+    setCustomShapes: (shapes: CustomShape[]) => void;
     setDefaultLevelTitle: (title: string) => void;
     setLevelName: (name: string) => void;
     setLgr: (lgr: string) => void;
@@ -142,7 +178,7 @@ export type EditorState = EditorLevel & {
     setPlayModeZoom: (zoom: number) => void;
     setPolygons: (polygons: Polygon[]) => void;
 
-    setToolMenuOpen: (open: boolean) => void;
+    setToolMenuOpen: (open: boolean, menuId?: string) => void;
     registerTool: (tool: Tool) => void;
     activateTool: (toolId: string, variant?: string) => void;
     getActiveTool: <T extends Tool>(toolId?: string) => T | undefined;
@@ -155,11 +191,6 @@ export type EditorState = EditorLevel & {
       state: Partial<T>,
     ) => void;
 
-    // Widgets
-    registerWidget: (widget: Widget) => void;
-    activateWidget: (widgetId: string) => void;
-    deactivateWidget: (widgetId: string) => void;
-
     // File system access
     setFileSession: (session?: FileSession) => void;
     setLevelFolder: (folder?: LevelFolder) => void;
@@ -169,11 +200,15 @@ export type EditorState = EditorLevel & {
     toggleAnimateSprites: () => void;
     toggleShowSprites: () => void;
     setLevelVisibility: (settings: Partial<LevelVisibilitySettings>) => void;
-    setPlaySettings: (settings: {
-      runEndBehavior?: PlayRunEndBehavior;
-      keyBindings?: Partial<PlayKeyBindings>;
-    }) => void;
+    setPlaySettings: (
+      settings: Partial<Omit<PlaySettings, "keyBindings">> & {
+        keyBindings?: Partial<PlayKeyBindings>;
+      },
+    ) => void;
+    setPictureSelection: (settings: Partial<PictureSelectionSettings>) => void;
     setVertexEdgeClickBehavior: (behavior: VertexEdgeClickBehavior) => void;
+    setGrid: (settings: Partial<GridSettings>) => void;
+    setGridSnapBypassed: (bypassed: boolean) => void;
     setAutoGrassOptions: (options: Partial<AutoGrassOptions>) => void;
     toggleLevelVisibility: (key: keyof LevelVisibilitySettings) => void;
     resetLevelVisibility: () => void;

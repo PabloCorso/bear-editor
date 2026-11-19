@@ -2,6 +2,7 @@ import {
   useEditorActions,
   useEditor,
   useEditorToolState,
+  useEditorActiveTool,
 } from "~/editor/use-editor-store";
 import { PictureIcon } from "~/components/sprite-icon";
 import {
@@ -28,12 +29,14 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   const pictureTool = useEditorToolState<PictureToolState>(
     defaultTools.picture.id,
   );
-  const { setToolState } = useEditorActions();
+  const { setToolState, activateTool } = useEditorActions();
+  const activeTool = useEditorActiveTool();
+  const isActive = activeTool?.meta.id === defaultTools.picture.id;
   const pictures = useEditor((state) => state.pictures);
   const lgrAssets = useLgrAssets();
 
   const selectedPictureName = pictureTool?.name ?? defaultPictureState.name;
-  const sprite = useLgrSprite(selectedPictureName);
+  const defaultSprite = useLgrSprite(defaultPictureState.name);
   const pictureSprites = [...usePictureSprites()];
   for (const picture of pictures) {
     if (
@@ -62,17 +65,20 @@ export function PictureToolControl(props: ToolControlButtonProps) {
   const selectedDistance =
     pictureTool?.distance ?? defaultPictureState.distance;
   const selectedClip = pictureTool?.clip ?? defaultPictureState.clip;
+
+  function updatePicture(
+    next: Pick<PictureToolState, "name" | "distance" | "clip">,
+  ) {
+    setToolState<PictureToolState>(defaultTools.picture.id, next);
+  }
+
   const pickerItems = pictureSprites.map(({ picture, ...sprite }) => {
     const isSelected = picture.name === selectedPictureName;
     const distance = isSelected ? selectedDistance : picture.distance;
     const clip = isSelected ? selectedClip : picture.clip;
     const pictureLabel = formatSpriteTitle(picture.name);
     const activatePicture = () => {
-      setToolState<PictureToolState>(defaultTools.picture.id, {
-        ...picture,
-        distance,
-        clip,
-      });
+      updatePicture({ name: picture.name, distance, clip });
     };
 
     return {
@@ -89,22 +95,14 @@ export function PictureToolControl(props: ToolControlButtonProps) {
       isSelected,
       onActivate: activatePicture,
       onDistanceChange: (distance: number) => {
-        setToolState<PictureToolState>(defaultTools.picture.id, {
-          ...picture,
-          distance,
-          clip,
-        });
+        updatePicture({ name: picture.name, distance, clip });
       },
       onClipChange: (clip: PictureToolState["clip"]) => {
-        setToolState<PictureToolState>(defaultTools.picture.id, {
-          ...picture,
-          distance,
-          clip,
-        });
+        updatePicture({ name: picture.name, distance, clip });
       },
       onResetDefaults: () => {
-        setToolState<PictureToolState>(defaultTools.picture.id, {
-          ...picture,
+        updatePicture({
+          name: picture.name,
           distance: picture.distance,
           clip: picture.clip,
         });
@@ -120,8 +118,13 @@ export function PictureToolControl(props: ToolControlButtonProps) {
           isLoading={!lgrAssets.isLoaded}
           {...defaultTools.picture}
           {...props}
+          id={undefined}
+          isActive={isActive}
+          onClick={() => {
+            if (!isActive) activateTool(defaultTools.picture.id);
+          }}
         >
-          <PictureIcon src={sprite.src} />
+          <PictureIcon src={defaultSprite.src} />
         </ToolControlButton>
       }
     >

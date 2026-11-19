@@ -114,6 +114,9 @@ export async function getBuiltinLevel(filename: string) {
 
 async function editorLevelFromBuffer(data: ArrayBuffer) {
   const elmaLevel = ElmaLevel.from(data);
+  if (elmaLevel.polygons.some((polygon) => polygon.vertices.length < 3)) {
+    throw new Error("The level contains a polygon with fewer than 3 vertices.");
+  }
 
   const apples: Apple[] = [];
   const killers: Position[] = [];
@@ -145,6 +148,7 @@ async function editorLevelFromBuffer(data: ArrayBuffer) {
 
   const level: EditorLevel = {
     levelName: elmaLevel.name,
+    top10: elmaLevel.top10,
     lgr: elmaLevel.lgr || "default",
     ground: elmaLevel.ground || Texture.Ground,
     sky: elmaLevel.sky || Texture.Sky,
@@ -171,6 +175,10 @@ export function elmaLevelFromEditorState(state: EditorState) {
     throw new Error(
       "No polygons found in level. Please add some geometry before downloading.",
     );
+  }
+
+  if (state.polygons.some((polygon) => polygon.vertices.length < 3)) {
+    throw new Error("Every polygon needs at least 3 vertices.");
   }
 
   const level = new ElmaLevel();
@@ -225,6 +233,9 @@ export function elmaLevelFromEditorState(state: EditorState) {
     grass: false,
     vertices: [],
   }));
+
+  // elmajs sorts time lists during serialization; never pass store-owned arrays.
+  level.top10 = structuredClone(state.top10 ?? { single: [], multi: [] });
 
   level.integrity = level.calculateIntegrity();
 

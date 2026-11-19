@@ -63,3 +63,6 @@ export const BUMP_THRESHOLD = 1.5;
 
 export const LEVEL_MAX_SIZE = 188;
 export const SEGMENTS_BORDER = 6;
+
+// Conversion used by both forward simulation and real-time rewind.
+export const GAME_TIME_PER_SECOND = 1000 * 0.182 * 0.0024;

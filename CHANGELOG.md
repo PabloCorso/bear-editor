@@ -2,9 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## 2026-11-12
+
+- Unify Picture, Texture and Color tools with Place / Fill modes and shared LGR pickers.
+- Fill polygons with adaptive masked textures or repeated ordinary picture/color tiles, with hover previews.
+- Replace selection anchors with objects, pictures, textures, color tiles or copied groups.
+- Convert selected LGR pictures into editable polygon silhouettes, optionally filled with texture.
+
+## 2026-11-06
+
+- Image to polygon support via AI prompts library @ofta
+
+## 2026-11-03
+
+- Add a configurable canvas grid and snap to grid under Level options → Grid. Hold Alt for free placement and movement.
+- Select by edge enclosed by selected vertices instead of selection the whole polygon @Infe.
+- Move selections with the arrow keys; hold Shift for larger steps.
+- Deselect with modifier + click @finman.
+- Add smooth tool.
+- Add boolean polygon tools: union, difference, intersection, and exclusive.
+- Add precise measurements to Resize & Rotate
+- Improve topology checks, issue navigation and repair previews
+- Add level properties dialog with statistics and saved times
+- Add picture/texture preferences for selection and bounds visibility.
+- Add Text tool.
+- Add library with default shapes.
+- Import image.
+- Improve history and undo/redo functionality.
+- Add play mode rewind and save captured ride positions as test starts.
+- Add reusable custom polygon shapes to the shape library.
+- Add picture selection preferences for outline or rectangle boundaries, interior/border/anchor clicks, and anchor-based area selection.
+- Add freehand Lasso alongside Marquee in the Select tool menu.
+
+## 2026-10-28
+
+- Add Frame, Draw and Brush tools.
+- Add session test starts and pick one when entering play mode.
+- Add tool settings and reset.
+- Add PNG export.
+- Add skew and improve selection mirroring.
+
 ## 2026-10-27
 
-- Add optional smart alignment guides and snapping for moving vertices, objects, pictures, and selections. Both start off under Main menu → View; hold Alt while dragging to bypass guides.
+- Add optional smart alignment guides and snapping for moving vertices, objects, pictures, and selections. Both start off under Canvas options. Hold Alt while dragging to bypass guides.
 
 ## 2026-10-26
 
@@ -13,6 +53,13 @@ All notable changes to this project will be documented in this file.
 - Update toolbars interaction, close panel after selection to reduce clutter.
 - Add fancy boosted Default.lgr by default and color pictures tool.
 - Refine pictures/textures/colors tools.
+- Add a saved preference to check topology after saving, enabled by default. Issues open the existing panel without blocking the save.
+
+## 2026-10-25
+
+- Add Shapes with ellipse, rectangle, star, and reusable custom polygon shapes.
+- Add Import image… for session reference images with move, resize, rotate, opacity, lock, and visibility controls.
+- Expand topology checks with EOL limits, exact issue markers and navigation, object and LGR diagnostics, size guides, and undoable repair previews.
 
 ## 2026-10-24
 

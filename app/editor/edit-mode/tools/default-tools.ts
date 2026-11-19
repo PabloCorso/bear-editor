@@ -1,35 +1,83 @@
 type DefaultToolVariant = { name: string; shortcut: string };
 
+export type ToolMenuBehavior = "toolGroup" | "options";
+
 export type ToolMeta = {
   id: string;
   name: string;
   shortcut: string;
-  hasMenu?: boolean;
+  menuBehavior?: ToolMenuBehavior;
   variants?: Record<string, DefaultToolVariant>;
 };
 
 export const defaultTools = {
-  select: { id: "select", name: "Select tool", shortcut: "S" },
+  select: {
+    id: "select",
+    name: "Select tool",
+    shortcut: "S",
+  },
   hand: { id: "hand", name: "Hand tool", shortcut: "H" },
   vertex: {
     id: "vertex",
     name: "Vertex",
-    hasMenu: true,
+    menuBehavior: "toolGroup",
     shortcut: "V",
     variants: {
       grass: { name: "Grass", shortcut: "G" },
+      brush: { name: "Brush", shortcut: "B" },
+      draw: { name: "Draw", shortcut: "D" },
+      smooth: { name: "Smooth", shortcut: "Shift + S" },
       pipe: { name: "Pipe", shortcut: "Shift + P" },
-      cutConnect: { name: "Cut & Connect", shortcut: "C" },
+      cutConnect: { name: "Cut & Connect", shortcut: "X" },
       frame: { name: "Frame", shortcut: "Shift + F" },
-      autoGrass: { name: "AutoGrass", shortcut: "" },
+      autoGrass: { name: "AutoGrass", shortcut: "Shift + G" },
     },
   },
-  apple: { hasMenu: true, id: "apple", name: "Apple", shortcut: "A" },
+  union: { id: "union", name: "Union", shortcut: "" },
+  subtract: { id: "subtract", name: "Subtract", shortcut: "" },
+  exclude: { id: "exclude", name: "Exclude", shortcut: "" },
+  intersect: { id: "intersect", name: "Intersect", shortcut: "" },
+  apple: {
+    menuBehavior: "options",
+    id: "apple",
+    name: "Apple",
+    shortcut: "A",
+  },
+  text: {
+    menuBehavior: "options",
+    id: "text",
+    name: "Text",
+    shortcut: "Shift + T",
+  },
+  shape: {
+    id: "shape",
+    name: "Library",
+    shortcut: "L",
+    menuBehavior: "options",
+  },
   killer: { id: "killer", name: "Killer", shortcut: "K" },
   flower: { id: "flower", name: "Flower", shortcut: "F" },
-  picture: { hasMenu: true, id: "picture", name: "Picture", shortcut: "P" },
-  color: { hasMenu: true, id: "color", name: "Color", shortcut: "C" },
-  texture: { hasMenu: true, id: "texture", name: "Texture", shortcut: "T" },
+  picture: {
+    menuBehavior: "options",
+    id: "picture",
+    name: "Picture",
+    shortcut: "P",
+  },
+  color: {
+    menuBehavior: "options",
+    id: "color",
+    name: "Color",
+    shortcut: "C",
+  },
+  texture: {
+    menuBehavior: "options",
+    id: "texture",
+    name: "Texture",
+    shortcut: "T",
+  },
+  textureFill: { id: "textureFill", name: "Texture Fill", shortcut: "" },
+  pictureFill: { id: "pictureFill", name: "Picture Fill", shortcut: "" },
+  colorFill: { id: "colorFill", name: "Color Fill", shortcut: "" },
 } as const satisfies Record<string, ToolMeta>;
 
 export type DefaultToolId = keyof typeof defaultTools;
@@ -45,4 +93,17 @@ export const defaultToolOrder: string[] = [
   defaultTools.picture.id,
   defaultTools.texture.id,
   defaultTools.color.id,
+  defaultTools.text.id,
+  defaultTools.shape.id,
+];
+
+export const objectToolIds: readonly string[] = ["apple", "killer", "flower"];
+
+export const materialToolIds: readonly string[] = [
+  "picture",
+  "texture",
+  "color",
+  "pictureFill",
+  "textureFill",
+  "colorFill",
 ];

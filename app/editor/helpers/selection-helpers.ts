@@ -106,7 +106,7 @@ export function findPolygonEdgeNearPosition(
 ): Polygon | null {
   const candidatePolygons = getCandidatePolygons(polygons, pos, threshold);
   for (const polygon of candidatePolygons) {
-    if (polygon.vertices.length < (polygon.grass ? 2 : 3)) continue;
+    if (polygon.vertices.length < 3) continue;
 
     // Check each edge of the polygon
     for (let i = 0; i < polygon.vertices.length; i++) {
@@ -205,7 +205,7 @@ export function findPolygonLineForEditing(
     adjustedThreshold,
   );
   for (const polygon of candidatePolygons) {
-    if (polygon.vertices.length < (polygon.grass ? 2 : 3)) continue;
+    if (polygon.vertices.length < 3) continue;
 
     // Check each edge of the polygon
     for (let i = 0; i < polygon.vertices.length; i++) {
@@ -268,12 +268,13 @@ export function isStartObjectHit(
   start: Position,
   mode: StartSelectionMode,
   imageHitAreaReady: boolean,
+  coords?: import("../kuski-geometry").BikeCoords,
 ): boolean {
   const useImageHitArea = mode === "boundsWithImage" && imageHitAreaReady;
 
   if (!useImageHitArea && mode === "boundsOnly") {
     // Keep selected start interactions tied to the visual handle points (head + wheels).
-    const circles = getKuskiSelectionCircles({ start });
+    const circles = getKuskiSelectionCircles({ start, coords });
     return circles.some((circle) => {
       const dx = point.x - circle.x;
       const dy = point.y - circle.y;
@@ -285,6 +286,7 @@ export function isStartObjectHit(
   return isPointInKuskiSelectionArea({
     point,
     start,
+    coords,
     useImageHitArea,
   });
 }

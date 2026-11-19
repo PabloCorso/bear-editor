@@ -1,3 +1,4 @@
+import clipping, { type Polygon as ClippingPolygon } from "polygon-clipping";
 import type { Polygon, Position } from "~/editor/elma-types";
 
 export const FRAME_MODES = ["inside", "outside", "centered"] as const;
@@ -33,16 +34,87 @@ export function createFramePolygons(
   const outer = offset(vertices, outerDistance);
   const inner = offset(vertices, innerDistance);
   if (!outer || !inner) return null;
-  // Returning both boundaries also makes preview replacement unambiguous.
+  // Elma stores each boundary separately, including split interiors and holes.
   return [
-    outerDistance === 0 ? polygon : { ...polygon, vertices: outer },
-    innerDistance === 0
-      ? polygon
-      : { ...polygon, vertices: inner, grass: false },
+    ...(outerDistance === 0
+      ? [polygon]
+      : outer.map((vertices) => ({ ...polygon, vertices }))),
+    ...(innerDistance === 0
+      ? [polygon]
+      : inner.map((vertices) => ({ ...polygon, vertices, grass: false }))),
   ];
 }
 
-function offset(vertices: Position[], amount: number): Position[] | null {
+function offset(vertices: Position[], amount: number): Position[][] | null {
+  const simple = simpleOffset(vertices, amount);
+  if (simple) return [simple];
+
+  // Sweep the boundary into strips, joining the exposed corners with miters.
+  // Boolean clipping removes overlaps when thin sections or notches collapse,
+  // allowing an inset to split into several surviving regions.
+  const orientation = Math.sign(signedArea(vertices));
+  const normals = vertices.map((point, index) => {
+    const next = vertices[(index + 1) % vertices.length];
+    const length = distance(point, next);
+    return {
+      x: (orientation * (next.y - point.y) * amount) / length,
+      y: (-orientation * (next.x - point.x) * amount) / length,
+    };
+  });
+  const strips: ClippingPolygon[] = [];
+  const toPolygon = (points: Position[]): ClippingPolygon => [
+    points.map(({ x, y }) => [x, y]),
+  ];
+  for (let index = 0; index < vertices.length; index++) {
+    const point = vertices[index];
+    const next = vertices[(index + 1) % vertices.length];
+    const previous = vertices[(index + vertices.length - 1) % vertices.length];
+    const before = normals[(index + vertices.length - 1) % vertices.length];
+    const after = normals[index];
+    const shift = (origin: Position, normal: Position): Position => ({
+      x: origin.x + normal.x,
+      y: origin.y + normal.y,
+    });
+    strips.push(
+      toPolygon([point, next, shift(next, after), shift(point, after)]),
+    );
+    if (cross(previous, point, next) * orientation * Math.sign(amount) <= 0)
+      continue;
+    const denominator =
+      1 + (before.x * after.x + before.y * after.y) / (amount * amount);
+    if (denominator < EPSILON) return null;
+    strips.push(
+      toPolygon([
+        point,
+        shift(point, before),
+        {
+          x: point.x + (before.x + after.x) / denominator,
+          y: point.y + (before.y + after.y) / denominator,
+        },
+        shift(point, after),
+      ]),
+    );
+  }
+  try {
+    const source = toPolygon(vertices);
+    const regions =
+      amount < 0
+        ? clipping.difference(source, ...strips)
+        : clipping.union(source, ...strips);
+    const rings = regions.flatMap((region) =>
+      region.map((ring) => ring.slice(0, -1).map(([x, y]) => ({ x, y }))),
+    );
+    const surviving = rings.filter(
+      (ring) => Math.abs(signedArea(ring)) > EPSILON,
+    );
+    return surviving.length && surviving.every(isSimple) ? surviving : null;
+  } catch {
+    // A failed preview must leave the original polygon intact.
+    return null;
+  }
+}
+
+function simpleOffset(vertices: Position[], amount: number): Position[] | null {
   if (amount === 0) return vertices;
   const orientation = Math.sign(signedArea(vertices));
   const normals = vertices.map((point, index) => {

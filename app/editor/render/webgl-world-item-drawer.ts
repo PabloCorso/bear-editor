@@ -15,7 +15,7 @@ import {
 } from "~/editor/render/affine-math";
 import { getObjectFrame, getObjectSprite } from "~/editor/render/object-assets";
 import { PICTURE_SCALE } from "~/editor/render/picture-metrics";
-import { getPictureWorldOutlineSegments } from "~/editor/render/picture-metrics";
+import { getPictureSelectionSegments } from "~/editor/helpers/picture-selection";
 import { buildWebGLBikePose } from "~/editor/render/webgl-bike-pose";
 import { type WebGLRenderContext } from "~/editor/render/webgl-render-context";
 import { WebGLShapeDrawer } from "~/editor/render/webgl-shape-drawer";
@@ -26,6 +26,13 @@ import type {
   WorldRenderPictureItem,
   WorldRenderScene,
 } from "~/editor/render/world-scene";
+
+type TextureMapping = {
+  origin: WorldPoint;
+  tileWidth: number;
+  tileHeight: number;
+  repeatTileSize: [width: number, height: number];
+};
 
 const GRAVITY_ARROW_ROTATIONS = {
   [Gravity.Up]: 0,
@@ -86,7 +93,7 @@ export class WebGLWorldItemDrawer {
 
     if (
       item.clip !== Clip.Sky &&
-      (item.clip !== Clip.Ground || !shouldClipGroundToSkyPolygons(scene))
+      (item.clip !== Clip.Ground || !scene.visibility.showPolygons)
     ) {
       draw();
       return;
@@ -178,16 +185,21 @@ export class WebGLWorldItemDrawer {
     this.drawPictureOutlineBounds(item, scene);
   }
 
-  private drawPicture(
+  drawPicture(
     item: WorldRenderPictureItem,
     scene: WorldRenderScene,
     opacityOverride?: number,
     drawBounds = true,
+    placement?: {
+      width: number;
+      height: number;
+      textureMapping: (sprite: ImageBitmap) => TextureMapping;
+    },
   ) {
     if (!this.lgrAssets) return;
     const opacity = opacityOverride ?? item.opacity ?? 1;
     const picture = this.getPictureSprite(item, scene);
-    const dimensions = this.getPictureWorldDimensions(item);
+    const dimensions = placement ?? this.getPictureWorldDimensions(item);
     if (!picture && (!drawBounds || !item.showBounds || !dimensions)) return;
 
     if (picture?.kind === "masked") {
@@ -196,6 +208,7 @@ export class WebGLWorldItemDrawer {
       this.drawMaskedTexturedRect({
         textureSprite: picture.texture,
         maskSprite: picture.mask,
+        mapping: placement?.textureMapping(picture.texture),
         x: item.position.x,
         y: item.position.y,
         width,
@@ -238,9 +251,21 @@ export class WebGLWorldItemDrawer {
     item: WorldRenderPictureItem,
     scene: WorldRenderScene,
   ) {
-    const outlineSegments = getPictureWorldOutlineSegments(
+    const outlineSegments = getPictureSelectionSegments(
       item,
       this.lgrAssets,
+      item.boundaryShape,
+    );
+    const anchorSize = 3 / scene.viewport.zoom;
+    this.shapes.drawRectOutline(
+      item.position.x - anchorSize,
+      item.position.y - anchorSize,
+      anchorSize * 2,
+      anchorSize * 2,
+      item.boundsLineWidth ?? 0.02,
+      item.boundsColor ?? colors.selection,
+      scene,
+      item.boundsOpacity ?? 1,
     );
     if (!outlineSegments || outlineSegments.length === 0) return;
 
@@ -321,10 +346,11 @@ export class WebGLWorldItemDrawer {
     };
   }
 
-  private drawObject(
+  drawObject(
     item: WorldRenderObjectItem,
     scene: WorldRenderScene,
     drawBounds = true,
+    frameOverride?: (sprite: ImageBitmap) => ReturnType<typeof getObjectFrame>,
   ) {
     if (!this.lgrAssets) return;
     const shouldShowBounds = item.showBounds ?? false;
@@ -343,9 +369,12 @@ export class WebGLWorldItemDrawer {
     if (scene.visibility.showObjects || item.forceVisible) {
       if (!sprite) return;
 
-      const frame = getObjectFrame(sprite, {
-        animate: scene.animateSprites && scene.visibility.showObjectAnimations,
-      });
+      const frame =
+        frameOverride?.(sprite) ??
+        getObjectFrame(sprite, {
+          animate:
+            scene.animateSprites && scene.visibility.showObjectAnimations,
+        });
       this.drawTexturedRect({
         sprite,
         sourceX: frame.sourceX,
@@ -360,7 +389,7 @@ export class WebGLWorldItemDrawer {
         scene,
       });
 
-      if (item.gravity != null) {
+      if (item.gravity != null && item.gravity !== Gravity.None) {
         const gravityArrowOpacity =
           item.objectKind === "apple" && item.forceVisible
             ? 1
@@ -385,7 +414,7 @@ export class WebGLWorldItemDrawer {
     }
   }
 
-  private drawStart(
+  drawStart(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "start" }>,
     scene: WorldRenderScene,
     drawBounds = true,
@@ -403,6 +432,8 @@ export class WebGLWorldItemDrawer {
         this.drawKuski(
           {
             type: "bike",
+            color: item.color,
+            opacity: item.opacity,
             distance: item.distance,
             start: item.position,
             coords: defaultBikeCoords,
@@ -422,8 +453,9 @@ export class WebGLWorldItemDrawer {
         this.shapes.drawCircle(
           item.position,
           OBJECT_DIAMETER / 2,
-          colors.start,
+          item.color ?? colors.start,
           scene,
+          item.opacity ?? 1,
         );
       }
     }
@@ -445,12 +477,11 @@ export class WebGLWorldItemDrawer {
   }
 
   private drawBikeFallback(
-    fallback: Extract<
-      WorldRenderScene["drawItems"][number],
-      { type: "bike" }
-    >["fallback"],
+    item: Extract<WorldRenderScene["drawItems"][number], { type: "bike" }>,
     scene: WorldRenderScene,
   ) {
+    const fallback = item.fallback;
+    const opacity = item.opacity ?? 1;
     const lineWidth = 2 / Math.max(scene.viewport.zoom, 1);
     this.shapes.drawLine(
       fallback.leftWheel,
@@ -458,6 +489,7 @@ export class WebGLWorldItemDrawer {
       lineWidth,
       "#111111",
       scene,
+      opacity,
     );
     this.shapes.drawLine(
       fallback.rightWheel,
@@ -465,6 +497,7 @@ export class WebGLWorldItemDrawer {
       lineWidth,
       "#111111",
       scene,
+      opacity,
     );
     this.shapes.drawLine(
       fallback.bike,
@@ -472,34 +505,71 @@ export class WebGLWorldItemDrawer {
       lineWidth,
       "#111111",
       scene,
+      opacity,
     );
-    this.shapes.drawCircle(fallback.leftWheel, 0.26, "#111111", scene);
-    this.shapes.drawCircle(fallback.rightWheel, 0.26, "#111111", scene);
-    this.shapes.drawCircle(fallback.head, 0.16, "#f5d0a9", scene);
+    this.shapes.drawCircle(fallback.leftWheel, 0.26, "#111111", scene, opacity);
+    this.shapes.drawCircle(
+      fallback.rightWheel,
+      0.26,
+      "#111111",
+      scene,
+      opacity,
+    );
+    this.shapes.drawCircle(fallback.head, 0.16, "#f5d0a9", scene, opacity);
   }
 
-  private drawBike(
+  drawBike(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "bike" }>,
     scene: WorldRenderScene,
   ) {
-    const kuskiSprites = this.lgrAssets?.getKuskiSprites();
-    const hasKuskiSprites = kuskiSprites
-      ? standardSprites.kuski.every((spriteName) => kuskiSprites[spriteName])
-      : false;
+    if (scene.visibility.showObjects || item.forceVisible) {
+      const kuskiSprites = this.lgrAssets?.getKuskiSprites();
+      const hasKuskiSprites = kuskiSprites
+        ? standardSprites.kuski.every((spriteName) => kuskiSprites[spriteName])
+        : false;
 
-    if (!kuskiSprites || !hasKuskiSprites) {
-      this.drawBikeFallback(item.fallback, scene);
-      return;
+      if (!kuskiSprites || !hasKuskiSprites) {
+        this.drawBikeFallback(item, scene);
+      } else {
+        this.drawKuski(
+          item,
+          scene,
+          kuskiSprites as Record<string, ImageBitmap>,
+        );
+      }
     }
 
-    this.drawKuski(item, scene, kuskiSprites as Record<string, ImageBitmap>);
+    if (item.showBounds) {
+      for (const circle of getKuskiSelectionCircles({
+        start: item.start,
+        coords: item.coords,
+      })) {
+        this.shapes.drawCircleOutline(
+          { x: circle.x, y: circle.y },
+          circle.radius,
+          item.boundsLineWidth ?? 0.02,
+          item.boundsColor ?? colors.selection,
+          scene,
+          item.boundsOpacity ?? 1,
+        );
+      }
+    }
   }
+
+  private bikeColor: [number, number, number, number] = [1, 1, 1, 1];
 
   private drawKuski(
     item: Extract<WorldRenderScene["drawItems"][number], { type: "bike" }>,
     scene: WorldRenderScene,
     lgrSprites: Record<string, ImageBitmap>,
   ) {
+    const hex = item.color ?? "#ffffff";
+    this.bikeColor = [
+      parseInt(hex.slice(1, 3), 16) / 255,
+      parseInt(hex.slice(3, 5), 16) / 255,
+      parseInt(hex.slice(5, 7), 16) / 255,
+      item.opacity ?? 1,
+    ];
     const coords = item.coords;
     const pose = buildWebGLBikePose({
       start: item.start,
@@ -820,7 +890,13 @@ export class WebGLWorldItemDrawer {
         1,
         1,
       ],
-      color: [1, 1, 1, opacity],
+      color: [
+        this.bikeColor[0],
+        this.bikeColor[1],
+        this.bikeColor[2],
+        opacity * this.bikeColor[3],
+      ],
+      recolorKuski: this.bikeColor.slice(0, 3).some((channel) => channel < 1),
       texture: this.context.getTexture(sprite),
       scene,
     });
@@ -876,6 +952,7 @@ export class WebGLWorldItemDrawer {
   private drawMaskedTexturedRect({
     textureSprite,
     maskSprite,
+    mapping,
     x,
     y,
     width,
@@ -885,6 +962,7 @@ export class WebGLWorldItemDrawer {
   }: {
     textureSprite: ImageBitmap;
     maskSprite: ImageBitmap;
+    mapping?: TextureMapping;
     x: number;
     y: number;
     width: number;
@@ -894,53 +972,58 @@ export class WebGLWorldItemDrawer {
   }) {
     const texture = this.context.getTexture(textureSprite);
     const maskTexture = this.context.getTexture(maskSprite);
-    const { tileWidth, tileHeight } = getTextureTileSize(textureSprite, scene);
+    const { tileWidth, tileHeight } =
+      mapping ?? getTextureTileSize(textureSprite, scene);
+    const u = (x - (mapping?.origin.x ?? 0)) / tileWidth;
+    const v = (y - (mapping?.origin.y ?? 0)) / tileHeight;
+    const u1 = u + width / tileWidth;
+    const v1 = v + height / tileHeight;
     const points = [
       {
         x,
         y,
-        u: x / tileWidth,
-        v: y / tileHeight,
+        u: u,
+        v: v,
         maskU: 0,
         maskV: 0,
       },
       {
         x: x + width,
         y,
-        u: (x + width) / tileWidth,
-        v: y / tileHeight,
+        u: u1,
+        v: v,
         maskU: 1,
         maskV: 0,
       },
       {
         x,
         y: y + height,
-        u: x / tileWidth,
-        v: (y + height) / tileHeight,
+        u: u,
+        v: v1,
         maskU: 0,
         maskV: 1,
       },
       {
         x,
         y: y + height,
-        u: x / tileWidth,
-        v: (y + height) / tileHeight,
+        u: u,
+        v: v1,
         maskU: 0,
         maskV: 1,
       },
       {
         x: x + width,
         y,
-        u: (x + width) / tileWidth,
-        v: y / tileHeight,
+        u: u1,
+        v: v,
         maskU: 1,
         maskV: 0,
       },
       {
         x: x + width,
         y: y + height,
-        u: (x + width) / tileWidth,
-        v: (y + height) / tileHeight,
+        u: u1,
+        v: v1,
         maskU: 1,
         maskV: 1,
       },
@@ -958,6 +1041,7 @@ export class WebGLWorldItemDrawer {
       color: [1, 1, 1, opacity],
       texture,
       maskTexture,
+      repeatTileSize: mapping?.repeatTileSize,
       scene,
     });
   }
@@ -1022,10 +1106,6 @@ function getTextureTileSize(
     tileWidth: sprite.width / Math.max(scene.viewport.zoom, 0.0001),
     tileHeight: sprite.height / Math.max(scene.viewport.zoom, 0.0001),
   };
-}
-
-function shouldClipGroundToSkyPolygons(scene: WorldRenderScene) {
-  return scene.groundClipMode === "always" || scene.visibility.showPolygons;
 }
 
 function elmaPixelsToWorldUnits(pixels: number) {

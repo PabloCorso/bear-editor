@@ -1,7 +1,12 @@
 build
 dist
 .react-router
+.agents
 node_modules
 public
 coverage
 storybook-static
+
+desktop/build/
+desktop/dist/
+desktop/node_modules/

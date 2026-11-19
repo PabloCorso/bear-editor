@@ -1,3 +1,27 @@
+import {
+  nextPictureClip,
+  normalizeDistance,
+  PICTURE_DISTANCE_STEP,
+} from "~/editor/helpers/picture-properties";
+import type { PictureToolState } from "../tools/picture-tool";
+import { activeTestStart } from "~/editor/test-starts";
+import { goToTestStart } from "~/editor/helpers/test-start-navigation";
+import {
+  getSessionArtifacts,
+  findSessionArtifact,
+} from "~/editor/session-artifacts";
+import { calculateBoundingBox } from "~/editor/helpers/level-helpers";
+import {
+  ImageExport,
+  type ImageExportOptions,
+} from "~/editor/helpers/image-export";
+import { getTopologyOverlays } from "../scene/topology-overlays";
+import {
+  getPictureSelectionSegments,
+  isPictureSelectionHit,
+} from "~/editor/helpers/picture-selection";
+import { TextureFillTool } from "../tools/texture-fill-tool";
+import { SceneryFillTool } from "../tools/scenery-fill-tool";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import { type EditorState } from "~/editor/editor-state";
 import {
@@ -21,7 +45,6 @@ import type {
   Tool,
   PlacementPropertiesMenuState,
 } from "~/editor/edit-mode/tools/tool-interface";
-import type { Widget } from "~/editor/edit-mode/widgets/widget-interface";
 import { createEditorStore, type EditorStore } from "~/editor/editor-store";
 import type { DefaultLevelPreset } from "~/editor/helpers/level-parser";
 import { LgrAssets } from "~/components/lgr-assets";
@@ -29,7 +52,12 @@ import {
   screenToWorld,
   worldToScreen,
 } from "~/editor/helpers/coordinate-helpers";
-import { Clip, type Picture, type Position } from "~/editor/elma-types";
+import {
+  Clip,
+  type EditorLevel,
+  type Picture,
+  type Position,
+} from "~/editor/elma-types";
 import { getDefaultLevel } from "~/editor/helpers/level-parser";
 import { checkModifierKey } from "~/utils/misc";
 import {
@@ -39,14 +67,18 @@ import {
 import {
   VertexTool,
   type VertexToolState,
+  type VertexToolVariant,
 } from "~/editor/edit-mode/tools/vertex-tool";
-import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
+import {
+  defaultTools,
+  objectToolIds,
+  materialToolIds,
+} from "~/editor/edit-mode/tools/default-tools";
 import type { EditorDocumentInput } from "~/editor/editor-state";
 import { buildEditorWorldScene } from "~/editor/edit-mode/scene/editor-scene-builder";
 import type { WorldRenderOverlayItem } from "~/editor/render/world-scene";
 import {
   getPictureWorldDimensions,
-  getPictureWorldOutlineSegments,
   isWorldPointInPictureVisiblePixel,
 } from "~/editor/render/picture-metrics";
 import {
@@ -68,6 +100,7 @@ import {
 import { isWorldPointInGroundRegion } from "~/editor/helpers/polygon-helpers";
 import type { Polygon } from "~/editor/elma-types";
 import { DEFAULT_OBJECT_RENDER_DISTANCE } from "~/editor/render/render-constants";
+import { FIT_TO_VIEW_SHORTCUT } from "../toolbars/keyboard-shortcuts";
 
 type EditorEngineOptions = {
   initialDocument?: EditorDocumentInput;
@@ -75,7 +108,6 @@ type EditorEngineOptions = {
   defaultLevelPreset?: DefaultLevelPreset;
   readOnly?: boolean;
   tools?: Array<new (store: EditorStore) => Tool>;
-  widgets?: Array<new (store: EditorStore) => Widget>;
   minZoom?: number;
   maxZoom?: number;
   panSpeed?: number;
@@ -88,11 +120,41 @@ type EditorEngineOptions = {
   rendererBackend?: WorldSceneRendererBackend;
 };
 
-const KEYBOARD_PAN_STEP = 200;
+const KEYBOARD_PAN_STEP = 50;
 const KEYBOARD_ZOOM_STEP_DIVISOR = 100;
 const WHEEL_PAN_MULTIPLIER = 0.5;
 const TOUCH_CONTEXT_MENU_DELAY_MS = 500;
 const TOUCH_CONTEXT_MENU_MOVE_TOLERANCE_PX = 8;
+
+export function settleLostPointerCapture(
+  event: Pick<PointerEvent, "buttons">,
+  interaction: {
+    active: () => boolean;
+    complete: () => void;
+    cancel: () => void;
+  },
+) {
+  if (!interaction.active()) return;
+  if (event.buttons === 0) interaction.complete();
+  if (interaction.active()) interaction.cancel();
+}
+
+function matchesToolShortcut(event: KeyboardEvent, shortcut: string) {
+  const normalized = shortcut.toUpperCase();
+  const shiftPrefix = "SHIFT + ";
+  const requiresShift = normalized.startsWith(shiftPrefix);
+  const key = requiresShift ? normalized.slice(shiftPrefix.length) : normalized;
+
+  return (
+    key !== "" &&
+    event.key.toUpperCase() === key &&
+    event.shiftKey === requiresShift &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.isComposing
+  );
+}
 
 type CachedLongestGrassEdge = {
   vertices: Polygon["vertices"];
@@ -167,9 +229,15 @@ export class EditorEngine {
   private modifierPressed = false;
   private pressedKeys = new Set<string>();
   private handleWindowBlur = () => {
+    this.store.getState().actions.setGridSnapBypassed(false);
     this.pressedKeys.clear();
     this.updateModifierPressed(false);
     this.cancelTouchContextMenuTimer();
+    const tool = this.store.getState().actions.getActiveTool();
+    tool?.cancelInteraction();
+    if (this.store.history.state.getState().active?.toolId === tool?.meta.id)
+      this.store.history.cancelActive();
+    this.isPanning = false;
   };
 
   constructor(
@@ -180,7 +248,6 @@ export class EditorEngine {
       defaultLevelPreset = "default",
       readOnly = false,
       tools = [],
-      widgets = [],
       minZoom = 0.2,
       maxZoom = 10000,
       panSpeed = 1.0,
@@ -234,15 +301,14 @@ export class EditorEngine {
           getPictureWorldDimensions(picture, this.lgrAssets),
         );
       }
+      if (tool instanceof TextureFillTool || tool instanceof SceneryFillTool) {
+        tool.setAssetsResolver(() => this.lgrAssets);
+      }
       state.actions.registerTool(tool);
     });
     if (tools.length > 0) {
       state.actions.activateTool(initialToolId);
     }
-
-    widgets.forEach((widget) =>
-      state.actions.registerWidget(new widget(this.store)),
-    );
 
     if (!readOnly) {
       this.setupEventListeners();
@@ -271,6 +337,10 @@ export class EditorEngine {
     this.canvas.addEventListener("pointerup", this.handlePointerUp, {
       passive: false,
     });
+    this.canvas.addEventListener(
+      "lostpointercapture",
+      this.handleLostPointerCapture,
+    );
     this.canvas.addEventListener("pointercancel", this.handlePointerCancel, {
       passive: false,
     });
@@ -318,6 +388,7 @@ export class EditorEngine {
       state.viewPortOffset,
       state.zoom,
     );
+    this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
     const forceObjectSelection = event.shiftKey || event.altKey;
     const activeTool = state.actions.getActiveTool();
@@ -440,7 +511,11 @@ export class EditorEngine {
         pointerPos.x,
         pointerPos.y,
       );
-      this.dispatchToolPointerEvent("up", syntheticEvent);
+      if (this.store.getState().activeToolId === "shape") {
+        this.store.getState().actions.getActiveTool()?.clear?.();
+      } else {
+        this.dispatchToolPointerEvent("up", syntheticEvent);
+      }
     }
 
     this.activeTouchToolPointerId = null;
@@ -499,6 +574,7 @@ export class EditorEngine {
   }
 
   private handlePointerDown = (event: PointerEvent) => {
+    this.store.setState({ testStartMenu: null, openToolMenuId: null });
     if (event.pointerType === "touch") {
       event.preventDefault();
       this.trySetPointerCapture(event.pointerId);
@@ -642,6 +718,17 @@ export class EditorEngine {
     }
   };
 
+  private handleLostPointerCapture = (event: PointerEvent) => {
+    settleLostPointerCapture(event, {
+      active: () => Boolean(this.store.history.state.getState().active),
+      complete: () => this.dispatchToolPointerEvent("up", event),
+      cancel: () => {
+        this.store.getState().actions.getActiveTool()?.cancelInteraction();
+        this.store.history.cancelActive();
+      },
+    });
+  };
+
   private handlePointerCancel = (event: PointerEvent) => {
     const activeTool = this.store.getState().actions.getActiveTool();
     if (
@@ -668,7 +755,9 @@ export class EditorEngine {
         this.updateCanvasCursor();
       }
     } else if (
-      this.store.getState().actions.getActiveTool() instanceof SelectTool
+      this.store.getState().actions.getActiveTool() instanceof SelectTool ||
+      this.store.getState().activeToolId === "shape" ||
+      this.store.getState().actions.getActiveTool() instanceof VertexTool
     ) {
       this.dispatchToolPointerEvent("up", event);
     }
@@ -699,13 +788,41 @@ export class EditorEngine {
       state.viewPortOffset,
       state.zoom,
     );
+    const openTestStartMenu = (id?: string | null, selectionMenu = false) => {
+      if (!selectionMenu)
+        state.actions.getTool<SelectTool>("select")?.closeContextMenu();
+      this.store.setState({
+        testStartMenu: {
+          x: event.clientX,
+          y: event.clientY,
+          position: context.worldPos,
+          selectionMenu,
+          ...(id !== undefined ? { id } : {}),
+        },
+      });
+    };
     this.updateSelectHoverState(state, context.worldPos);
+    const hoveredObject = this.store
+      .getState()
+      .actions.getToolState<SelectToolState>("select")?.hoveredObject;
+    const test = state.testStarts.items.find(
+      (item) => item.position === hoveredObject,
+    );
+    const levelHit = hoveredObject === state.start;
 
     const activeTool = this.store.getState().actions.getActiveTool();
     if (activeTool?.onRightClick) {
       const consumed = activeTool.onRightClick(event, context);
-      if (consumed) return;
+      if (consumed) {
+        if (state.activeToolId === "select")
+          openTestStartMenu(test?.id ?? (levelHit ? null : undefined), true);
+        return;
+      }
     }
+    // Let selection resolve objects, pictures, and terrain before treating the
+    // canvas as empty space for a new test start.
+    if (state.activeToolId === "select")
+      openTestStartMenu(levelHit ? null : undefined);
   }
 
   private getCanvasPoint(clientX: number, clientY: number) {
@@ -841,6 +958,7 @@ export class EditorEngine {
   }
 
   private handleKeyDown = (event: KeyboardEvent) => {
+    this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.add(event.code);
     const state = this.store.getState();
@@ -856,6 +974,14 @@ export class EditorEngine {
       return;
     }
     if (isUserTyping()) return;
+    if (
+      event.target instanceof Element &&
+      (event.target.closest('[role="menu"]') ||
+        (event.target.closest('[aria-haspopup="menu"]') &&
+          ["Enter", " ", "ArrowUp", "ArrowDown"].includes(event.key)))
+    ) {
+      return;
+    }
 
     if (state.isPlayMode) {
       if (event.key === "Escape") {
@@ -869,48 +995,28 @@ export class EditorEngine {
     const key = event.key.toUpperCase();
     const modifier = checkModifierKey(event);
 
+    const vertexVariantShortcuts: Partial<Record<string, VertexToolVariant>> =
+      event.shiftKey
+        ? { P: "pipe", F: "frame", G: "autoGrass", S: "smooth" }
+        : { B: "brush", D: "draw", X: "cutConnect" };
+    const variant = vertexVariantShortcuts[key];
     if (
-      key === "C" &&
+      variant &&
       !event.metaKey &&
       !event.ctrlKey &&
       !event.altKey &&
-      !event.shiftKey &&
       !event.isComposing
-    ) {
-      const vertexState = state.actions.getToolState<VertexToolState>("vertex");
-      if (
-        state.activeToolId !== "vertex" ||
-        vertexState?.variant !== "cutConnect"
-      ) {
-        state.actions.activateTool("vertex", "cutConnect");
-      }
-      event.preventDefault();
-      return;
-    }
-
-    if (
-      (key === "P" || key === "F") &&
-      event.shiftKey &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey
     ) {
       const vertexState = state.actions.getToolState<VertexToolState>(
         defaultTools.vertex.id,
       );
-      const variant = key === "F" ? "frame" : "pipe";
       if (
-        state.activeToolId !== defaultTools.vertex.id ||
-        vertexState?.variant !== variant
+        !event.repeat &&
+        (state.activeToolId !== defaultTools.vertex.id ||
+          vertexState?.variant !== variant)
       ) {
         state.actions.activateTool(defaultTools.vertex.id, variant);
       }
-      event.preventDefault();
-      return;
-    }
-
-    if (key === "G" && event.shiftKey && !modifier && !event.altKey) {
-      this.autoGrassAll(state);
       event.preventDefault();
       return;
     }
@@ -923,13 +1029,25 @@ export class EditorEngine {
     }
     if (event.repeat && key === "ENTER") return;
 
+    if (
+      key === "ENTER" &&
+      event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.isComposing
+    ) {
+      const screenPoint = this.getCurrentMouseScreenPoint(state);
+      goToTestStart(this.store, activeTestStart(state).position, this.canvas);
+      this.syncMousePositionFromScreenPoint(screenPoint);
+      event.preventDefault();
+      return;
+    }
+
     const currentTool = state.actions.getActiveTool();
     if (
-      currentTool?.meta.hasMenu &&
-      currentTool.meta.shortcut.toUpperCase() === key &&
-      !modifier &&
-      !event.altKey &&
-      !event.shiftKey
+      currentTool?.meta.menuBehavior === "options" &&
+      matchesToolShortcut(event, currentTool.meta.shortcut)
     ) {
       if (!event.repeat) {
         state.actions.setToolMenuOpen(
@@ -938,6 +1056,54 @@ export class EditorEngine {
       }
       event.preventDefault();
       return;
+    }
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.isComposing
+    ) {
+      if (
+        event.key === " " &&
+        !event.shiftKey &&
+        objectToolIds.includes(state.activeToolId)
+      ) {
+        if (!event.repeat) {
+          const index = objectToolIds.indexOf(state.activeToolId);
+          state.actions.activateTool(
+            objectToolIds[(index + 1) % objectToolIds.length],
+          );
+        }
+        event.preventDefault();
+        return;
+      }
+      if (materialToolIds.includes(state.activeToolId)) {
+        const placement = state.actions.getToolState<PictureToolState>(
+          state.activeToolId,
+        );
+        if (
+          placement &&
+          (event.key === " " || ["+", "=", "-"].includes(event.key))
+        ) {
+          if (event.key === " ") {
+            if (!event.repeat && !event.shiftKey) {
+              state.actions.setToolState(state.activeToolId, {
+                clip: nextPictureClip(placement.clip),
+              });
+            }
+          } else {
+            state.actions.setToolState(state.activeToolId, {
+              distance: normalizeDistance(
+                placement.distance +
+                  (event.key === "-" ? -1 : 1) * PICTURE_DISTANCE_STEP,
+              ),
+            });
+          }
+          event.preventDefault();
+          return;
+        }
+      }
     }
 
     // Let active tool handle the key first
@@ -962,13 +1128,20 @@ export class EditorEngine {
     }
 
     for (const tool of state.toolsMap.values()) {
-      if (
-        tool.meta.shortcut.toUpperCase() === key &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey
-      ) {
-        if (!event.repeat) state.actions.activateTool(tool.meta.id);
+      if (matchesToolShortcut(event, tool.meta.shortcut)) {
+        if (
+          !event.repeat &&
+          (tool.meta.id !== defaultTools.select.id ||
+            state.activeToolId !== tool.meta.id)
+        ) {
+          state.actions.activateTool(
+            tool.meta.id,
+            tool.meta.menuBehavior === "toolGroup" ? "normal" : undefined,
+          );
+          if (tool.meta.menuBehavior === "options") {
+            state.actions.setToolMenuOpen(true);
+          }
+        }
         event.preventDefault();
         return;
       }
@@ -976,8 +1149,13 @@ export class EditorEngine {
       for (const [variantKey, variantMeta] of Object.entries(
         tool.meta.variants || {},
       )) {
-        // C is handled above with modifier checks so Copy stays available.
-        if (variantKey === "cutConnect") continue;
+        // These variants are handled above with explicit modifier checks.
+        if (
+          ["cutConnect", "brush", "draw", "autoGrass", "smooth"].includes(
+            variantKey,
+          )
+        )
+          continue;
         if (variantMeta.shortcut.toUpperCase() === key) {
           // If tool is already active, let onKeyDown handle it (toggle)
           if (state.activeToolId === tool.meta.id) {
@@ -1025,20 +1203,68 @@ export class EditorEngine {
         panSpeed: this.panSpeed,
       });
       this.syncMousePositionFromScreenPoint(screenPoint);
+      event.preventDefault();
       return;
     }
 
-    if (event.key === "0" && checkModifierKey(event)) {
-      this.fitToView();
+    if (
+      key === FIT_TO_VIEW_SHORTCUT &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !event.isComposing &&
+      !event.defaultPrevented &&
+      !(
+        event.target instanceof Element &&
+        event.target.closest('[role="dialog"]')
+      )
+    ) {
+      if (!event.repeat) this.fitToView();
+      event.preventDefault();
       return;
     }
 
     // Handle other shortcuts
     const shortcuts: Record<string, () => void> = {
-      Enter: () =>
+      Enter: () => {
+        if (
+          state.activeToolId === "select" &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          !event.shiftKey &&
+          !event.isComposing
+        ) {
+          const selection =
+            state.actions.getToolState<SelectToolState>("select");
+          if (
+            selection &&
+            !selection.selectedVertices.length &&
+            !selection.selectedPictures.length &&
+            !selection.isDragging &&
+            !selection.isMarqueeSelecting &&
+            !selection.transformMode
+          ) {
+            const selectedTestStart = state.testStarts.items.find(
+              (item) =>
+                selection.selectedObjects.length === 1 &&
+                item.position === selection.selectedObjects[0],
+            );
+            if (selectedTestStart) {
+              state.actions.activateTestStart(selectedTestStart.id);
+            } else if (
+              selection.selectedObjects.length === 1 &&
+              selection.selectedObjects[0] === state.start
+            ) {
+              state.actions.activateTestStart(null);
+            }
+          }
+        }
         state.actions.startPlayMode(
           Array.from(this.pressedKeys).filter((code) => code !== "Enter"),
-        ),
+        );
+      },
       Escape: () => state.actions.activateTool("select"),
       "+": () => this.zoomInOut(this.zoomStep),
       "=": () => this.zoomInOut(this.zoomStep),
@@ -1048,18 +1274,15 @@ export class EditorEngine {
     shortcuts[event.key]?.();
   };
 
-  private autoGrassAll(state: EditorState): boolean {
-    return (
-      state.actions
-        .getTool<VertexTool>(defaultTools.vertex.id)
-        ?.autoGrassAll() ?? false
-    );
-  }
-
   private handleKeyUp = (event: KeyboardEvent) => {
+    this.store.getState().actions.setGridSnapBypassed(event.altKey);
     this.updateModifierPressed(checkModifierKey(event));
     this.pressedKeys.delete(event.code);
     const state = this.store.getState();
+    if (!state.isPlayMode && !isUserTyping())
+      state.actions
+        .getActiveTool()
+        ?.onKeyUp?.(event, this.getKeyboardEventContext(state));
     this.refreshSelectionHoverForModifierKeys(state, event);
   };
 
@@ -1082,13 +1305,20 @@ export class EditorEngine {
   }
 
   public undo() {
-    this.discardPendingVertexEditBeforeHistory();
-    this.store.temporal.getState().undo();
+    this.store.history.undo();
   }
 
   public redo() {
-    this.discardPendingVertexEditBeforeHistory();
-    this.store.temporal.getState().redo();
+    this.store.history.redo();
+  }
+
+  public importLevel(level: EditorLevel): void {
+    const state = this.store.getState();
+    if (state.isPlayMode) return;
+
+    state.actions
+      .getTool<SelectTool>("select")
+      ?.importLevelContent(level, this.getKeyboardEventContext(state).worldPos);
   }
 
   private selectAllVisible(): boolean {
@@ -1124,26 +1354,6 @@ export class EditorEngine {
     });
   }
 
-  private discardPendingVertexEditBeforeHistory() {
-    const state = this.store.getState();
-    if (state.activeToolId !== "vertex") return;
-
-    const toolState = state.actions.getToolState<VertexToolState>("vertex");
-    if (toolState?.variant === "cutConnect") {
-      state.actions.getActiveTool()?.clear?.();
-      return;
-    }
-    if (
-      !toolState?.editingPolygon ||
-      toolState.drawingPolygon.vertices.length === 0
-    ) {
-      return;
-    }
-
-    const activeTool = state.actions.getActiveTool();
-    activeTool?.clear?.();
-  }
-
   private startRenderLoop() {
     this.requestRender();
   }
@@ -1162,6 +1372,106 @@ export class EditorEngine {
     this.lgrAssets = lgrAssets;
     this.worldRenderer.setLgrAssets(lgrAssets);
     this.requestRender();
+  }
+
+  public createImageExport(): ImageExport {
+    const state = this.store.getState();
+    const scenes = new Map<string, ReturnType<typeof this.buildScene>>();
+    for (const area of ["view", "level"] as const) {
+      let cameraState = state;
+      let viewportSize = {
+        width: this.canvas.width,
+        height: this.canvas.height,
+      };
+      if (area === "level") {
+        let zoom = state.zoom;
+        let offset = state.viewPortOffset;
+        const pictureBounds = state.pictures.flatMap((picture) => {
+          const size = getPictureWorldDimensions(picture, this.lgrAssets);
+          return size
+            ? [
+                picture.position,
+                {
+                  x: picture.position.x + size.width,
+                  y: picture.position.y + size.height,
+                },
+              ]
+            : [picture.position];
+        });
+        fitToView({
+          canvas: this.canvas,
+          polygons: state.polygons,
+          apples: state.apples,
+          killers: [...state.killers, ...pictureBounds],
+          flowers: state.flowers,
+          start: state.start,
+          minZoom: this.minZoom,
+          maxZoom: this.maxZoom,
+          setCamera: (x, y) => {
+            offset = { x, y };
+          },
+          setZoom: (value) => {
+            zoom = value;
+          },
+        });
+        const bounds = calculateBoundingBox({
+          polygons: state.polygons,
+          apples: state.apples,
+          killers: [...state.killers, ...pictureBounds],
+          flowers: state.flowers,
+          start: state.start,
+        });
+        // Frame the level itself instead of retaining the editor window's aspect ratio.
+        const padding = 2;
+        viewportSize = {
+          width: Math.max(
+            1,
+            Math.ceil((bounds.maxX - bounds.minX + padding * 2) * zoom),
+          ),
+          height: Math.max(
+            1,
+            Math.ceil((bounds.maxY - bounds.minY + padding * 2) * zoom),
+          ),
+        };
+        offset = {
+          x: -(bounds.minX - padding) * zoom,
+          y: -(bounds.minY - padding) * zoom,
+        };
+        cameraState = { ...state, zoom, viewPortOffset: offset };
+      }
+      for (const appearance of ["shown", "game"] as const) {
+        const game = appearance === "game";
+        const exportState = game
+          ? {
+              ...cameraState,
+              levelVisibility: {
+                ...cameraState.levelVisibility,
+                useGroundSkyTextures: true,
+                useGrassTextures: true,
+                zoomTextures: true,
+                showObjects: true,
+                showPictures: true,
+                showTextures: true,
+                showPolygons: true,
+                showGroundBounds: false,
+                showGrassBounds: false,
+                showObjectBounds: false,
+                showPictureBounds: false,
+                showTextureBounds: false,
+              },
+            }
+          : cameraState;
+        scenes.set(
+          `${area}-${appearance}`,
+          this.buildScene(exportState, !game, viewportSize),
+        );
+      }
+    }
+    return new ImageExport(
+      this.lgrAssets,
+      (options: ImageExportOptions) =>
+        scenes.get(`${options.area}-${options.appearance}`)!,
+    );
   }
 
   private flushRender() {
@@ -1215,38 +1525,46 @@ export class EditorEngine {
     });
   }
 
-  private render() {
-    const state = this.store.getState();
+  private buildScene(
+    state = this.store.getState(),
+    includeEditor = true,
+    viewportSize = { width: this.canvas.width, height: this.canvas.height },
+  ) {
     const viewportRect = getViewportWorldRectFromOffset({
-      width: this.canvas.width,
-      height: this.canvas.height,
+      width: viewportSize.width,
+      height: viewportSize.height,
       offsetX: state.viewPortOffset.x,
       offsetY: state.viewPortOffset.y,
       zoom: state.zoom,
     });
     const scene = buildEditorWorldScene({
       state,
-      viewportSize: {
-        width: this.canvas.width,
-        height: this.canvas.height,
-      },
+      includeDrafts: includeEditor,
+      viewportSize,
       viewportRect,
       resolvePictureDimensions: (picture) =>
         getPictureWorldDimensions(picture, this.lgrAssets),
     });
     const activeTool = state.actions.getActiveTool();
-    const overlays = [
-      ...this.getEditorOverlays(state, viewportRect),
-      ...(activeTool?.getWorldOverlays?.({
-        viewportRect,
-        modifierPressed: this.modifierPressed,
-      }) ?? []),
-    ];
+    const overlays = includeEditor
+      ? [
+          ...this.getEditorOverlays(state, viewportRect),
+          ...getTopologyOverlays(state, this.lgrAssets),
+          ...(activeTool?.getWorldOverlays?.({
+            viewportRect,
+            modifierPressed: this.modifierPressed,
+          }) ?? []),
+        ]
+      : [];
     scene.overlays = [
       ...overlays.filter((overlay) => overlay.layer !== "top"),
       ...overlays.filter((overlay) => overlay.layer === "top"),
     ];
-    this.worldRenderer.render(scene);
+    return scene;
+  }
+
+  private render() {
+    this.worldRenderer.render(this.buildScene());
   }
 
   private refreshSelectionHoverForModifierKeys(
@@ -1290,7 +1608,7 @@ export class EditorEngine {
     }
 
     const selectState = state.actions.getToolState<SelectToolState>("select");
-    if (selectState?.isDragging) {
+    if (selectState?.isDragging || selectState?.isMarqueeSelecting) {
       return;
     }
 
@@ -1365,19 +1683,29 @@ export class EditorEngine {
       if (!pictureDimensions) continue;
 
       const { width, height } = pictureDimensions;
-      const isInPictureBounds =
-        worldPos.x >= picture.position.x &&
-        worldPos.x <= picture.position.x + width &&
-        worldPos.y >= picture.position.y &&
-        worldPos.y <= picture.position.y + height;
-      if (!isInPictureBounds) continue;
+      const matchesSelection = isPictureSelectionHit(
+        worldPos,
+        picture,
+        this.lgrAssets,
+        state.pictureSelection,
+        selectionThresholds.vertex / state.zoom,
+      );
+      if (!matchesSelection) continue;
       const isTexture = Boolean(picture.texture && picture.mask);
 
-      const isVisibleOnTopLayer = this.isPictureCandidateSelectable(
-        state,
-        picture,
-        worldPos,
-      );
+      const useVisiblePixels =
+        state.pictureSelection.boundary === "outline" &&
+        state.pictureSelection.click === "interior";
+      const isAnchorHit =
+        Math.hypot(
+          worldPos.x - picture.position.x,
+          worldPos.y - picture.position.y,
+        ) <=
+        selectionThresholds.vertex / state.zoom;
+      const isVisibleOnTopLayer =
+        !useVisiblePixels ||
+        isAnchorHit ||
+        this.isPictureCandidateSelectable(state, picture, worldPos);
       pictureCandidates.push({
         picture,
         width,
@@ -1400,7 +1728,13 @@ export class EditorEngine {
       frontmostVisiblePicture.picture.distance < DEFAULT_OBJECT_RENDER_DISTANCE;
 
     const toolState = state.actions.getToolState<SelectToolState>("select");
-    if (toolState?.selectedObjects.length && this.isObjectSelectable(state)) {
+    if (
+      toolState?.selectedObjects.length &&
+      (this.isObjectSelectable(state) ||
+        toolState.selectedObjects.some((object) =>
+          Boolean(findSessionArtifact(state, object)),
+        ))
+    ) {
       const selectedObject = this.findObjectNearSelectedPosition(
         worldPos,
         toolState.selectedObjects,
@@ -1417,6 +1751,20 @@ export class EditorEngine {
           hoveredPictureBounds: undefined,
         };
       }
+    }
+
+    if (forceObjectSelection || !isObjectSelectionBlockedByPicture) {
+      const useImageStartSelection =
+        state.levelVisibility.showObjects &&
+        this.isStartObjectImageSelectionReady();
+      const artifact = [...getSessionArtifacts(state)]
+        .reverse()
+        .find((item) => item.hitTest(worldPos, useImageStartSelection));
+      if (artifact)
+        return {
+          hoveredObject: artifact.position,
+          hoveredPictureBounds: undefined,
+        };
     }
 
     if (
@@ -1528,6 +1876,11 @@ export class EditorEngine {
       : "boundsOnly";
 
     for (const object of objects) {
+      const artifact = findSessionArtifact(state, object);
+      if (artifact) {
+        if (artifact.hitTest(position, useImageStartSelection)) return object;
+        continue;
+      }
       if (object === state.start) {
         const isHovered = isStartObjectHit(
           position,
@@ -1643,9 +1996,7 @@ export class EditorEngine {
   ): WorldRenderOverlayItem[] {
     const overlays: WorldRenderOverlayItem[] = [];
     const selectState = state.actions.getToolState<SelectToolState>("select");
-    if (state.activeToolId !== "select") {
-      return overlays;
-    }
+    if (state.activeToolId !== "select") return overlays;
 
     const hoveredPicture = selectState?.isMarqueeSelecting
       ? undefined
@@ -1684,9 +2035,10 @@ export class EditorEngine {
               rect.minY > viewportRect.maxY
             )
           ) {
-            const outlineSegments = getPictureWorldOutlineSegments(
+            const outlineSegments = getPictureSelectionSegments(
               picture,
               this.lgrAssets,
+              state.pictureSelection.boundary,
             );
             if (outlineSegments && outlineSegments.length > 0) {
               overlays.push(
@@ -1727,9 +2079,10 @@ export class EditorEngine {
         continue;
       }
 
-      const outlineSegments = getPictureWorldOutlineSegments(
+      const outlineSegments = getPictureSelectionSegments(
         picture,
         this.lgrAssets,
+        state.pictureSelection.boundary,
       );
       if (outlineSegments && outlineSegments.length > 0) {
         overlays.push(
@@ -1788,6 +2141,8 @@ export class EditorEngine {
   }
 
   public destroy() {
+    this.store.getState().actions.getActiveTool()?.cancelInteraction();
+    this.store.history.cancelActive();
     if (this.animationId) {
       cancelAnimationFrame(this.animationId);
     }
@@ -1799,6 +2154,10 @@ export class EditorEngine {
     this.canvas.removeEventListener("pointermove", this.handlePointerMove);
     this.canvas.removeEventListener("pointerup", this.handlePointerUp);
     this.canvas.removeEventListener("pointercancel", this.handlePointerCancel);
+    this.canvas.removeEventListener(
+      "lostpointercapture",
+      this.handleLostPointerCapture,
+    );
     this.canvas.removeEventListener("pointerleave", this.handlePointerLeave);
     this.canvas.removeEventListener("contextmenu", this.handleRightClick);
     this.canvas.removeEventListener("wheel", this.handleWheel);

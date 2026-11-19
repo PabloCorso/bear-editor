@@ -1,3 +1,10 @@
+import {
+  UnionTool,
+  SubtractTool,
+  IntersectTool,
+  ExcludeTool,
+} from "./tools/polygon-boolean-tool";
+import { ShapeTool } from "./tools/shape-tool";
 import { DEFAULT_LEVEL_TITLE } from "~/editor/helpers/level-title";
 import React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -8,7 +15,6 @@ import { SelectTool } from "~/editor/edit-mode/tools/select-tool";
 import { AppleTool } from "~/editor/edit-mode/tools/apple-tools";
 import { KillerTool } from "~/editor/edit-mode/tools/killer-tool";
 import { FlowerTool } from "~/editor/edit-mode/tools/flower-tool";
-import { AIWidget } from "~/editor/edit-mode/widgets/ai-widget";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import {
   editorLevelFromFile,
@@ -19,6 +25,11 @@ import { ColorTool } from "~/editor/edit-mode/tools/color-tool";
 import { PictureTool } from "~/editor/edit-mode/tools/picture-tool";
 import { HandTool } from "~/editor/edit-mode/tools/hand-tool";
 import { TextureTool } from "~/editor/edit-mode/tools/texture-tool";
+import { TextureFillTool } from "~/editor/edit-mode/tools/texture-fill-tool";
+import {
+  PictureFillTool,
+  ColorFillTool,
+} from "~/editor/edit-mode/tools/scenery-fill-tool";
 import { cn } from "~/utils/misc";
 import type { EditorLevel } from "~/editor/elma-types";
 import type { EditorDocumentInput } from "~/editor/editor-state";
@@ -27,6 +38,7 @@ import {
   useCustomDefaultLevelTemplate,
   useDefaultLevelPreset,
 } from "~/editor/edit-mode/default-level-preset";
+import { TextTool } from "~/editor/edit-mode/tools/text-tool.js";
 
 type EditorViewProps = React.ComponentPropsWithRef<"canvas"> & {};
 
@@ -43,13 +55,11 @@ export function EditorView({ className, ...props }: EditorViewProps) {
 
 type UseEditorViewOptions = {
   initialDocument?: InitialDocument;
-  isOpenAIEnabled?: boolean;
   rendererBackend?: WorldSceneRendererBackend;
 };
 
 export function useEditorView({
   initialDocument,
-  isOpenAIEnabled,
   rendererBackend = "webgl",
 }: UseEditorViewOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -114,23 +124,26 @@ export function useEditorView({
         SelectTool,
         HandTool,
         VertexTool,
+        UnionTool,
+        SubtractTool,
+        IntersectTool,
+        ExcludeTool,
+        TextTool,
+        ShapeTool,
         AppleTool,
         KillerTool,
         FlowerTool,
         PictureTool,
         ColorTool,
         TextureTool,
+        TextureFillTool,
+        PictureFillTool,
+        ColorFillTool,
       ];
-
-      const widgets = [];
-      if (isOpenAIEnabled) {
-        widgets.push(AIWidget);
-      }
 
       engineRef.current = new EditorEngine(canvas, {
         store,
         tools,
-        widgets,
         lgrAssets: editorLgrAssets ?? undefined,
         initialDocument: initialDocument?.document,
         rendererBackend,
@@ -147,7 +160,6 @@ export function useEditorView({
       store,
       initialDocument?.document,
       initialDocument?.status,
-      isOpenAIEnabled,
       editorLgrAssets,
       rendererBackend,
     ],

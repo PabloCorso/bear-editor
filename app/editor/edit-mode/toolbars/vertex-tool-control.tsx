@@ -1,4 +1,5 @@
-import { GearIcon } from "@phosphor-icons/react/dist/ssr";
+import { isPolygonBooleanTool } from "../tools/polygon-boolean-tool";
+import { PolygonOperationIcon } from "./polygon-operation-icon";
 import {
   ToolControlButton,
   ToolControlMenu,
@@ -7,90 +8,95 @@ import {
 import { ToolButton } from "~/components/tool-button";
 import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import {
-  useEditorActions,
   useEditor,
+  useEditorActions,
   useEditorToolState,
 } from "~/editor/use-editor-store";
 import {
-  VertexTool,
+  type VertexTool,
   type VertexToolState,
   type VertexToolVariant,
 } from "~/editor/edit-mode/tools/vertex-tool";
 import { Toolbar, type ToolbarProps } from "~/components/ui/toolbar";
-import {
-  colors,
-  ELMA_PIXELS_PER_WORLD_UNIT,
-  uiColors,
-} from "~/editor/constants";
+import { colors, uiColors } from "~/editor/constants";
 import { cn } from "~/utils/misc";
-import { useCallback, useId, useState } from "react";
-import {
-  defaultAutoGrassOptions,
-  type AutoGrassOptions,
-} from "~/editor/helpers/auto-grass";
-import { Popover, PopoverTrigger } from "~/components/ui/popover";
-import { Input } from "~/components/ui/input";
+import { useId } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import {
-  SettingsPopoverContent,
-  SettingsPopoverFields,
-} from "./settings-popover";
 
-export const AUTO_GRASS_ALL_SHORTCUT = "Shift + G";
+const polygonOperations = [
+  "union",
+  "subtract",
+  "intersect",
+  "exclude",
+] as const;
 
 export function VertexToolControl(props: ToolControlButtonProps) {
-  const vertexToolState = useEditorToolState<VertexToolState>(
+  const activeToolId = useEditor((state) => state.activeToolId);
+  const vertexTool = useEditorToolState<VertexToolState>(
     defaultTools.vertex.id,
   );
-  const { activateTool, setToolMenuOpen } = useEditorActions();
+  const { activateTool } = useEditorActions();
+  const isNormalVertexActive =
+    activeToolId === defaultTools.vertex.id &&
+    (!vertexTool?.variant || vertexTool.variant === "normal");
 
   return (
     <ToolControlMenu
       id={defaultTools.vertex.id}
       button={
-        <ToolControlButton {...defaultTools.vertex} {...props}>
-          <VertexIcon {...getVertexIconProps(vertexToolState?.variant)} />
+        <ToolControlButton
+          {...props}
+          name="Vertex tools"
+          onClick={() => {
+            if (!isNormalVertexActive) {
+              activateTool(defaultTools.vertex.id, "normal");
+            }
+          }}
+          isActive={
+            activeToolId === defaultTools.vertex.id ||
+            isPolygonBooleanTool(activeToolId)
+          }
+        >
+          <VertexIcon {...getVertexIconProps("normal")} />
         </ToolControlButton>
       }
     >
       <VertexToolbar
+        isLoading={props.isLoading}
         onVariantChange={(variant: VertexToolVariant) => {
           activateTool(defaultTools.vertex.id, variant);
-          // Settings triggers need the panel to stay mounted. Choice buttons
-          // close it through ToolControlMenu after this callback returns.
-          setToolMenuOpen(true);
         }}
       />
     </ToolControlMenu>
   );
 }
 
+const polygonVariants = [
+  "cutConnect",
+  "smooth",
+  "frame",
+] as const satisfies readonly VertexToolVariant[];
+
 type VertexToolbarProps = ToolbarProps & {
+  isLoading?: boolean;
   onVariantChange: (variant: VertexToolVariant) => void;
 };
 
-function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
+function VertexToolbar({
+  isLoading,
+  onVariantChange,
+  ...props
+}: VertexToolbarProps) {
+  const { getTool } = useEditorActions();
+  const activeToolId = useEditor((state) => state.activeToolId);
+  const isVertexActive = activeToolId === defaultTools.vertex.id;
   const vertexTool = useEditorToolState<VertexToolState>(
     defaultTools.vertex.id,
-  );
-  const autoGrassOptions = useEditor((state) => state.autoGrassOptions);
-  const { getActiveTool, getToolState, setAutoGrassOptions, setToolState } =
-    useEditorActions();
-  const autoGrassAllRef = useCallback(
-    (node: HTMLButtonElement | null) => {
-      if (
-        !node &&
-        getToolState<VertexToolState>("vertex")?.previewAutoGrassAll
-      ) {
-        setToolState<VertexToolState>("vertex", { previewAutoGrassAll: false });
-      }
-    },
-    [getToolState, setToolState],
   );
 
   return (
@@ -102,7 +108,10 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={!vertexTool?.variant || vertexTool.variant === "normal"}
+        isActive={
+          isVertexActive &&
+          (!vertexTool?.variant || vertexTool.variant === "normal")
+        }
         onClick={() => onVariantChange("normal")}
       >
         <VertexIcon {...getVertexIconProps("normal")} />
@@ -114,11 +123,39 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "grass"}
+        isActive={isVertexActive && vertexTool?.variant === "grass"}
         onClick={() => onVariantChange("grass")}
       >
         <VertexIcon {...getVertexIconProps("grass")} />
       </ToolControlButton>
+      <ToolControlButton
+        {...defaultTools.vertex}
+        name={defaultTools.vertex.variants?.autoGrass?.name}
+        shortcut={defaultTools.vertex.variants.autoGrass.shortcut}
+        tooltipSide="right"
+        size="sm"
+        showLabel
+        isActive={isVertexActive && vertexTool?.variant === "autoGrass"}
+        onClick={() => onVariantChange("autoGrass")}
+      >
+        <VertexIcon {...getVertexIconProps("autoGrass")} />
+      </ToolControlButton>
+      <ToolControlButton
+        name="AutoGrass level"
+        size="sm"
+        showLabel
+        disabled={isLoading}
+        onClick={() =>
+          getTool<VertexTool>(defaultTools.vertex.id)?.autoGrassAll()
+        }
+      >
+        <VertexIcon {...getVertexIconProps("autoGrass")} />
+      </ToolControlButton>
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        className="my-1 h-px self-stretch bg-separator"
+      />
       <ToolControlButton
         {...defaultTools.vertex}
         name="Pipe"
@@ -126,235 +163,76 @@ function VertexToolbar({ onVariantChange, ...props }: VertexToolbarProps) {
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "pipe"}
+        isActive={isVertexActive && vertexTool?.variant === "pipe"}
         onClick={() => onVariantChange("pipe")}
       >
         <VertexIcon {...getVertexIconProps("pipe")} />
       </ToolControlButton>
       <ToolControlButton
         {...defaultTools.vertex}
-        name="Frame"
-        shortcut={defaultTools.vertex.variants.frame.shortcut}
+        name="Draw"
+        shortcut={defaultTools.vertex.variants.draw.shortcut}
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "frame"}
-        onClick={() => onVariantChange("frame")}
+        isActive={isVertexActive && vertexTool?.variant === "draw"}
+        onClick={() => onVariantChange("draw")}
       >
-        <VertexIcon {...getVertexIconProps("frame")} />
+        <VertexIcon {...getVertexIconProps("draw")} />
       </ToolControlButton>
       <ToolControlButton
         {...defaultTools.vertex}
-        name={defaultTools.vertex.variants.cutConnect.name}
-        shortcut={defaultTools.vertex.variants.cutConnect.shortcut}
+        name="Brush"
+        shortcut={defaultTools.vertex.variants.brush.shortcut}
         tooltipSide="right"
         size="sm"
         showLabel
-        isActive={vertexTool?.variant === "cutConnect"}
-        onClick={() => onVariantChange("cutConnect")}
+        isActive={isVertexActive && vertexTool?.variant === "brush"}
+        onClick={() => onVariantChange("brush")}
       >
-        <VertexIcon {...getVertexIconProps("cutConnect")} />
+        <VertexIcon {...getVertexIconProps("brush")} />
       </ToolControlButton>
       <div
         role="separator"
         aria-orientation="horizontal"
         className="my-1 h-px self-stretch bg-separator"
       />
-      <div className="-my-0.5 flex items-center justify-between gap-3 pl-1">
-        <span className="text-[10px] font-medium text-secondary">
-          AutoGrass
-        </span>
-        <AutoGrassSettingsTrigger
-          options={autoGrassOptions}
-          onChange={setAutoGrassOptions}
-          onOpenSettings={() => onVariantChange("autoGrass")}
-        />
-      </div>
-      <ToolControlButton
-        {...defaultTools.vertex}
-        name={defaultTools.vertex.variants?.autoGrass?.name}
-        label="Polygon"
-        shortcut={undefined}
-        tooltipSide="right"
-        size="sm"
-        showLabel
-        isActive={vertexTool?.variant === "autoGrass"}
-        onClick={() => onVariantChange("autoGrass")}
-      >
-        <VertexIcon {...getVertexIconProps("autoGrass")} />
-      </ToolControlButton>
-      <ToolButton
-        ref={autoGrassAllRef}
-        name="Generate grass for all polygons"
-        label="All"
-        shortcut={AUTO_GRASS_ALL_SHORTCUT}
-        tooltipSide="right"
-        size="sm"
-        showLabel
-        onPointerEnter={() =>
-          setToolState<VertexToolState>("vertex", { previewAutoGrassAll: true })
-        }
-        onPointerLeave={() =>
-          setToolState<VertexToolState>("vertex", {
-            previewAutoGrassAll: false,
-          })
-        }
-        onPointerCancel={() =>
-          setToolState<VertexToolState>("vertex", {
-            previewAutoGrassAll: false,
-          })
-        }
-        onClick={() => {
-          const activeTool = getActiveTool<VertexTool>(defaultTools.vertex.id);
-          if (!activeTool) return;
-          activeTool.autoGrassAll();
-        }}
-      >
-        <VertexIcon {...getVertexIconProps("autoGrass")} badge="All" />
-      </ToolButton>
-    </Toolbar>
-  );
-}
-
-function AutoGrassSettingsTrigger({
-  options,
-  onChange,
-  onOpenSettings,
-}: {
-  options: AutoGrassOptions;
-  onChange: (options: Partial<AutoGrassOptions>) => void;
-  onOpenSettings: () => void;
-}) {
-  const isDefault =
-    options.depth === defaultAutoGrassOptions.depth &&
-    options.endInset === defaultAutoGrassOptions.endInset;
-
-  return (
-    <Popover>
-      <PopoverTrigger>
-        <ToolButton
-          name="AutoGrass settings"
+      {polygonVariants.map((variant) => (
+        <ToolControlButton
+          key={variant}
+          {...defaultTools.vertex}
+          name={defaultTools.vertex.variants[variant].name}
+          shortcut={defaultTools.vertex.variants[variant].shortcut}
           tooltipSide="right"
           size="sm"
-          iconSize="sm"
-          className="size-6 text-secondary"
-          onClick={onOpenSettings}
+          showLabel
+          isActive={
+            activeToolId === defaultTools.vertex.id &&
+            vertexTool?.variant === variant
+          }
+          onClick={() => onVariantChange(variant)}
         >
-          <GearIcon />
-        </ToolButton>
-      </PopoverTrigger>
-      <SettingsPopoverContent
-        title="AutoGrass"
-        closeLabel="Close AutoGrass settings"
-        resetLabel="Reset AutoGrass defaults"
-        isDefault={isDefault}
-        onReset={() => onChange(defaultAutoGrassOptions)}
-        onKeyDown={(event) => event.stopPropagation()}
-      >
-        <AutoGrassOptionsControl options={options} onChange={onChange} />
-      </SettingsPopoverContent>
-    </Popover>
-  );
-}
-
-function AutoGrassOptionsControl({
-  options,
-  onChange,
-}: {
-  options: AutoGrassOptions;
-  onChange: (options: Partial<AutoGrassOptions>) => void;
-}) {
-  return (
-    <SettingsPopoverFields>
-      <AutoGrassNumberSetting
-        label="Height"
-        value={worldToPixelValue(options.depth)}
-        min={1}
-        max={200}
-        onCommit={(depthPx) => onChange({ depth: pixelToWorldValue(depthPx) })}
+          <VertexIcon {...getVertexIconProps(variant)} />
+        </ToolControlButton>
+      ))}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        className="my-1 h-px self-stretch bg-separator"
       />
-      <AutoGrassNumberSetting
-        label="End inset"
-        value={worldToPixelValue(options.endInset)}
-        min={0}
-        max={200}
-        onCommit={(insetPx) =>
-          onChange({ endInset: pixelToWorldValue(insetPx) })
-        }
-      />
-    </SettingsPopoverFields>
+      {polygonOperations.map((operation) => (
+        <ToolControlButton
+          key={operation}
+          {...defaultTools[operation]}
+          tooltipSide="right"
+          size="sm"
+          showLabel
+        >
+          <PolygonOperationIcon operation={operation} />
+        </ToolControlButton>
+      ))}
+    </Toolbar>
   );
-}
-
-function AutoGrassNumberSetting({
-  label,
-  value,
-  min,
-  max,
-  onCommit,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onCommit: (value: number) => void;
-}) {
-  const [draft, setDraft] = useState({ value, text: String(value) });
-  if (draft.value !== value) {
-    setDraft({ value, text: String(value) });
-  }
-
-  const commitInput = (input: HTMLInputElement) => {
-    const parsed = input.valueAsNumber;
-    if (!Number.isFinite(parsed)) {
-      setDraft({ value, text: String(value) });
-      return;
-    }
-
-    const nextValue = Math.max(min, Math.min(max, Math.round(parsed)));
-    setDraft({ value: nextValue, text: String(nextValue) });
-    if (nextValue !== value) onCommit(nextValue);
-  };
-
-  return (
-    <label className="contents" onClick={(event) => event.stopPropagation()}>
-      <span className="text-xs font-bold text-secondary">{label}</span>
-      <Input
-        size="sm"
-        aria-label={`AutoGrass ${label.toLowerCase()}`}
-        className="w-12 justify-self-end text-center"
-        value={draft.text}
-        inputMode="numeric"
-        type="number"
-        min={min}
-        max={max}
-        step={1}
-        onClick={(event) => event.stopPropagation()}
-        onChange={(event) => {
-          event.stopPropagation();
-          const input = event.currentTarget;
-          const parsed = input.valueAsNumber;
-          const isValid =
-            Number.isInteger(parsed) && parsed >= min && parsed <= max;
-          setDraft({ value: isValid ? parsed : value, text: input.value });
-          if (isValid && parsed !== value) onCommit(parsed);
-        }}
-        onBlur={(event) => commitInput(event.currentTarget)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          event.currentTarget.blur();
-        }}
-      />
-    </label>
-  );
-}
-
-function worldToPixelValue(value: number) {
-  return Math.round(value * ELMA_PIXELS_PER_WORLD_UNIT);
-}
-
-function pixelToWorldValue(value: number) {
-  return value / ELMA_PIXELS_PER_WORLD_UNIT;
 }
 
 type PolygonToolbarProps = ToolbarProps & {
@@ -405,6 +283,8 @@ type VertexIconProps = React.ComponentPropsWithoutRef<"svg"> & {
   badge?: string;
   corridor?: boolean | "narrow";
   frame?: boolean;
+  freehand?: boolean;
+  smooth?: boolean;
 };
 
 export function VertexIcon({
@@ -417,6 +297,8 @@ export function VertexIcon({
   badge,
   corridor,
   frame,
+  freehand,
+  smooth,
   ...props
 }: VertexIconProps) {
   const frameClipId = useId();
@@ -435,7 +317,17 @@ export function VertexIcon({
         </clipPath>
       </defs>
 
-      {frame ? (
+      {smooth ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={sky} />
+          <path
+            d="M-1 25C10 25 10 16 12 12S14-1 25-1V25Z"
+            fill={ground}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+        </g>
+      ) : frame ? (
         <g clipPath={`url(#${frameClipId})`}>
           <rect width="24" height="24" fill={sky} />
           <path
@@ -444,6 +336,26 @@ export function VertexIcon({
             fillRule="evenodd"
             stroke={boundsColor}
             strokeWidth="1"
+          />
+        </g>
+      ) : freehand && corridor ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={ground} />
+          <path
+            d="M-3 18C4 18 3 5 10 5S16 17 27 4L27 13C16 26 11 12 10 12S9 25-3 25Z"
+            fill={sky}
+            stroke={boundsColor}
+            strokeWidth="1.5"
+          />
+        </g>
+      ) : freehand ? (
+        <g clipPath={`url(#${frameClipId})`}>
+          <rect width="24" height="24" fill={sky} />
+          <path
+            d="M0 20L4 16L6 9L10 7L13 12L17 10L24 17V25H-1Z"
+            fill={ground}
+            stroke={boundsColor}
+            strokeWidth="1.5"
           />
         </g>
       ) : corridor ? (
@@ -527,12 +439,15 @@ export function getVertexIconProps(
   if (variant === "cutConnect") {
     return {
       corridor: "narrow",
-      badge: "C",
       sky: colors.ground,
       ground: colors.sky,
     };
   }
   if (variant === "frame") return { frame: true };
+  if (variant === "smooth") return { smooth: true };
+  if (variant === "brush") return { corridor: true, freehand: true };
+
+  if (variant === "draw") return { freehand: true };
 
   if (variant === "pipe") {
     return { corridor: true };

@@ -1,11 +1,35 @@
+import { TextureFillTool } from "../tools/texture-fill-tool";
+import { SceneryFillTool } from "../tools/scenery-fill-tool";
+import type { PictureToolState } from "../tools/picture-tool";
+import {
+  MAX_PICTURE_DISTANCE,
+  MIN_PICTURE_DISTANCE,
+  PICTURE_DISTANCE_STEP,
+  nextPictureClip,
+  normalizeDistance,
+  pictureClipOptions,
+} from "~/editor/helpers/picture-properties";
+import { ShapeToolInfo } from "./shape-tool-control";
+import {
+  isPolygonBooleanTool,
+  type PolygonBooleanTool,
+} from "../tools/polygon-boolean-tool";
 import {
   useEditor,
   useEditorActions,
   useEditorToolState,
   useEditorRegisteredTools,
 } from "~/editor/use-editor-store";
-import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
 import {
+  defaultTools,
+  materialToolIds,
+} from "~/editor/edit-mode/tools/default-tools";
+import {
+  getPipeToolSettings,
+  getDrawEdgeLength,
+  DEFAULT_DRAW_EDGE_LENGTH_PX,
+  MIN_DRAW_EDGE_LENGTH_PX,
+  MAX_DRAW_EDGE_LENGTH_PX,
   canToggleVertexToolDirection,
   getToggledVertexToolState,
   VertexTool,
@@ -21,7 +45,11 @@ import {
   CanvasTipKey,
   CanvasTipKeyButton,
 } from "./canvas-tip";
-import type { SelectToolState } from "~/editor/edit-mode/tools/select-tool";
+import { TransformMeasurements } from "./transform-measurements";
+import type {
+  SelectTool,
+  SelectToolState,
+} from "~/editor/edit-mode/tools/select-tool";
 import { useModifier } from "~/utils/misc";
 import {
   DEFAULT_CUT_CONNECT_WIDTH_PX,
@@ -46,29 +74,82 @@ import {
   MIN_FRAME_WIDTH_PX,
   MAX_FRAME_WIDTH_PX,
 } from "~/editor/helpers/frame";
+import {
+  DEFAULT_SMOOTH_AMOUNT,
+  MIN_SMOOTH_AMOUNT,
+  MAX_SMOOTH_AMOUNT,
+  DEFAULT_SMOOTH_VERTEX_OFFSET,
+  MIN_SMOOTH_VERTEX_OFFSET,
+  MAX_SMOOTH_VERTEX_OFFSET,
+} from "~/editor/helpers/smooth";
 
 export function ToolInfo() {
+  const polygonStatus = useEditor((state) => {
+    if (!isPolygonBooleanTool(state.activeToolId)) return null;
+    const interaction = state.actions
+      .getActiveTool<PolygonBooleanTool>()
+      ?.getInteraction();
+    const result = interaction?.result;
+    if (result?.status === "invalid") return "Cannot process these polygons";
+    if (result?.status === "no-overlap") return "Polygons must overlap";
+    if (result?.status === "ready" && result.polygons.length === 0) {
+      return "Result removes both polygons";
+    }
+    if (result?.status === "ready" && result.touchingVertices) {
+      return "Result has touching vertices";
+    }
+    return null;
+  });
   const modifier = useModifier();
   const activeToolId = useEditor((state) => state.activeToolId);
   const hasPictures = useEditor((state) => state.pictures.length > 0);
   const registeredTools = useEditorRegisteredTools();
+  const placement = useEditorToolState<PictureToolState>(activeToolId);
+  const { activateTool } = useEditorActions();
+  const nextObjectId =
+    activeToolId === "apple"
+      ? "killer"
+      : activeToolId === "killer"
+        ? "flower"
+        : "apple";
+  const objectTip = (
+    <CanvasTipSegment>
+      Next object
+      <CanvasTipKeyButton
+        aria-label="Next object"
+        title="Next object (Space)"
+        onClick={() => activateTool(nextObjectId)}
+      >
+        space
+      </CanvasTipKeyButton>
+    </CanvasTipSegment>
+  );
   const vertex = useEditorToolState<VertexToolState>("vertex");
   const select = useEditorToolState<SelectToolState>("select");
+  useEditor((state) => state.mousePosition);
+  useEditor((state) => state.mouseOnCanvas);
+  useEditor((state) => state.polygons);
   const options = useEditor((state) => state.autoGrassOptions);
   const { getActiveTool, setToolState } = useEditorActions();
   const activeTool = (
     registeredTools.length ? registeredTools : Object.values(defaultTools)
   ).find((tool) => tool.id === activeToolId);
-  const toolName =
-    activeTool?.name ??
-    (activeToolId === "ai-chat" ? "AI Assistant" : activeToolId);
+  const toolName = activeTool?.name ?? activeToolId;
+
+  if (activeToolId === "select" && select?.transformMode && select.skewMode) {
+    return (
+      <CanvasTipGroup
+        title={`${toolName} · Skew`}
+        aria-label="Active tool info"
+      />
+    );
+  }
+
+  if (activeToolId === "shape") return <ShapeToolInfo />;
 
   if (activeToolId === "select" && select?.transformMode) {
     return (
-      <CanvasTipGroup
-        title={`${toolName} · Resize & Rotate`}
-        aria-label="Active tool info"
-      >
+      <CanvasTipGroup title="Resize & Rotate" aria-label="Active tool info">
         <CanvasTipSegment>
           Resize proportionally
           <CanvasTipKey>{modifier}</CanvasTipKey>
@@ -77,6 +158,7 @@ export function ToolInfo() {
           Rotate in 45° steps
           <CanvasTipKey>{modifier}</CanvasTipKey>
         </CanvasTipSegment>
+        <TransformMeasurements tool={getActiveTool<SelectTool>()} />
       </CanvasTipGroup>
     );
   }
@@ -100,13 +182,91 @@ export function ToolInfo() {
     );
   }
 
-  if (["picture", "texture", "color"].includes(activeToolId)) {
+  if (activeToolId === "apple") {
+    return (
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        {objectTip}
+        <CanvasTipSegment>
+          Animation
+          <CanvasTipKey>1</CanvasTipKey>
+          <CanvasTipKey>2</CanvasTipKey>
+        </CanvasTipSegment>
+        <CanvasTipSegment>
+          Gravity
+          <CanvasTipKey>N</CanvasTipKey>
+          <CanvasTipKey>Shift + arrows</CanvasTipKey>
+        </CanvasTipSegment>
+      </CanvasTipGroup>
+    );
+  }
+
+  if (["killer", "flower"].includes(activeToolId)) {
+    return (
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        {objectTip}
+      </CanvasTipGroup>
+    );
+  }
+
+  if (materialToolIds.includes(activeToolId) && placement) {
+    const fillError =
+      activeToolId === "textureFill"
+        ? getActiveTool<TextureFillTool>()?.getFillPreview()?.error
+        : activeToolId === "pictureFill" || activeToolId === "colorFill"
+          ? getActiveTool<SceneryFillTool>()?.getFillPreview()?.error
+          : undefined;
     return (
       <CanvasTipGroup title={toolName} aria-label="Active tool info">
         <CanvasTipSegment>
-          Properties
-          <CanvasTipKey>Right click</CanvasTipKey>
+          Clip:{" "}
+          {
+            pictureClipOptions.find((option) => option.value === placement.clip)
+              ?.label
+          }
+          <CanvasTipKeyButton
+            aria-label="Change clipping"
+            title="Change clipping (Space)"
+            onClick={() =>
+              setToolState(activeToolId, {
+                clip: nextPictureClip(placement.clip),
+              })
+            }
+          >
+            space
+          </CanvasTipKeyButton>
         </CanvasTipSegment>
+        <CanvasTipNumberControl
+          label="Distance"
+          accessibleLabel="distance"
+          value={placement.distance}
+          min={MIN_PICTURE_DISTANCE}
+          max={MAX_PICTURE_DISTANCE}
+          onAdjust={(delta) =>
+            setToolState(activeToolId, {
+              distance: normalizeDistance(
+                placement.distance + delta * PICTURE_DISTANCE_STEP,
+              ),
+            })
+          }
+        />
+        {fillError && <CanvasTipSegment>{fillError}</CanvasTipSegment>}
+      </CanvasTipGroup>
+    );
+  }
+
+  if (isPolygonBooleanTool(activeToolId)) {
+    return (
+      <CanvasTipGroup title={toolName} aria-label="Active tool info">
+        <CanvasTipSegment>
+          {activeToolId === "subtract"
+            ? "Remove the second polygon from the first"
+            : activeToolId === "union"
+              ? "Combine both polygon areas"
+              : activeToolId === "exclude"
+                ? "Keep the non-overlapping areas"
+                : "Keep only the overlapping area"}
+        </CanvasTipSegment>
+        {polygonStatus && <CanvasTipSegment>{polygonStatus}</CanvasTipSegment>}
       </CanvasTipGroup>
     );
   }
@@ -150,9 +310,13 @@ export function ToolInfo() {
 
   const isAutoGrass =
     vertex?.variant === "autoGrass" || vertex?.previewAutoGrassAll;
-  const isPipe = vertex?.variant === "pipe" && !isAutoGrass;
-  const pipeWidth = vertex?.pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
-  const pipeAppleMode = vertex?.pipeAppleMode ?? "none";
+  const isDraw = vertex?.variant === "draw" && !isAutoGrass;
+  const isBrush = vertex?.variant === "brush" && !isAutoGrass;
+  const isPipe = (vertex?.variant === "pipe" || isBrush) && !isAutoGrass;
+  const pipeName = isBrush ? "Brush" : "Pipe";
+  const pipeWidth =
+    getPipeToolSettings(vertex).pipeWidthPx ?? DEFAULT_PIPE_WIDTH_PX;
+  const pipeAppleMode = getPipeToolSettings(vertex).pipeAppleMode ?? "none";
   const canChangeDirection = canToggleVertexToolDirection(vertex);
   if (vertex?.variant === "cutConnect" && !isAutoGrass) {
     return (
@@ -181,10 +345,69 @@ export function ToolInfo() {
     );
   }
 
+  if (isDraw) {
+    return (
+      <CanvasTipGroup title="Draw" aria-label="Active tool info">
+        <CanvasTipNumberControl
+          label="Edge length"
+          accessibleLabel="draw edge length"
+          value={getDrawEdgeLength(vertex) ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+          min={MIN_DRAW_EDGE_LENGTH_PX}
+          max={MAX_DRAW_EDGE_LENGTH_PX}
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
+          }
+        />
+      </CanvasTipGroup>
+    );
+  }
+
+  if (vertex?.variant === "smooth" && !isAutoGrass) {
+    const amount = vertex.smoothAmount ?? DEFAULT_SMOOTH_AMOUNT;
+    const vertexOffset =
+      vertex.smoothVertexOffset ?? DEFAULT_SMOOTH_VERTEX_OFFSET;
+    const preview = getActiveTool<VertexTool>()?.getSmoothPreview();
+    const amountLabel =
+      amount > 0 ? "Round corners" : amount < 0 ? "Simplify" : "No change";
+    return (
+      <CanvasTipGroup title="Smooth" aria-label="Active tool info">
+        <CanvasTipNumberControl
+          label={amountLabel}
+          accessibleLabel={`${amountLabel.toLowerCase()} level`}
+          value={amount}
+          min={MIN_SMOOTH_AMOUNT}
+          max={MAX_SMOOTH_AMOUNT}
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustSmoothAmount(delta)
+          }
+        />
+        <CanvasTipNumberControl
+          label="Offset"
+          accessibleLabel="smooth vertex offset percentage"
+          value={vertexOffset}
+          min={MIN_SMOOTH_VERTEX_OFFSET}
+          max={MAX_SMOOTH_VERTEX_OFFSET}
+          decreaseKey="["
+          increaseKey="]"
+          increaseShortcut="]"
+          onAdjust={(delta) =>
+            getActiveTool<VertexTool>()?.adjustSmoothVertexOffset(delta)
+          }
+        />
+        {preview && (
+          <CanvasTipSegment>
+            {preview.source.vertices.length} → {preview.polygon.vertices.length}{" "}
+            vertices
+          </CanvasTipSegment>
+        )}
+      </CanvasTipGroup>
+    );
+  }
+
   if (isPipe) {
     return (
       <CanvasTipSections aria-label="Active tool info">
-        <CanvasTipGroup title="Pipe" aria-label="Pipe width">
+        <CanvasTipGroup title={pipeName} aria-label={`${pipeName} width`}>
           <CanvasTipNumberControl
             label="Width"
             accessibleLabel="pipe width"
@@ -196,7 +419,24 @@ export function ToolInfo() {
             }
           />
         </CanvasTipGroup>
-        <CanvasTipSection aria-label="Pipe apples">
+        {isBrush && (
+          <CanvasTipSection aria-label="Brush drawing">
+            <CanvasTipNumberControl
+              label="Edge length"
+              accessibleLabel="brush edge length"
+              value={getDrawEdgeLength(vertex) ?? DEFAULT_DRAW_EDGE_LENGTH_PX}
+              min={MIN_DRAW_EDGE_LENGTH_PX}
+              max={MAX_DRAW_EDGE_LENGTH_PX}
+              decreaseKey=","
+              increaseKey="."
+              increaseShortcut="."
+              onAdjust={(delta) =>
+                getActiveTool<VertexTool>()?.adjustDrawEdgeLength(delta)
+              }
+            />
+          </CanvasTipSection>
+        )}
+        <CanvasTipSection aria-label={`${pipeName} apples`}>
           <CanvasTipSegment>
             <span className="mr-1">Mode</span>
             <CanvasTipKeyButton
@@ -217,8 +457,10 @@ export function ToolInfo() {
               }
               value={
                 pipeAppleMode === "distance"
-                  ? (vertex?.pipeAppleDistance ?? DEFAULT_PIPE_APPLE_DISTANCE)
-                  : (vertex?.pipeAppleCount ?? DEFAULT_PIPE_APPLE_COUNT)
+                  ? (getPipeToolSettings(vertex).pipeAppleDistance ??
+                    DEFAULT_PIPE_APPLE_DISTANCE)
+                  : (getPipeToolSettings(vertex).pipeAppleCount ??
+                    DEFAULT_PIPE_APPLE_COUNT)
               }
               min={pipeAppleMode === "distance" ? PIPE_APPLE_DISTANCE_STEP : 0}
               max={

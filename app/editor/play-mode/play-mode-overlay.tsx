@@ -1,7 +1,10 @@
+import { activeTestStart } from "~/editor/test-starts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@mantine/hooks";
 import {
   ArrowsClockwiseIcon,
+  RewindIcon,
+  PushPinIcon,
   ArrowDownIcon,
   ArrowBendUpLeftIcon,
   ArrowBendUpRightIcon,
@@ -22,6 +25,7 @@ import { PlaySettingsDialog } from "~/editor/edit-mode/edit-settings";
 import { Button } from "~/components/ui/button";
 import {
   useEditorActions,
+  useEditor,
   useEditorStore,
   usePlaySettings,
 } from "~/editor/use-editor-store";
@@ -30,6 +34,7 @@ import {
   PLAY_MODE_MAX_ZOOM,
   PLAY_MODE_MIN_ZOOM,
   type PlayRunEndBehavior,
+  type PlaySettings,
 } from "~/editor/play-mode/play-settings";
 import { elmaLevelFromEditorState } from "~/editor/helpers/level-parser";
 import { convertLevelToGameData } from "~/editor/play-mode/level-converter";
@@ -40,13 +45,17 @@ import {
   getTimeCentiseconds,
   type GameState,
 } from "~/editor/play-mode/engine/game/game-loop";
+import { Vec2 } from "~/editor/play-mode/engine/core/vec2";
+import { correctVertexPrecision } from "~/editor/helpers/polygon-helpers";
+import { RideHistory } from "~/editor/play-mode/engine/game/ride-history";
+import { formatShortcutCode } from "~/editor/edit-mode/toolbars/keyboard-shortcuts";
 import type { LevelData } from "~/editor/play-mode/engine/level";
 import {
   DEFAULT_KEYS,
   InputManager,
 } from "~/editor/play-mode/engine/input-manager";
-import { createPlayModeRenderer } from "~/editor/play-mode/scene/renderer";
-import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
+import { PlayModeSceneRenderer } from "~/editor/play-mode/scene/play-mode-scene-renderer";
+import { WebGLInitializationError } from "~/editor/render/webgl-render-context";
 import { ToolButton } from "~/components/tool-button";
 
 const PLAY_MODE_WHEEL_ZOOM_STEP = 420;
@@ -112,11 +121,7 @@ function getActiveMobileControlState(
   };
 }
 
-export function PlayModeOverlay({
-  rendererBackend = "webgl",
-}: {
-  rendererBackend?: WorldSceneRendererBackend;
-}) {
+export function PlayModeOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeMobilePointersRef = useRef<Map<number, PlayModeMobileControlId>>(
@@ -129,6 +134,7 @@ export function PlayModeOverlay({
   } | null>(null);
   const store = useEditorStore();
   const { lgr } = useLgrAssets();
+  const playModeZoom = useEditor((state) => state.playModeZoom);
   const playSettings = usePlaySettings();
   const gameStateRef = useRef<GameState | null>(null);
   const inputRef = useRef<InputManager | null>(null);
@@ -137,7 +143,15 @@ export function PlayModeOverlay({
     playSettings.runEndBehavior,
   );
   const restartRequestedRef = useRef(false);
-  const playTimeTextRef = useRef<HTMLDivElement>(null);
+  const captureRequestedRef = useRef(false);
+  const rewindPointerRef = useRef(false);
+  const settingsOpenRef = useRef(false);
+  const [rewindState, setRewindState] = useState({
+    available: false,
+    active: false,
+  });
+  const playTimeTextRef = useRef<HTMLSpanElement>(null);
+  const fpsTextRef = useRef<HTMLSpanElement>(null);
   const lastPlayTimeRef = useRef("00:00,00");
   const { setPlayModeZoom, stopPlayMode } = useEditorActions();
   const [playSettingsOpen, setPlaySettingsOpen] = useState(false);
@@ -278,6 +292,9 @@ export function PlayModeOverlay({
       if (nextOpen) {
         releaseMobileControls();
       }
+      captureRequestedRef.current = false;
+      settingsOpenRef.current = nextOpen;
+      rewindPointerRef.current = false;
       setPlaySettingsOpen(nextOpen);
     },
     [releaseMobileControls],
@@ -369,6 +386,19 @@ export function PlayModeOverlay({
   );
 
   useEffect(
+    function applyStoredPlayModeZoom() {
+      const gameState = gameStateRef.current;
+      if (!gameState) return;
+      gameState.camera.zoom = clamp(
+        playModeZoom,
+        PLAY_MODE_MIN_ZOOM,
+        PLAY_MODE_MAX_ZOOM,
+      );
+    },
+    [playModeZoom],
+  );
+
+  useEffect(
     function setupPlayModeOverlay() {
       const canvas = canvasRef.current;
       const container = containerRef.current;
@@ -377,11 +407,24 @@ export function PlayModeOverlay({
       let levelData: LevelData;
       try {
         levelData = convertLevelToGameData(
-          elmaLevelFromEditorState(store.getState()),
+          elmaLevelFromEditorState({
+            ...store.getState(),
+            start: activeTestStart(store.getState()).position,
+          }),
         );
       } catch (error) {
         console.error("Failed to start play mode:", error);
         stopPlayMode();
+        return;
+      }
+
+      let renderer: PlayModeSceneRenderer;
+      try {
+        renderer = new PlayModeSceneRenderer(canvas, lgr);
+      } catch (error) {
+        if (!(error instanceof WebGLInitializationError)) throw error;
+        stopPlayMode();
+        alert(error.message);
         return;
       }
 
@@ -390,14 +433,13 @@ export function PlayModeOverlay({
         store.getState().playModeSeedKeys,
       );
       inputRef.current = input;
-      const renderer = createPlayModeRenderer({
-        canvas,
-        lgrAssets: lgr,
-        backend: rendererBackend,
-      });
       const keyBindings = keyBindingsRef.current;
 
       let gameState: GameState = createGame(levelData, input, keyBindings);
+      let history = new RideHistory(
+        gameState,
+        activeTestStart(store.getState()).ride,
+      );
       gameStateRef.current = gameState;
       gameState.lastTimestamp = performance.now();
       gameState.camera.zoom = clamp(
@@ -408,8 +450,10 @@ export function PlayModeOverlay({
       syncStoredZoom(gameState.camera.zoom);
       updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
 
+      let redraw = true;
       const resize = () => {
         renderer.resize();
+        redraw = true;
       };
 
       const observer = new ResizeObserver(() => resize());
@@ -438,12 +482,29 @@ export function PlayModeOverlay({
       canvas.addEventListener("wheel", handleWheel, { passive: false });
 
       const resetGame = () => {
+        const currentZoom = gameState.camera.zoom;
+        const active = activeTestStart(store.getState());
+        // The active start can change during this play session after a capture.
+        const start = correctVertexPrecision(active.position);
+        levelData = {
+          ...levelData,
+          objects: levelData.objects.map((object) =>
+            object.type === "start"
+              ? {
+                  ...object,
+                  r: new Vec2(start.x, start.y),
+                }
+              : object,
+          ),
+        };
         gameState = createGame(levelData, input, keyBindingsRef.current);
+        history = new RideHistory(gameState, active.ride);
         gameStateRef.current = gameState;
-        input.seedJustPressedKey(keyBindingsRef.current.turn);
+        input.update();
+        if (!active.ride) input.seedJustPressedKey(keyBindingsRef.current.turn);
         gameState.lastTimestamp = performance.now();
         gameState.camera.zoom = clamp(
-          store.getState().playModeZoom || DEFAULT_PLAY_MODE_ZOOM,
+          currentZoom,
           PLAY_MODE_MIN_ZOOM,
           PLAY_MODE_MAX_ZOOM,
         );
@@ -467,18 +528,141 @@ export function PlayModeOverlay({
       };
 
       let animationFrame = 0;
+      let lastFrameTimestamp = performance.now();
+      const releaseRewind = () => {
+        rewindPointerRef.current = false;
+      };
+      window.addEventListener("blur", releaseRewind);
+      let lastRenderedSettings: PlaySettings | undefined;
+      let lastRenderedZoom = gameState.camera.zoom;
+      let nextRenderTime = 0;
+      let fpsSampleStart: number | undefined;
+      let framesDrawn = 0;
+
+      const resetFpsSample = () => {
+        fpsSampleStart = undefined;
+        framesDrawn = 0;
+        if (fpsTextRef.current) fpsTextRef.current.textContent = "";
+      };
+
+      const render = (timestamp: number, paused: boolean) => {
+        const { start, testStarts, playSettings } = store.getState();
+        const viewChanged =
+          redraw ||
+          playSettings !== lastRenderedSettings ||
+          (paused && gameState.camera.zoom !== lastRenderedZoom);
+
+        if (paused && !viewChanged) return;
+
+        if (viewChanged) nextRenderTime = timestamp;
+        const interval = playSettings.limitFps
+          ? 1000 / playSettings.fpsLimit
+          : 0;
+
+        // Keep input and simulation on every animation callback. Carry the
+        // render deadline forward so limits between refresh rates average out.
+        if (timestamp + 0.5 < nextRenderTime) return;
+        nextRenderTime = interval
+          ? nextRenderTime +
+            Math.max(
+              1,
+              Math.floor((timestamp - nextRenderTime) / interval) + 1,
+            ) *
+              interval
+          : timestamp;
+
+        if (
+          playSettings.showFps !== lastRenderedSettings?.showFps ||
+          playSettings.limitFps !== lastRenderedSettings?.limitFps ||
+          playSettings.fpsLimit !== lastRenderedSettings?.fpsLimit
+        ) {
+          resetFpsSample();
+        }
+        renderer.render(gameState, playSettings, { start, testStarts });
+        lastRenderedSettings = playSettings;
+        lastRenderedZoom = gameState.camera.zoom;
+        redraw = false;
+
+        const fpsText = fpsTextRef.current;
+        if (!paused && fpsText) {
+          fpsSampleStart ??= timestamp;
+          const elapsed = timestamp - fpsSampleStart;
+          if (elapsed >= 500) {
+            fpsText.textContent =
+              Math.round((framesDrawn * 1000) / elapsed) + " FPS";
+            fpsSampleStart = timestamp;
+            framesDrawn = 0;
+          }
+          framesDrawn++;
+        }
+      };
+
       const loop = (timestamp: number) => {
+        const wallSeconds = Math.min(
+          Math.max(0, (timestamp - lastFrameTimestamp) / 1000),
+          0.1,
+        );
+        lastFrameTimestamp = timestamp;
+        if (settingsOpenRef.current || document.hidden) {
+          if (!document.hidden) render(timestamp, true);
+          resetFpsSample();
+          gameState.lastTimestamp = timestamp;
+          rewindPointerRef.current = false;
+          input.update();
+          animationFrame = requestAnimationFrame(loop);
+          return;
+        }
+        if (input.isDown(keyBindingsRef.current.escape)) {
+          stopPlayMode();
+          return;
+        }
         if (restartRequestedRef.current || input.wasJustPressed("Enter")) {
           resetGame();
         }
 
-        gameFrame(gameState, timestamp);
-        if (
-          (gameState.result === "dead" || gameState.result === "won") &&
-          handleRunEnd()
-        ) {
-          return;
+        const bindings = store.getState().playSettings.keyBindings;
+        const rewindHeld =
+          rewindPointerRef.current || input.isDown(bindings.rewind);
+        if (rewindHeld && (history.canRewind || history.rewinding)) {
+          gameFrame(gameState, timestamp, false);
+          history.rewind(gameState, wallSeconds);
+        } else if (history.rewinding) {
+          // Restore the precise physics state behind the visual preview. The
+          // release frame does not also advance physics or consume a turn.
+          history.resume(gameState, timestamp);
+        } else {
+          const previousResult = gameState.result;
+          gameFrame(gameState, timestamp);
+          history.record(gameState);
+          // Only new terminal transitions trigger auto restart/exit. A captured
+          // dead start must stay frozen so its saved approach can be rewound.
+          if (
+            previousResult === "playing" &&
+            (gameState.result === "dead" || gameState.result === "won") &&
+            handleRunEnd()
+          )
+            return;
         }
+        if (
+          captureRequestedRef.current ||
+          input.wasJustPressed(bindings.captureStart)
+        ) {
+          const moment = history.captureStart();
+          const wheel = moment.snapshot.motor.leftWheel.r;
+          store
+            .getState()
+            .actions.addTestStart({ x: wheel.x, y: -wheel.y }, moment, {
+              select: true,
+            });
+          captureRequestedRef.current = false;
+        }
+        setRewindState((previous) => {
+          const available = history.canRewind || history.rewinding;
+          const active = history.rewinding;
+          return previous.available === available && previous.active === active
+            ? previous
+            : { available, active };
+        });
         syncStoredZoom(gameState.camera.zoom);
         setActiveMobileControls((currentState) => {
           const nextState = getActiveMobileControlState(
@@ -493,12 +677,7 @@ export function PlayModeOverlay({
           return currentState;
         });
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
-        renderer.render(gameState, {
-          visibility: {
-            ...store.getState().levelVisibility,
-            showGrassBounds: false,
-          },
-        });
+        render(timestamp, false);
 
         if (gameState.result === "escaped") {
           stopPlayMode();
@@ -513,8 +692,12 @@ export function PlayModeOverlay({
 
       return () => {
         cancelAnimationFrame(animationFrame);
+        window.removeEventListener("blur", releaseRewind);
+        rewindPointerRef.current = false;
+        captureRequestedRef.current = false;
         canvas.removeEventListener("wheel", handleWheel);
         observer.disconnect();
+        renderer.destroy();
         releaseMobileControls();
         lastCanvasTapRef.current = null;
         restartRequestedRef.current = false;
@@ -523,15 +706,7 @@ export function PlayModeOverlay({
         input.destroy();
       };
     },
-    [
-      lgr,
-      releaseMobileControls,
-      rendererBackend,
-      setPlayModeZoom,
-      store,
-      stopPlayMode,
-      syncStoredZoom,
-    ],
+    [lgr, releaseMobileControls, store, stopPlayMode, syncStoredZoom],
   );
 
   return (
@@ -539,14 +714,8 @@ export function PlayModeOverlay({
       ref={containerRef}
       className="absolute inset-0 z-20 bg-black/60 backdrop-blur-[1px] select-none"
     >
-      <div className="pointer-events-none absolute top-4 right-4 z-10 flex items-center gap-4">
-        <div
-          ref={playTimeTextRef}
-          className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
-        >
-          {lastPlayTimeRef.current}
-        </div>
-        <Toolbar className="pointer-events-auto gap-2">
+      <div className="pointer-events-none absolute top-4 right-4 left-4 z-10 flex flex-col items-end gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <Toolbar className="pointer-events-auto gap-2 sm:order-last">
           <ToolButton
             name="Play settings"
             onClick={() => handlePlaySettingsOpenChange(true)}
@@ -554,7 +723,65 @@ export function PlayModeOverlay({
             <GearIcon weight="fill" />
           </ToolButton>
           <ToolbarSeparator />
-          <ToolButton name="Restart run" onClick={restartPlayMode}>
+          <ToolButton
+            name="Rewind (hold)"
+            shortcut={formatShortcutCode(playSettings.keyBindings.rewind)}
+            disabled={!rewindState.available || playSettingsOpen}
+            aria-pressed={rewindState.active}
+            className={cn(
+              "touch-none",
+              rewindState.active && "bg-primary-active",
+            )}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              rewindPointerRef.current = true;
+            }}
+            onPointerUp={() => {
+              rewindPointerRef.current = false;
+            }}
+            onPointerCancel={() => {
+              rewindPointerRef.current = false;
+            }}
+            onLostPointerCapture={() => {
+              rewindPointerRef.current = false;
+            }}
+            onKeyDown={(event) => {
+              if (event.key === " " || event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                rewindPointerRef.current = true;
+              }
+            }}
+            onKeyUp={(event) => {
+              if (event.key === " " || event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
+                rewindPointerRef.current = false;
+              }
+            }}
+            onBlur={() => {
+              rewindPointerRef.current = false;
+            }}
+          >
+            <RewindIcon weight="fill" />
+          </ToolButton>
+          <ToolButton
+            name="Capture test start"
+            shortcut={formatShortcutCode(playSettings.keyBindings.captureStart)}
+            disabled={playSettingsOpen}
+            onClick={() => {
+              captureRequestedRef.current = true;
+            }}
+          >
+            <PushPinIcon weight="fill" />
+          </ToolButton>
+          <ToolButton
+            name="Restart run"
+            shortcut="Enter"
+            onClick={restartPlayMode}
+          >
             <ArrowsClockwiseIcon weight="fill" />
           </ToolButton>
           <ToolButton
@@ -565,6 +792,20 @@ export function PlayModeOverlay({
             <StopIcon weight="fill" />
           </ToolButton>
         </Toolbar>
+        <div className="flex items-baseline gap-3 whitespace-nowrap">
+          {playSettings.showFps ? (
+            <span
+              ref={fpsTextRef}
+              className="font-mono text-sm text-primary tabular-nums"
+            />
+          ) : null}
+          <span
+            ref={playTimeTextRef}
+            className="text-right font-mono text-2xl font-bold text-primary tabular-nums"
+          >
+            {lastPlayTimeRef.current}
+          </span>
+        </div>
       </div>
       <div className="pointer-events-none absolute right-4 bottom-4 z-10 flex items-center gap-2">
         <Toolbar className="pointer-events-auto w-fit gap-2">

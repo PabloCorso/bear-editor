@@ -203,3 +203,34 @@ export function focusPositionsInView({
   );
   setZoom(newZoom);
 }
+
+export function getDevicePixelSnappedViewportCenter({
+  centerX,
+  centerY,
+  width,
+  height,
+  zoom,
+  devicePixelRatio,
+}: {
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+  zoom: number;
+  devicePixelRatio: number;
+}) {
+  const unitsPerDevicePixel = 1 / Math.max(zoom * devicePixelRatio, 0.0001);
+  const halfWidth = width / (2 * zoom);
+  const halfHeight = height / (2 * zoom);
+  const minX = snapToGrid(centerX - halfWidth, unitsPerDevicePixel);
+  const minY = snapToGrid(centerY - halfHeight, unitsPerDevicePixel);
+
+  return {
+    x: minX + halfWidth,
+    y: minY + halfHeight,
+  };
+}
+
+function snapToGrid(value: number, gridSize: number) {
+  return Math.round(value / gridSize) * gridSize;
+}

@@ -1,6 +1,7 @@
+import { CanvasOptionsMenu } from "./canvas-options-menu";
+import type { ShapeToolState } from "../tools/shape-tool";
 import {
   useEditor,
-  useEditorActions,
   useEditorCanRedo,
   useEditorCanUndo,
   useEditorHistory,
@@ -10,7 +11,6 @@ import { Toolbar, type ToolbarProps } from "~/components/ui/toolbar";
 import {
   ArrowArcLeftIcon,
   ArrowArcRightIcon,
-  CornersOutIcon,
   ChatsCircleIcon,
   ClockCounterClockwiseIcon,
   ArrowUpRightIcon,
@@ -45,16 +45,20 @@ export function CanvasToolbar({
   engineRef,
   ...props
 }: CanvasToolbarProps) {
-  const { triggerFitToView } = useEditorActions();
   const activeToolId = useEditor((state) => state.activeToolId);
   const vertex = useEditorToolState<VertexToolState>("vertex");
+  const shape = useEditorToolState<ShapeToolState>("shape");
   const usesSizeShortcuts =
-    activeToolId === "vertex" &&
-    (vertex?.variant === "autoGrass" ||
-      vertex?.variant === "pipe" ||
-      vertex?.variant === "cutConnect" ||
-      vertex?.previewAutoGrassAll);
-  const modifier = useModifier();
+    (activeToolId === "shape" &&
+      !shape?.capturing &&
+      ["ellipse", "star"].includes(shape?.shapeId ?? "ellipse")) ||
+    (activeToolId === "vertex" &&
+      (vertex?.variant === "autoGrass" ||
+        vertex?.variant === "pipe" ||
+        vertex?.variant === "cutConnect" ||
+        vertex?.variant === "draw" ||
+        vertex?.variant === "brush" ||
+        vertex?.previewAutoGrassAll));
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(function handleKeyboardShortcutsListener() {
@@ -81,37 +85,31 @@ export function CanvasToolbar({
     <>
       <div
         className={cn(
-          "absolute right-4 bottom-4 flex items-center gap-2",
+          "flex max-w-full items-center gap-2 overflow-x-auto",
           className,
         )}
         {...props}
       >
-        <Toolbar className="w-fit gap-2">
-          <UndoToolButton engineRef={engineRef} />
-          <RedoToolButton engineRef={engineRef} />
+        <Toolbar className="pointer-events-auto shrink-0 gap-1 sm:gap-2">
+          <UndoToolButton />
+          <RedoToolButton />
         </Toolbar>
-        <Toolbar className="w-fit gap-2">
+        <Toolbar className="pointer-events-auto shrink-0 gap-1 sm:gap-2">
           <ToolButton
-            name="Zoom In"
-            shortcut={usesSizeShortcuts ? undefined : "+"}
-            onClick={() => engineRef.current?.zoomIn()}
-          >
-            <PlusIcon />
-          </ToolButton>
-          <ToolButton
-            name="Zoom Out"
+            name="Zoom out"
             shortcut={usesSizeShortcuts ? undefined : "-"}
             onClick={() => engineRef.current?.zoomOut()}
           >
             <MinusIcon />
           </ToolButton>
           <ToolButton
-            name="Fit to view"
-            shortcut={`${modifier} + 0`}
-            onClick={triggerFitToView}
+            name="Zoom in"
+            shortcut={usesSizeShortcuts ? undefined : "+"}
+            onClick={() => engineRef.current?.zoomIn()}
           >
-            <CornersOutIcon />
+            <PlusIcon />
           </ToolButton>
+          <CanvasOptionsMenu />
           <CanvasHelpMenu onOpenShortcuts={() => setShortcutsOpen(true)} />
         </Toolbar>
       </div>
@@ -172,27 +170,17 @@ function CanvasHelpMenu({ onOpenShortcuts }: { onOpenShortcuts: () => void }) {
   );
 }
 
-function UndoToolButton({
-  engineRef,
-  ...props
-}: ToolButtonProps & {
-  engineRef: React.RefObject<EditorEngine | null>;
-}) {
+function UndoToolButton(props: ToolButtonProps) {
   const { undo } = useEditorHistory();
   const canUndo = useEditorCanUndo();
-  const vertexToolState = useEditorToolState<VertexToolState>("vertex");
-  const hasPendingVertexEdit = Boolean(
-    vertexToolState?.editingPolygon &&
-    vertexToolState.drawingPolygon.vertices.length > 0,
-  );
   const modifier = useModifier();
   return (
     <ToolButton
       id="undo"
       name="Undo"
       shortcut={`${modifier} + Z`}
-      onClick={() => engineRef.current?.undo() ?? undo()}
-      disabled={!canUndo && !hasPendingVertexEdit}
+      onClick={undo}
+      disabled={!canUndo}
       {...props}
     >
       <ArrowArcLeftIcon />
@@ -200,12 +188,7 @@ function UndoToolButton({
   );
 }
 
-function RedoToolButton({
-  engineRef,
-  ...props
-}: ToolButtonProps & {
-  engineRef: React.RefObject<EditorEngine | null>;
-}) {
+function RedoToolButton(props: ToolButtonProps) {
   const { redo } = useEditorHistory();
   const canRedo = useEditorCanRedo();
   const modifier = useModifier();
@@ -214,7 +197,7 @@ function RedoToolButton({
       id="redo"
       name="Redo"
       shortcut={`${modifier} + Y`}
-      onClick={() => engineRef.current?.redo() ?? redo()}
+      onClick={redo}
       disabled={!canRedo}
       {...props}
     >

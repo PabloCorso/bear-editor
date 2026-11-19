@@ -14,11 +14,7 @@ export function meta() {
   ];
 }
 
-export function loader() {
-  return { isOpenAIEnabled: !!process.env.OPENAI_API_KEY };
-}
-
-export default function Home({ params, loaderData }: Route.ComponentProps) {
+export default function Home({ params }: Route.ComponentProps) {
   return (
     <TooltipProvider>
       <LgrAssetsProvider>
@@ -27,10 +23,7 @@ export default function Home({ params, loaderData }: Route.ComponentProps) {
             <LevelLgrSync />
             <EditorDocumentGuardProvider>
               <div className="flex h-[100dvh]">
-                <EditorShell
-                  isOpenAIEnabled={loaderData.isOpenAIEnabled}
-                  initialLevelName={params.level}
-                />
+                <EditorShell initialLevelName={params.level} />
               </div>
             </EditorDocumentGuardProvider>
           </EditorProvider>
