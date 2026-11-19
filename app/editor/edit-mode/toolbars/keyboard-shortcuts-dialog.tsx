@@ -563,6 +563,10 @@ function getShortcutGroups(
               src={toolIcons.pictureSprite}
             />
           ),
+          subItems: [
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
+          ],
         },
         {
           shortcut: defaultTools.texture.shortcut,
@@ -573,11 +577,19 @@ function getShortcutGroups(
               src={toolIcons.textureSprite}
             />
           ),
+          subItems: [
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
+          ],
         },
         {
           shortcut: defaultTools.color.shortcut,
           label: defaultTools.color.name,
           icon: <ColorToolIcon className="h-5 w-5" />,
+          subItems: [
+            { shortcut: "Space", label: "Change clipping" },
+            { shortcut: "+ / -", label: "Adjust distance" },
+          ],
         },
         {
           shortcut: defaultTools.text.shortcut,

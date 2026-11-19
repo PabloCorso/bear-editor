@@ -75,6 +75,9 @@ export const defaultTools = {
     name: "Texture",
     shortcut: "T",
   },
+  textureFill: { id: "textureFill", name: "Texture Fill", shortcut: "" },
+  pictureFill: { id: "pictureFill", name: "Picture Fill", shortcut: "" },
+  colorFill: { id: "colorFill", name: "Color Fill", shortcut: "" },
 } as const satisfies Record<string, ToolMeta>;
 
 export type DefaultToolId = keyof typeof defaultTools;
@@ -95,3 +98,12 @@ export const defaultToolOrder: string[] = [
 ];
 
 export const objectToolIds: readonly string[] = ["apple", "killer", "flower"];
+
+export const materialToolIds: readonly string[] = [
+  "picture",
+  "texture",
+  "color",
+  "pictureFill",
+  "textureFill",
+  "colorFill",
+];

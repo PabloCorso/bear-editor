@@ -1,3 +1,5 @@
+import { TextureFillTool } from "../tools/texture-fill-tool";
+import { SceneryFillTool } from "../tools/scenery-fill-tool";
 import type { PictureToolState } from "../tools/picture-tool";
 import {
   MAX_PICTURE_DISTANCE,
@@ -18,7 +20,10 @@ import {
   useEditorToolState,
   useEditorRegisteredTools,
 } from "~/editor/use-editor-store";
-import { defaultTools } from "~/editor/edit-mode/tools/default-tools";
+import {
+  defaultTools,
+  materialToolIds,
+} from "~/editor/edit-mode/tools/default-tools";
 import {
   getPipeToolSettings,
   getDrawEdgeLength,
@@ -203,7 +208,13 @@ export function ToolInfo() {
     );
   }
 
-  if (["picture", "texture", "color"].includes(activeToolId) && placement) {
+  if (materialToolIds.includes(activeToolId) && placement) {
+    const fillError =
+      activeToolId === "textureFill"
+        ? getActiveTool<TextureFillTool>()?.getFillPreview()?.error
+        : activeToolId === "pictureFill" || activeToolId === "colorFill"
+          ? getActiveTool<SceneryFillTool>()?.getFillPreview()?.error
+          : undefined;
     return (
       <CanvasTipGroup title={toolName} aria-label="Active tool info">
         <CanvasTipSegment>
@@ -238,6 +249,7 @@ export function ToolInfo() {
             })
           }
         />
+        {fillError && <CanvasTipSegment>{fillError}</CanvasTipSegment>}
       </CanvasTipGroup>
     );
   }

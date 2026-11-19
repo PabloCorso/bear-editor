@@ -5,10 +5,11 @@ import type { IconProps } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import type { LgrAssets } from "~/components/lgr-assets";
 import { useLgrAssets } from "~/components/use-lgr-assets";
-import { Switch } from "~/components/ui/switch";
+import { ColorPaletteSwitch } from "./color-palette-switch";
 import {
   useEditorActions,
   useEditorToolState,
+  useEditorActiveTool,
 } from "~/editor/use-editor-store";
 import { defaultTools } from "../tools/default-tools";
 import type { ColorToolState } from "../tools/color-tool";
@@ -61,15 +62,18 @@ function ColorListControl({
     [colors],
   );
   const state = useEditorToolState<ColorToolState>(defaultTools.color.id);
-  const { setToolState } = useEditorActions();
+  const activeTool = useEditorActiveTool();
+  const isActive = activeTool?.meta.id === defaultTools.color.id;
+  const { setToolState, activateTool, setToolMenuOpen } = useEditorActions();
+  const selectedName = state?.name;
   const selectedColor =
-    colors.find(({ picture }) => picture.name === state?.name) ??
+    colors.find(({ picture }) => picture.name === selectedName) ??
     ordered.find(({ picture }) => baseNames.has(picture.name));
   const visibleColors = showAll
     ? ordered
     : ordered.filter(
         ({ picture }) =>
-          baseNames.has(picture.name) || picture.name === state?.name,
+          baseNames.has(picture.name) || picture.name === selectedName,
       );
 
   const distance = state?.distance ?? selectedColor?.picture.distance ?? 0;
@@ -99,12 +103,12 @@ function ColorListControl({
     [isLoaded, selectedColor, state?.name, distance, clip, setToolState],
   );
 
+  function updateColor(patch: Partial<ColorToolState>) {
+    setToolState<ColorToolState>(defaultTools.color.id, patch);
+  }
+
   function activate(color: ColorSprite) {
-    setToolState<ColorToolState>(defaultTools.color.id, {
-      name: color.picture.name,
-      distance,
-      clip,
-    });
+    updateColor({ name: color.picture.name, distance, clip });
   }
 
   const items = visibleColors.map((color) => {
@@ -119,7 +123,7 @@ function ColorListControl({
       previewSrc: lgr.getSpritePreview(picture.name),
       width: color.width,
       height: color.height,
-      isSelected: state?.name === picture.name,
+      isSelected: selectedName === picture.name,
       onActivate: () => activate(color),
     };
   });
@@ -131,13 +135,25 @@ function ColorListControl({
         <ToolControlButton
           {...defaultTools.color}
           {...props}
+          id={undefined}
+          isActive={isActive}
           isLoading={!isLoaded}
           onClick={() => {
-            if (selectedColor) activate(selectedColor);
-            else
-              setToolState<ColorToolState>(defaultTools.color.id, {
-                name: "",
-              });
+            if (!isActive) {
+              if (selectedColor) {
+                setToolState<ColorToolState>(defaultTools.color.id, {
+                  name: selectedColor.picture.name,
+                  distance,
+                  clip,
+                });
+              } else {
+                setToolState<ColorToolState>(defaultTools.color.id, {
+                  name: "",
+                });
+              }
+              activateTool(defaultTools.color.id);
+              setToolMenuOpen(true, defaultTools.color.id);
+            }
           }}
         >
           <ColorToolIcon />
@@ -159,19 +175,11 @@ function ColorListControl({
                 clip={clip}
                 defaultDistance={selectedColor?.picture.distance}
                 defaultClip={selectedColor?.picture.clip}
-                onDistanceChange={(distance) =>
-                  setToolState<ColorToolState>(defaultTools.color.id, {
-                    distance,
-                  })
-                }
-                onClipChange={(clip) =>
-                  setToolState<ColorToolState>(defaultTools.color.id, {
-                    clip,
-                  })
-                }
+                onDistanceChange={(distance) => updateColor({ distance })}
+                onClipChange={(clip) => updateColor({ clip })}
                 onResetDefaults={() => {
                   if (!selectedColor) return;
-                  setToolState<ColorToolState>(defaultTools.color.id, {
+                  updateColor({
                     distance: selectedColor.picture.distance,
                     clip: selectedColor.picture.clip,
                   });
@@ -180,18 +188,11 @@ function ColorListControl({
             }
             header={
               colors.length > baseNames.size && (
-                <label
-                  title={`Show all ${colors.length} colors`}
-                  className="inline-flex cursor-pointer items-center gap-1.5 pl-1 text-[10px] text-secondary"
-                >
-                  <Switch checked={showAll} onCheckedChange={setShowAll} />
-                  <span className="sr-only">
-                    Show all {colors.length} colors
-                  </span>
-                  <span aria-hidden="true" className="whitespace-nowrap">
-                    All {colors.length}
-                  </span>
-                </label>
+                <ColorPaletteSwitch
+                  count={colors.length}
+                  checked={showAll}
+                  onCheckedChange={setShowAll}
+                />
               )
             }
           />
