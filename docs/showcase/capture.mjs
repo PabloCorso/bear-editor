@@ -121,29 +121,12 @@ try {
     "Design and test Elasto Mania levels in one workspace",
     null,
     [
-      { x: 55, y: 85, text: "1 · Editing tools" },
+      { x: 65, y: 340, text: "1 · Editing tools" },
       { x: 525, y: 140, text: "2 · Level canvas" },
       { x: 1010, y: 85, text: "3 · Playtest" },
     ],
   );
   await example.screenshot({ path: join(output, "editor-annotated.png") });
-  const transition = sequence("editor-to-game");
-  await transition.capture(example, "Edit the level", null, 12);
-  await example.keyboard.press("Enter");
-  await example.getByRole("button", { name: /Stop play mode/ }).waitFor();
-  await example.keyboard.down("ArrowUp");
-  try {
-    for (let i = 0; i < 24; i++) {
-      await transition.capture(example, "Playtest directly in the editor");
-    }
-  } finally {
-    await example.keyboard.up("ArrowUp");
-  }
-  await example.keyboard.press("Escape");
-  await transition.capture(example, "Return to editing", null, 12);
-  await transition.finish({ video: true });
-  await example.close();
-
   // A fresh default level gives reproducible coordinates inside its boundary.
   const page = await open();
   const polygon = sequence("create-polygon");
@@ -153,6 +136,7 @@ try {
     [530, 425],
     [340, 440],
   ];
+  await page.mouse.click(650, 340);
   await page.keyboard.press("v");
   await polygon.capture(page, "V · Vertex tool", null, 10);
   await page.screenshot({ path: join(output, "step-1.png") });
@@ -182,6 +166,30 @@ try {
   await move.capture(page, "Release to finish", null, 12);
   await move.finish();
   await page.close();
+
+  const transition = sequence("editor-to-game");
+  await transition.capture(example, "Edit the level", null, 12);
+  await example.getByRole("button", { name: /^Play mode/ }).click();
+  try {
+    await example.getByRole("button", { name: /Stop play mode/ }).waitFor();
+  } catch (error) {
+    await example.screenshot({
+      path: join(output, "play-mode-diagnostic.png"),
+    });
+    throw error;
+  }
+  await example.keyboard.down("ArrowUp");
+  try {
+    for (let i = 0; i < 24; i++) {
+      await transition.capture(example, "Playtest directly in the editor");
+    }
+  } finally {
+    await example.keyboard.up("ArrowUp");
+  }
+  await example.getByRole("button", { name: /Stop play mode/ }).click();
+  await transition.capture(example, "Return to editing", null, 12);
+  await transition.finish({ video: true });
+  await example.close();
 } finally {
   await browser.close();
 }
