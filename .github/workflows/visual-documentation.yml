@@ -1,0 +1,40 @@
+name: Visual documentation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/showcase/**"
+      - ".github/workflows/visual-documentation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false playwright
+      - run: npx playwright install --with-deps chromium
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Capture examples
+        run: |
+          npx react-router dev --host 127.0.0.1 --port 5173 > /tmp/bear-showcase.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fs http://127.0.0.1:5173/ > /dev/null; then break; fi
+            sleep 2
+          done
+          node docs/showcase/capture.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bear-editor-showcase
+          path: docs/showcase/generated
+          if-no-files-found: error
