@@ -100,6 +100,8 @@ export type EditorState = EditorHistoryContent & {
   customShapes: CustomShape[];
 
   // View settings
+  showSmartGuides: boolean;
+  snapToSmartGuides: boolean;
   animateSprites: boolean;
   showSprites: boolean;
   levelVisibility: LevelVisibilitySettings;
@@ -194,6 +196,7 @@ export type EditorState = EditorHistoryContent & {
     setLevelFolder: (folder?: LevelFolder) => void;
 
     // View operations
+    toggleSmartGuides: (key: "showSmartGuides" | "snapToSmartGuides") => void;
     toggleAnimateSprites: () => void;
     toggleShowSprites: () => void;
     setLevelVisibility: (settings: Partial<LevelVisibilitySettings>) => void;

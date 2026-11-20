@@ -653,7 +653,7 @@ function getShortcutGroups(
       items: [
         {
           shortcut: "Alt",
-          label: "Hold to bypass grid snapping while placing or moving",
+          label: "Hold to bypass grid snapping and smart guides",
         },
         {
           shortcut: "Enter",

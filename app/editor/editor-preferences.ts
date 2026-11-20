@@ -75,6 +75,8 @@ function parseStoredItem<T>(key: string): T | null {
 
 const defaultEditorPreferences: EditorPreferences = {
   defaultLevelTitle: DEFAULT_LEVEL_TITLE,
+  showSmartGuides: false,
+  snapToSmartGuides: false,
   checkTopologyOnSave: false,
   customShapes: [],
   animateSprites: true,
@@ -118,6 +120,8 @@ export function loadEditorPreferences(): EditorPreferences {
       typeof preferences?.defaultLevelTitle === "string"
         ? normalizeLevelTitle(preferences.defaultLevelTitle)
         : defaultEditorPreferences.defaultLevelTitle,
+    showSmartGuides: preferences?.showSmartGuides === true,
+    snapToSmartGuides: preferences?.snapToSmartGuides === true,
     animateSprites:
       preferences?.animateSprites ?? defaultEditorPreferences.animateSprites,
     isUIVisible:
@@ -192,6 +196,8 @@ function getPersistedEditorPreferences(
 function getComparableEditorPreferences(state: EditorState): EditorPreferences {
   return {
     defaultLevelTitle: state.defaultLevelTitle,
+    showSmartGuides: state.showSmartGuides,
+    snapToSmartGuides: state.snapToSmartGuides,
     checkTopologyOnSave: state.checkTopologyOnSave,
     customShapes: state.customShapes,
     animateSprites: state.animateSprites,
