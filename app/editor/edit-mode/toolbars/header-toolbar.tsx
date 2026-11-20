@@ -1,5 +1,6 @@
 import { trackEvent } from "~/analytics";
 import { DesktopDownloadDialog } from "./desktop-download-dialog";
+import { ShareButton } from "~/editor/collaboration/controls";
 import { TestStartPicker } from "../test-start-controls";
 import { useLgrAssets } from "~/components/use-lgr-assets";
 import { getLevelTopology } from "~/editor/helpers/level-topology";
@@ -331,9 +332,10 @@ export function HeaderToolbar({
           <TopologyCheck isLoading={isLoading} />
           <TestStartPicker mobile />
           <PlayModeControl />
+          <ShareButton />
         </Toolbar>
 
-        <div className="hidden grid-cols-[120px_minmax(0,1fr)_120px] gap-4 sm:grid">
+        <div className="hidden grid-cols-[auto_minmax(0,1fr)_auto] gap-4 sm:grid">
           <Toolbar className="pointer-events-auto w-fit gap-2">
             <MainDropdownMenu
               onImportLevel={openLevelImportPicker}
@@ -362,6 +364,7 @@ export function HeaderToolbar({
           <Toolbar className="pointer-events-auto w-fit gap-2 justify-self-end">
             <TestStartPicker />
             <PlayModeControl />
+            <ShareButton />
           </Toolbar>
         </div>
 
@@ -458,6 +461,10 @@ function useMainMenuActions() {
   );
 
   const handleOpenFile = useCallback(async () => {
+    if (store.getState().collaboration) {
+      alert("Leave the session before opening another level.");
+      return;
+    }
     if (store.getState().documentSession.saveState === "saving") return;
     await runWithPickerGuard(async () => {
       const shouldContinue = await confirmDiscardChanges();
@@ -502,6 +509,10 @@ function useMainMenuActions() {
   ]);
 
   const handleNew = useCallback(async () => {
+    if (store.getState().collaboration) {
+      alert("Leave the session before creating another level.");
+      return;
+    }
     if (store.getState().documentSession.saveState === "saving") return;
     const shouldContinue = await confirmDiscardChanges();
     if (!shouldContinue) return;
@@ -914,6 +925,10 @@ function LevelFileName({
     isLoading || isNavigating || documentSession.saveState === "saving";
 
   async function navigateToLevel(name: string) {
+    if (store.getState().collaboration) {
+      alert("Leave the session before opening another level.");
+      return;
+    }
     if (navigatingRef.current || navigationDisabled) return;
     navigatingRef.current = true;
     setIsNavigating(true);

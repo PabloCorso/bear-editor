@@ -60,11 +60,14 @@ export function useEditorCanUndo() {
     store,
     (state) => state.actions.getActiveTool()?.isInteracting?.() ?? false,
   );
-  return canUndo || hasDraft;
+  const collaborative = useZustand(store, (state) => !!state.collaboration);
+  return !collaborative && (canUndo || hasDraft);
 }
 export function useEditorCanRedo() {
   const store = useEditorStore();
-  return useZustand(store.history.state, (state) => state.canRedo);
+  const collaborative = useZustand(store, (state) => !!state.collaboration);
+  const canRedo = useZustand(store.history.state, (state) => state.canRedo);
+  return !collaborative && canRedo;
 }
 
 export function useHistoryState() {

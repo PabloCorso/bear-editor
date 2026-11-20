@@ -700,6 +700,7 @@ function getShortcutGroups(
     {
       title: "Navigation",
       items: [
+        { shortcut: "Esc", label: "Stop following a participant" },
         {
           shortcut: `${modifier} + Z`,
           label: "Undo",

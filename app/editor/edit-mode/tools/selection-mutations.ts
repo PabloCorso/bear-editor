@@ -1,3 +1,4 @@
+import { preserveRoomId } from "~/editor/collaboration/identity";
 import { findSessionArtifact } from "~/editor/session-artifacts";
 import type { Apple, Polygon, Position } from "~/editor/elma-types";
 import type { EditorState } from "~/editor/editor-state";
@@ -161,7 +162,7 @@ export class SelectionMutations {
         );
         if (index === -1) return vertex;
         changed = true;
-        return newPositions[index];
+        return preserveRoomId(vertex, newPositions[index]);
       });
       return changed ? { ...polygon, vertices } : polygon;
     });
@@ -186,7 +187,7 @@ export class SelectionMutations {
     const selectedObjects = [...selection.selectedObjects];
 
     selection.selectedObjects.forEach((object, index) => {
-      const position = newPositions[index];
+      const position = preserveRoomId(object, newPositions[index]);
       const artifact = findSessionArtifact(state, object);
       if (artifact) {
         if (artifact.move) {

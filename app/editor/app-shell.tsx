@@ -1,3 +1,4 @@
+import { CollaborationControls } from "./collaboration/controls";
 import { TestStartContextMenu } from "~/editor/edit-mode/test-start-controls";
 import { lazy, Suspense } from "react";
 import { useHotkeys } from "@mantine/hooks";
@@ -45,7 +46,10 @@ export function EditorShell({
   const isPlayMode = useEditorIsPlayMode();
 
   return (
-    <>
+    <CollaborationControls
+      canvasRef={canvasRef}
+      ready={initialDocument.status !== "loading"}
+    >
       <div className="relative flex-1">
         <EditorView ref={canvasRef} />
         <TextEditorOverlay />
@@ -62,7 +66,7 @@ export function EditorShell({
       <EditorContextMenu />
       <PlacementPropertiesMenu />
       <TestStartContextMenu />
-    </>
+    </CollaborationControls>
   );
 }
 
