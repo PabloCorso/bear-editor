@@ -6,5 +6,5 @@ export function meta() {
 }
 
 export default function Demo() {
-  return <DemoView name="Building QWQUU001" loadDemo={loadQwquu001Demo} />;
+  return <DemoView name="Building Warm up" loadDemo={loadQwquu001Demo} />;
 }

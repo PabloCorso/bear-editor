@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowClockwiseIcon, CursorIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react";
+import type { ScriptedRide } from "~/editor/play-mode/scripted-ride";
 import { LgrAssetsProvider, useLgrAssets } from "~/components/use-lgr-assets";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { createEditorStore } from "~/editor/editor-store";
@@ -67,7 +68,7 @@ function DemoPlayback({
   const [cursor, setCursor] = useState<DemoCursor | null>(null);
   const [stage, setStage] = useState("Loading demo…");
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
-  const [playtestDuration, setPlaytestDuration] = useState(3500);
+  const [scriptedRide, setScriptedRide] = useState<ScriptedRide>();
   const onReady = useCallback(
     (engine: EditorEngine, canvas: HTMLCanvasElement) => {
       setReady({ engine, canvas });
@@ -152,7 +153,7 @@ function DemoPlayback({
       signal,
       onCursor: setCursor,
       onStage: ({ label }) => setStage(label),
-      setPlaytestDuration,
+      setScriptedRide,
     });
     void player
       .run(demo.commands)
@@ -201,7 +202,7 @@ function DemoPlayback({
               initialDocument={initialDocument}
               readOnly
               onReady={onReady}
-              scriptedPlaytestDuration={playtestDuration}
+              scriptedRide={scriptedRide}
             />
           )}
         </div>
@@ -213,11 +214,21 @@ function DemoPlayback({
             {cursor.pressed && (
               <div className="absolute -top-3 -left-3 size-6 rounded-full border-2 border-white bg-white/25" />
             )}
-            <CursorIcon
-              size={24}
-              weight="fill"
-              className="-translate-x-0.5 -translate-y-0.5"
-            />
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              className="overflow-visible"
+              aria-hidden="true"
+            >
+              <path
+                d="M0 0 L19 13 L11 14 L8 21 Z"
+                fill="white"
+                stroke="#171717"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+            </svg>
           </div>
         )}
         {(!ready || failed) && (

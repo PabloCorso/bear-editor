@@ -6,6 +6,7 @@ import type { AppleToolState } from "~/editor/edit-mode/tools/apple-tools";
 import type { PictureToolState } from "~/editor/edit-mode/tools/picture-tool";
 import { worldToScreen } from "~/editor/helpers/coordinate-helpers";
 import type { DemoCommand } from "./commands";
+import type { ScriptedRide } from "~/editor/play-mode/scripted-ride";
 
 export type DemoCursor = Position & { pressed: boolean };
 export type DemoStage = {
@@ -36,7 +37,7 @@ type DemoPlayerOptions = {
   surface: HTMLElement;
   canvas: HTMLCanvasElement;
   engine: EditorEngine;
-  setPlaytestDuration: (duration: number) => void;
+  setScriptedRide: (ride: ScriptedRide) => void;
 };
 
 /** Executes semantic editor commands, never global DOM input events. */
@@ -331,7 +332,6 @@ export class DemoPlayer {
           await this.wait(650);
           break;
         case "title":
-          await this.select("select");
           await this.clickControl("level-name", {
             action: () => {
               this.state.actions.setToolMenuOpen(false);
@@ -354,7 +354,7 @@ export class DemoPlayer {
           });
           break;
         case "playtest":
-          this.options.setPlaytestDuration(command.duration);
+          this.options.setScriptedRide(command.ride);
           await this.clickControl("Play mode (Enter)");
           this.options.onCursor(null);
           if (!this.state.isPlayMode)

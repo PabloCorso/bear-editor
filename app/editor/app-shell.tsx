@@ -24,6 +24,7 @@ import {
 } from "~/editor/edit-mode/editor-view";
 import type { WorldSceneRendererBackend } from "~/editor/render/world-scene-renderer";
 import { TextEditorOverlay } from "~/editor/edit-mode/text-editor-overlay";
+import type { ScriptedRide } from "~/editor/play-mode/scripted-ride";
 
 const LazyPlayModeOverlay = lazy(async () => {
   const module = await import("~/editor/play-mode/play-mode-overlay");
@@ -53,7 +54,7 @@ type EditorSurfaceProps = {
   rendererBackend?: WorldSceneRendererBackend;
   readOnly?: boolean;
   onReady?: (engine: EditorEngine, canvas: HTMLCanvasElement) => void;
-  scriptedPlaytestDuration?: number;
+  scriptedRide?: ScriptedRide;
 };
 
 /** The same editor surface is used by the interactive editor and scripted demos. */
@@ -62,7 +63,7 @@ export function EditorSurface({
   rendererBackend = "webgl",
   readOnly = false,
   onReady,
-  scriptedPlaytestDuration,
+  scriptedRide,
 }: EditorSurfaceProps) {
   const { canvasRef, engineRef } = useEditorView({
     initialDocument,
@@ -83,7 +84,7 @@ export function EditorSurface({
         <TextEditorOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
-            <LazyPlayModeOverlay scriptedDuration={scriptedPlaytestDuration} />
+            <LazyPlayModeOverlay scriptedRide={scriptedRide} />
           </Suspense>
         ) : null}
       </div>

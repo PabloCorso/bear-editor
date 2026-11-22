@@ -4,6 +4,7 @@ import type {
   Picture,
   Position,
 } from "~/editor/elma-types";
+import type { ScriptedRide } from "~/editor/play-mode/scripted-ride";
 
 export type Demo = {
   initial: EditorLevel;
@@ -21,5 +22,5 @@ export type DemoCommand =
   | { type: "picture"; picture: Picture }
   | { type: "title"; title: string }
   | { type: "preview" }
-  | { type: "playtest"; duration: number }
+  | { type: "playtest"; ride: ScriptedRide }
   | { type: "wait"; duration: number };

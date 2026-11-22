@@ -26,7 +26,10 @@ function fromBottomLeft(vertices: Position[]): Position[] {
 }
 
 export async function loadQwquu001Demo(): Promise<Demo> {
-  const target = await getBuiltinLevel("QWQUU001.lev");
+  const target = {
+    ...(await getBuiltinLevel("QWQUU001.lev")),
+    levelName: "Warm up",
+  };
   // Start with empty terrain and the two required objects, ready to move.
   const initial: EditorLevel = {
     ...target,
@@ -64,8 +67,30 @@ export async function loadQwquu001Demo(): Promise<Demo> {
     })),
     { type: "caption", text: "Give the level a name." },
     { type: "title", title: target.levelName },
-    { type: "caption", text: "Playtest the level." },
-    { type: "playtest", duration: 3500 },
+    {
+      type: "caption",
+      text: "Playtest: collect the apple and reach the flower.",
+    },
+    {
+      type: "playtest",
+      ride: {
+        durationMs: 19000,
+        // Ride right to collect the apple, then turn and ride back to the flower.
+        steps: [
+          { at: 300, controls: ["turn"] },
+          { at: 350, controls: [] },
+          { at: 500, controls: ["gas"] },
+          { at: 2500, controls: [] },
+          { at: 3700, controls: ["gas"] },
+          { at: 8657, controls: ["turn", "brake"] },
+          { at: 8705, controls: ["brake"] },
+          { at: 8753, controls: [] },
+          { at: 10241, controls: ["gas"] },
+          { at: 12250, controls: [] },
+          { at: 12450, controls: ["gas"] },
+        ],
+      },
+    },
     { type: "caption", text: "Level complete." },
     { type: "preview" },
   ];
