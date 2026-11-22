@@ -13,7 +13,11 @@ export class InputManager {
   private handleKeyUp: (e: KeyboardEvent) => void;
   private handleBlur: () => void;
 
-  constructor(extraGameKeys: string[] = [], initialKeys: string[] = []) {
+  constructor(
+    extraGameKeys: string[] = [],
+    initialKeys: string[] = [],
+    listenToKeyboard = true,
+  ) {
     this.extraGameKeys = new Set(extraGameKeys);
     this.keyboardKeys = new Set(initialKeys);
     this.justPressedKeys = new Set(initialKeys);
@@ -32,7 +36,7 @@ export class InputManager {
       this.virtualKeys.clear();
     };
 
-    if (typeof window !== "undefined") {
+    if (listenToKeyboard && typeof window !== "undefined") {
       window.addEventListener("keydown", this.handleKeyDown);
       window.addEventListener("keyup", this.handleKeyUp);
       window.addEventListener("blur", this.handleBlur);

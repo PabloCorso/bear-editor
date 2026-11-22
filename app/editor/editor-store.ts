@@ -43,6 +43,7 @@ type CreateEditorStoreOptions = {
   defaultLevelTitle?: string;
   historyLimit?: number;
   initialPreferences?: EditorPreferences;
+  analytics?: boolean;
 };
 
 export type PartialEditorState = Pick<
@@ -153,6 +154,7 @@ export function createEditorStore({
   defaultLevelTitle = DEFAULT_LEVEL_TITLE,
   historyLimit,
   initialPreferences,
+  analytics = true,
 }: CreateEditorStoreOptions = {}) {
   defaultLevelTitle =
     normalizeLevelTitle(
@@ -762,7 +764,7 @@ export function createEditorStore({
       getLevelSnapshot(state),
       state.documentSession.baselineLevel,
     );
-    if (dirty) trackFirstEdit();
+    if (dirty && analytics) trackFirstEdit();
     const currentSaveState = state.documentSession.saveState;
     const nextSaveState =
       currentSaveState === "saving" || currentSaveState === "error"
@@ -789,7 +791,7 @@ export function createEditorStore({
 
   editorStore.subscribe(syncDocumentSession);
   editorStore.subscribe((state, previous) => {
-    if (state.isPlayMode && !previous.isPlayMode) {
+    if (analytics && state.isPlayMode && !previous.isPlayMode) {
       trackEvent("playtest_started");
     }
   });

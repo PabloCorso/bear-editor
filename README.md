@@ -17,6 +17,15 @@ npm install
 npm run dev
 ```
 
+### Animated demos
+
+Open `/demo` to watch QWQUU001 being built and playtested. The demo uses the
+editor and game renderers with an independent editor store.
+
+To add another demo, define its initial level, framing target, and sequence of
+`DemoCommand` values in `app/demos/`, then pass the loader to `DemoView`.
+The player handles cursor animation, tool selection, timing, and replay.
+
 ## Desktop
 
 Run `npm ci` and `npm run desktop:build` from the repository root, then
