@@ -12,6 +12,7 @@ export type Demo = {
 };
 
 export type DemoCommand =
+  | { type: "caption"; text: string }
   | { type: "polygon"; vertices: Position[] }
   | { type: "moveStart"; to: Position }
   | { type: "moveFlower"; index: number; to: Position }

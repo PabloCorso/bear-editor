@@ -227,8 +227,9 @@ function DemoPlayback({
         )}
       </div>
       <div
-        className="flex min-h-12 shrink-0 items-center justify-center px-4 py-2 text-sm font-medium"
+        className="flex h-16 shrink-0 items-center justify-center px-4 py-2 text-center text-sm font-medium"
         aria-live="polite"
+        aria-atomic="true"
       >
         {failed ? "Demo unavailable" : stage}
       </div>

@@ -40,12 +40,14 @@ export async function loadQwquu001Demo(): Promise<Demo> {
     flowers: target.flowers.map(({ x, y }) => ({ x: x + 2, y: y - 2 })),
   };
   const commands: DemoCommand[] = [
+    { type: "caption", text: "Draw the terrain with the Vertex tool." },
     ...target.polygons
       .filter((polygon) => !polygon.grass)
       .map((polygon) => ({
         type: "polygon" as const,
         vertices: fromBottomLeft(polygon.vertices),
       })),
+    { type: "caption", text: "Place the start, finish flower and apple." },
     { type: "moveStart", to: target.start },
     ...target.flowers.map((to, index) => ({
       type: "moveFlower" as const,
@@ -53,13 +55,18 @@ export async function loadQwquu001Demo(): Promise<Demo> {
       to,
     })),
     ...target.apples.map((apple) => ({ type: "apple" as const, apple })),
+    { type: "caption", text: "AutoGrass adds grass in one step." },
     { type: "autoGrass" },
+    { type: "caption", text: "Decorate the level with pictures." },
     ...target.pictures.map((picture) => ({
       type: "picture" as const,
       picture,
     })),
+    { type: "caption", text: "Give the level a name." },
     { type: "title", title: target.levelName },
+    { type: "caption", text: "Playtest the level." },
     { type: "playtest", duration: 3500 },
+    { type: "caption", text: "Level complete." },
     { type: "preview" },
   ];
   return { initial, target, commands };

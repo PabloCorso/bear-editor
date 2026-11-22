@@ -12,6 +12,22 @@ export type DemoStage = {
   label: string;
 };
 
+type MovePace = "normal" | "vertex" | "picture" | "drag";
+
+// Short nearby movements are quicker; longer moves and careful placement
+// take more time. Each range also works on narrow demo viewports.
+const moveTimings: Record<
+  MovePace,
+  { min: number; max: number; speed: number }
+> = {
+  normal: { min: 250, max: 850, speed: 0.9 },
+  vertex: { min: 200, max: 650, speed: 0.8 },
+  picture: { min: 450, max: 1150, speed: 0.65 },
+  drag: { min: 650, max: 1300, speed: 0.55 },
+};
+
+const MIN_CAPTION_DURATION = 2800;
+
 type DemoPlayerOptions = {
   store: EditorStore;
   signal: AbortSignal;
@@ -27,6 +43,7 @@ type DemoPlayerOptions = {
 export class DemoPlayer {
   private cursor: Position = { x: 0, y: 0 };
   private pressed = false;
+  private captionStartedAt: number | undefined;
 
   constructor(private options: DemoPlayerOptions) {}
 
@@ -72,8 +89,27 @@ export class DemoPlayer {
     this.options.onCursor({ ...position, pressed: this.pressed });
   }
 
-  private async move(to: () => Position, duration = 320, onCanvas = false) {
+  private async showCaption(text: string) {
+    if (this.captionStartedAt !== undefined) {
+      const remaining =
+        MIN_CAPTION_DURATION - (performance.now() - this.captionStartedAt);
+      if (remaining > 0) await this.wait(remaining);
+    }
+    this.options.onStage({ label: text });
+    this.captionStartedAt = performance.now();
+    await this.wait(650);
+  }
+
+  private async move(
+    to: () => Position,
+    pace: MovePace = "normal",
+    onCanvas = false,
+  ) {
     const from = this.cursor;
+    const target = to();
+    const distance = Math.hypot(target.x - from.x, target.y - from.y);
+    const { min, max, speed } = moveTimings[pace];
+    const duration = Math.min(max, Math.max(min, min + distance / speed));
     this.state.actions.setMouseOnCanvas(onCanvas);
     await this.animate(duration, (progress) => {
       const eased = progress * progress * (3 - 2 * progress);
@@ -89,10 +125,10 @@ export class DemoPlayer {
     });
   }
 
-  private moveWorld(position: Position, duration?: number) {
+  private moveWorld(position: Position, pace?: MovePace) {
     return this.move(
       () => worldToScreen(position, this.state.viewPortOffset, this.state.zoom),
-      duration,
+      pace,
       true,
     );
   }
@@ -129,18 +165,23 @@ export class DemoPlayer {
     return element;
   }
 
-  private async clickControl(label: string, action?: () => void) {
+  private async clickControl(
+    label: string,
+    {
+      action,
+      before = 120,
+      after = 150,
+    }: { action?: () => void; before?: number; after?: number } = {},
+  ) {
     const control = this.control(label);
     control.scrollIntoView({ block: "nearest", inline: "nearest" });
     await this.move(() => this.positionOf(control));
+    await this.wait(before);
     await this.click(action ?? (() => control.click()));
+    await this.wait(after);
   }
 
-  private async select(
-    tool: "select" | "vertex" | "apple" | "picture",
-    label: string,
-  ) {
-    this.options.onStage({ label });
+  private async select(tool: "select" | "vertex" | "apple" | "picture") {
     const active = this.state.activeToolId === tool;
     if (
       active &&
@@ -152,7 +193,6 @@ export class DemoPlayer {
     switch (tool) {
       case "select":
         await this.clickControl("Select tool (S)");
-        await this.clickControl("Marquee");
         break;
       case "vertex":
         await this.clickControl("Vertex tools");
@@ -162,7 +202,7 @@ export class DemoPlayer {
         await this.clickControl("Objects (A / K / F)");
         break;
       case "picture":
-        await this.clickControl("Picture (P)");
+        await this.clickControl("Picture (P)", { after: 750 });
         break;
     }
   }
@@ -208,11 +248,11 @@ export class DemoPlayer {
     await this.moveWorld(from);
     this.pressed = true;
     this.pointer("down", this.cursor);
-    await this.moveWorld(to, 700);
+    await this.moveWorld(to, "drag");
     this.pointer("up", this.cursor);
     this.pressed = false;
     this.showCursor(this.cursor);
-    await this.wait(200);
+    await this.wait(500);
   }
 
   async run(commands: readonly DemoCommand[]) {
@@ -221,27 +261,31 @@ export class DemoPlayer {
     for (const command of commands) {
       this.options.signal.throwIfAborted();
       switch (command.type) {
+        case "caption":
+          await this.showCaption(command.text);
+          break;
         case "polygon":
-          await this.select("vertex", "Draw the terrain");
+          await this.select("vertex");
           for (const vertex of command.vertices) {
-            await this.moveWorld(vertex, 240);
+            await this.moveWorld(vertex, "vertex");
             await this.clickWorld(vertex);
           }
           await this.clickWorld(
             command.vertices[command.vertices.length - 1],
             true,
           );
+          await this.wait(600);
           break;
         case "moveStart":
-          await this.select("select", "Move the start");
+          await this.select("select");
           await this.drag(this.state.start, command.to);
           break;
         case "moveFlower":
-          await this.select("select", "Move the flower");
+          await this.select("select");
           await this.drag(this.state.flowers[command.index], command.to);
           break;
         case "apple":
-          await this.select("apple", "Place an apple");
+          await this.select("apple");
           if (this.state.openToolMenuId === "apple") {
             await this.clickControl(
               `Apple animation ${command.apple.animation}`,
@@ -253,45 +297,54 @@ export class DemoPlayer {
           );
           await this.moveWorld(command.apple.position);
           await this.clickWorld(command.apple.position);
+          await this.wait(550);
           break;
         case "autoGrass":
-          this.options.onStage({ label: "AutoGrass level" });
           if (this.state.openToolMenuId !== "vertex")
-            await this.clickControl("Vertex tools");
-          await this.clickControl("AutoGrass level");
-          await this.wait(600);
+            await this.clickControl("Vertex tools", { after: 600 });
+          await this.clickControl("AutoGrass level", {
+            before: 850,
+            after: 1800,
+          });
           break;
         case "picture":
-          await this.select("picture", "Place pictures");
+          await this.select("picture");
           if (
             this.state.openToolMenuId === "picture" ||
             this.state.actions.getToolState<PictureToolState>("picture")
               ?.name !== command.picture.name
           ) {
             if (this.state.openToolMenuId !== "picture")
-              await this.clickControl("Picture (P)");
-            await this.clickControl(command.picture.name);
+              await this.clickControl("Picture (P)", { after: 750 });
+            await this.clickControl(command.picture.name, {
+              before: 450,
+              after: 350,
+            });
           }
           this.state.actions.setToolState<PictureToolState>(
             "picture",
             command.picture,
           );
-          await this.moveWorld(command.picture.position, 420);
+          await this.moveWorld(command.picture.position, "picture");
+          await this.wait(250);
           await this.clickWorld(command.picture.position);
+          await this.wait(650);
           break;
         case "title":
-          await this.select("select", "Name the level");
-          await this.clickControl("level-name", () =>
-            this.state.actions.setLevelName(""),
-          );
+          await this.select("select");
+          await this.clickControl("level-name", {
+            action: () => {
+              this.state.actions.setToolMenuOpen(false);
+              this.state.actions.setLevelName("");
+            },
+          });
           for (let index = 1; index <= command.title.length; index++) {
             this.state.actions.setLevelName(command.title.slice(0, index));
-            await this.wait(75);
+            await this.wait(110);
           }
-          await this.wait(350);
+          await this.wait(700);
           break;
         case "preview":
-          this.options.onStage({ label: "Finished level" });
           this.state.actions.setLevelVisibility({
             useGroundSkyTextures: true,
             useGrassTextures: true,
@@ -301,7 +354,6 @@ export class DemoPlayer {
           });
           break;
         case "playtest":
-          this.options.onStage({ label: "Playtest" });
           this.options.setPlaytestDuration(command.duration);
           await this.clickControl("Play mode (Enter)");
           this.options.onCursor(null);
