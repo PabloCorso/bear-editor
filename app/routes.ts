@@ -10,7 +10,8 @@ export default (desktop
     ]
   : [
       index("routes/home.tsx"),
-      route("levels/:id", "routes/elma-level.tsx"),
+      route("level/:id", "routes/elma-level.tsx"),
+      route("lev/:id", "routes/elma-level-alias.ts"),
       route("internal", "routes/internal-index.ts"),
       route("internal/:number", "routes/internal-level.tsx"),
       route("int/:number?", "routes/internal-alias.ts"),
