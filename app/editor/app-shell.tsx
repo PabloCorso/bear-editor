@@ -1,5 +1,5 @@
 import { TestStartContextMenu } from "~/editor/edit-mode/test-start-controls";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useHotkeys } from "@mantine/hooks";
 import { ControlToolbar } from "~/editor/edit-mode/toolbars/control-toolbar";
 import {
@@ -17,6 +17,7 @@ import {
 } from "~/editor/use-editor-store";
 import {
   EditorView,
+  type InitialDocument,
   type InitialLevelSource,
   useEditorView,
   useInitialLevel,
@@ -39,11 +40,41 @@ export function EditorShell({
   rendererBackend = "webgl",
 }: EditorShellProps) {
   const initialDocument = useInitialLevel(initialLevel);
+  return (
+    <EditorSurface
+      initialDocument={initialDocument}
+      rendererBackend={rendererBackend}
+    />
+  );
+}
+
+type EditorSurfaceProps = {
+  initialDocument: InitialDocument;
+  rendererBackend?: WorldSceneRendererBackend;
+  readOnly?: boolean;
+  onReady?: (engine: EditorEngine, canvas: HTMLCanvasElement) => void;
+  scriptedPlaytestDuration?: number;
+};
+
+/** The same editor surface is used by the interactive editor and scripted demos. */
+export function EditorSurface({
+  initialDocument,
+  rendererBackend = "webgl",
+  readOnly = false,
+  onReady,
+  scriptedPlaytestDuration,
+}: EditorSurfaceProps) {
   const { canvasRef, engineRef } = useEditorView({
     initialDocument,
     rendererBackend,
+    readOnly,
   });
   const isPlayMode = useEditorIsPlayMode();
+
+  useEffect(() => {
+    if (engineRef.current && canvasRef.current)
+      onReady?.(engineRef.current, canvasRef.current);
+  }, [onReady, initialDocument, engineRef, canvasRef]);
 
   return (
     <>
@@ -52,13 +83,14 @@ export function EditorShell({
         <TextEditorOverlay />
         {isPlayMode ? (
           <Suspense fallback={<PlayModeOverlayFallback />}>
-            <LazyPlayModeOverlay />
+            <LazyPlayModeOverlay scriptedDuration={scriptedPlaytestDuration} />
           </Suspense>
         ) : null}
       </div>
       <EditorToolbars
         engineRef={engineRef}
         isLoading={initialDocument.status === "loading"}
+        readOnly={readOnly}
       />
       <EditorContextMenu />
       <PlacementPropertiesMenu />
@@ -81,14 +113,16 @@ function PlayModeOverlayFallback() {
 function EditorToolbars({
   engineRef,
   isLoading,
+  readOnly,
 }: {
   engineRef: React.RefObject<EditorEngine | null>;
   isLoading?: boolean;
+  readOnly?: boolean;
 }) {
   const { toggleUIVisibility } = useEditorActions();
   const isUIVisible = useEditorIsUIVisible();
   const isPlayMode = useEditorIsPlayMode();
-  useHotkeys([["mod + .", () => toggleUIVisibility()]]);
+  useHotkeys(readOnly ? [] : [["mod + .", () => toggleUIVisibility()]]);
 
   const fileNameEntrance = useLevelFileNameEntrance(isUIVisible && !isPlayMode);
 
@@ -99,6 +133,7 @@ function EditorToolbars({
         engineRef={engineRef}
         isLoading={isLoading}
         fileNameEntrance={fileNameEntrance}
+        readOnly={readOnly}
       />
       <div className="relative col-span-full row-start-2 flex min-h-0 items-center">
         <ControlToolbar />
@@ -106,6 +141,7 @@ function EditorToolbars({
       <CanvasToolbar
         className="row-start-4 self-end justify-self-end sm:col-start-2 sm:row-start-3"
         engineRef={engineRef}
+        readOnly={readOnly}
       />
     </div>
   );

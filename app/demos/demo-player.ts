@@ -1,19 +1,15 @@
 import type { EditorStore } from "~/editor/editor-store";
 import type { Position } from "~/editor/elma-types";
-import type { VertexTool } from "~/editor/edit-mode/tools/vertex-tool";
+import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
+import type { VertexToolState } from "~/editor/edit-mode/tools/vertex-tool";
 import type { AppleToolState } from "~/editor/edit-mode/tools/apple-tools";
 import type { PictureToolState } from "~/editor/edit-mode/tools/picture-tool";
-import {
-  worldToScreen,
-  screenToWorld,
-} from "~/editor/helpers/coordinate-helpers";
-import type { DemoCommand, DemoTool } from "./commands";
+import { worldToScreen } from "~/editor/helpers/coordinate-helpers";
+import type { DemoCommand } from "./commands";
 
 export type DemoCursor = Position & { pressed: boolean };
 export type DemoStage = {
-  tool: DemoTool;
   label: string;
-  picture?: string;
 };
 
 type DemoPlayerOptions = {
@@ -21,8 +17,10 @@ type DemoPlayerOptions = {
   signal: AbortSignal;
   onCursor: (cursor: DemoCursor | null) => void;
   onStage: (stage: DemoStage) => void;
-  toolbarPosition: (target: DemoTool | "title") => Position;
-  playtest: (duration: number) => Promise<void>;
+  surface: HTMLElement;
+  canvas: HTMLCanvasElement;
+  engine: EditorEngine;
+  setPlaytestDuration: (duration: number) => void;
 };
 
 /** Executes semantic editor commands, never global DOM input events. */
@@ -86,8 +84,7 @@ export class DemoPlayer {
       };
       this.showCursor(position);
       if (onCanvas) {
-        const { actions, viewPortOffset, zoom } = this.state;
-        actions.setMousePosition(screenToWorld(position, viewPortOffset, zoom));
+        this.pointer("move", position);
       }
     });
   }
@@ -110,76 +107,116 @@ export class DemoPlayer {
     await this.wait(100);
   }
 
-  private async select(tool: DemoTool, label: string, picture?: string) {
-    await this.move(() => this.options.toolbarPosition(tool));
-    await this.click(() => {
-      this.options.onStage({ tool, label, picture });
-      this.state.actions.activateTool(
-        tool === "autoGrass"
-          ? "vertex"
-          : tool === "preview" || tool === "playtest"
-            ? "select"
-            : tool,
-        tool === "autoGrass"
-          ? "autoGrass"
-          : tool === "vertex"
-            ? "normal"
-            : undefined,
-      );
-    });
+  private positionOf(element: HTMLElement): Position {
+    const rect = element.getBoundingClientRect();
+    const bounds = this.options.surface.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 - bounds.left,
+      y: rect.top + rect.height / 2 - bounds.top,
+    };
   }
 
-  private clickWorld(position: Position, right = false) {
+  private control(label: string): HTMLElement {
+    const elements = this.options.surface.querySelectorAll<HTMLElement>(
+      "button[aria-label], input[name]",
+    );
+    const element = Array.from(elements).find((candidate) => {
+      const name =
+        candidate.getAttribute("aria-label") ?? candidate.getAttribute("name");
+      return name === label && candidate.getClientRects().length > 0;
+    });
+    if (!element) throw new Error(`Demo control not found: ${label}`);
+    return element;
+  }
+
+  private async clickControl(label: string, action?: () => void) {
+    const control = this.control(label);
+    control.scrollIntoView({ block: "nearest", inline: "nearest" });
+    await this.move(() => this.positionOf(control));
+    await this.click(action ?? (() => control.click()));
+  }
+
+  private async select(
+    tool: "select" | "vertex" | "apple" | "picture",
+    label: string,
+  ) {
+    this.options.onStage({ label });
+    const active = this.state.activeToolId === tool;
+    if (
+      active &&
+      (tool !== "vertex" ||
+        this.state.actions.getToolState<VertexToolState>("vertex")?.variant ===
+          "normal")
+    )
+      return;
+    switch (tool) {
+      case "select":
+        await this.clickControl("Select tool (S)");
+        await this.clickControl("Marquee");
+        break;
+      case "vertex":
+        await this.clickControl("Vertex tools");
+        await this.clickControl("Vertex (V)");
+        break;
+      case "apple":
+        await this.clickControl("Objects (A / K / F)");
+        break;
+      case "picture":
+        await this.clickControl("Picture (P)");
+        break;
+    }
+  }
+
+  private pointer(phase: "down" | "move" | "up", position: Position) {
+    const bounds = this.options.canvas.getBoundingClientRect();
+    if (phase === "down") this.state.actions.setToolMenuOpen(false);
+    this.options.engine.dispatchToolPointerEvent(
+      phase,
+      new PointerEvent(`pointer${phase}`, {
+        pointerType: "mouse",
+        button: 0,
+        buttons: phase === "up" || !this.pressed ? 0 : 1,
+        clientX: bounds.left + position.x,
+        clientY: bounds.top + position.y,
+      }),
+    );
+  }
+
+  private async clickWorld(position: Position, right = false) {
     const screen = worldToScreen(
       position,
       this.state.viewPortOffset,
       this.state.zoom,
     );
-    const context = {
-      worldPos: position,
-      screenX: screen.x,
-      screenY: screen.y,
-    };
-    const tool = this.state.actions.getActiveTool();
-    return this.click(() => {
-      if (right)
-        tool?.onRightClick?.(
-          new MouseEvent("contextmenu", { button: 2 }),
-          context,
-        );
-      else
-        tool?.onPointerDown?.(
-          new PointerEvent("pointerdown", { button: 0 }),
-          context,
-        );
+    await this.click(() => {
+      if (right) {
+        this.state.actions
+          .getActiveTool()
+          ?.onRightClick?.(new MouseEvent("contextmenu", { button: 2 }), {
+            worldPos: position,
+            screenX: screen.x,
+            screenY: screen.y,
+          });
+      } else {
+        this.pointer("down", screen);
+        this.pointer("up", screen);
+      }
     });
   }
 
-  private async drag(
-    from: Position,
-    to: Position,
-    update: (position: Position) => void,
-  ) {
+  private async drag(from: Position, to: Position) {
     await this.moveWorld(from);
     this.pressed = true;
-    await this.animate(700, (progress) => {
-      const eased = progress * progress * (3 - 2 * progress);
-      const position = {
-        x: from.x + (to.x - from.x) * eased,
-        y: from.y + (to.y - from.y) * eased,
-      };
-      update(position);
-      this.showCursor(
-        worldToScreen(position, this.state.viewPortOffset, this.state.zoom),
-      );
-    });
+    this.pointer("down", this.cursor);
+    await this.moveWorld(to, 700);
+    this.pointer("up", this.cursor);
     this.pressed = false;
     this.showCursor(this.cursor);
     await this.wait(200);
   }
 
   async run(commands: readonly DemoCommand[]) {
-    this.cursor = this.options.toolbarPosition("select");
+    this.cursor = this.positionOf(this.control("Select tool (S)"));
     this.showCursor(this.cursor);
     for (const command of commands) {
       this.options.signal.throwIfAborted();
@@ -197,26 +234,19 @@ export class DemoPlayer {
           break;
         case "moveStart":
           await this.select("select", "Move the start");
-          await this.drag(this.state.start, command.to, (position) =>
-            this.state.actions.setStart(position),
-          );
+          await this.drag(this.state.start, command.to);
           break;
         case "moveFlower":
           await this.select("select", "Move the flower");
-          await this.drag(
-            this.state.flowers[command.index],
-            command.to,
-            (position) => {
-              this.state.actions.setFlowers(
-                this.state.flowers.map((flower, index) =>
-                  index === command.index ? position : flower,
-                ),
-              );
-            },
-          );
+          await this.drag(this.state.flowers[command.index], command.to);
           break;
         case "apple":
           await this.select("apple", "Place an apple");
+          if (this.state.openToolMenuId === "apple") {
+            await this.clickControl(
+              `Apple animation ${command.apple.animation}`,
+            );
+          }
           this.state.actions.setToolState<AppleToolState>(
             "apple",
             command.apple,
@@ -225,12 +255,23 @@ export class DemoPlayer {
           await this.clickWorld(command.apple.position);
           break;
         case "autoGrass":
-          await this.select("autoGrass", "AutoGrass level");
-          this.state.actions.getTool<VertexTool>("vertex")?.autoGrassAll();
+          this.options.onStage({ label: "AutoGrass level" });
+          if (this.state.openToolMenuId !== "vertex")
+            await this.clickControl("Vertex tools");
+          await this.clickControl("AutoGrass level");
           await this.wait(600);
           break;
         case "picture":
-          await this.select("picture", "Place pictures", command.picture.name);
+          await this.select("picture", "Place pictures");
+          if (
+            this.state.openToolMenuId === "picture" ||
+            this.state.actions.getToolState<PictureToolState>("picture")
+              ?.name !== command.picture.name
+          ) {
+            if (this.state.openToolMenuId !== "picture")
+              await this.clickControl("Picture (P)");
+            await this.clickControl(command.picture.name);
+          }
           this.state.actions.setToolState<PictureToolState>(
             "picture",
             command.picture,
@@ -240,8 +281,9 @@ export class DemoPlayer {
           break;
         case "title":
           await this.select("select", "Name the level");
-          await this.move(() => this.options.toolbarPosition("title"));
-          await this.click(() => this.state.actions.setLevelName(""));
+          await this.clickControl("level-name", () =>
+            this.state.actions.setLevelName(""),
+          );
           for (let index = 1; index <= command.title.length; index++) {
             this.state.actions.setLevelName(command.title.slice(0, index));
             await this.wait(75);
@@ -249,7 +291,7 @@ export class DemoPlayer {
           await this.wait(350);
           break;
         case "preview":
-          await this.select("preview", "Finished level");
+          this.options.onStage({ label: "Finished level" });
           this.state.actions.setLevelVisibility({
             useGroundSkyTextures: true,
             useGrassTextures: true,
@@ -259,9 +301,13 @@ export class DemoPlayer {
           });
           break;
         case "playtest":
-          await this.select("playtest", "Playtest");
+          this.options.onStage({ label: "Playtest" });
+          this.options.setPlaytestDuration(command.duration);
+          await this.clickControl("Play mode (Enter)");
           this.options.onCursor(null);
-          await this.options.playtest(command.duration);
+          if (!this.state.isPlayMode)
+            throw new Error("Could not start playtest");
+          while (this.state.isPlayMode) await this.wait(100);
           break;
         case "wait":
           await this.wait(command.duration);

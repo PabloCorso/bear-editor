@@ -1,40 +1,17 @@
-import { useEffect, useRef, useState } from "react";
-import { useStore } from "zustand";
-import {
-  CursorIcon,
-  PolygonIcon,
-  CircleIcon,
-  PlantIcon,
-  ImageIcon,
-  EyeIcon,
-  PlayIcon,
-  ArrowClockwiseIcon,
-} from "@phosphor-icons/react";
-import { LgrAssets } from "~/components/lgr-assets";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowClockwiseIcon, CursorIcon } from "@phosphor-icons/react";
+import { LgrAssetsProvider, useLgrAssets } from "~/components/use-lgr-assets";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import { createEditorStore } from "~/editor/editor-store";
-import { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
-import { SelectTool } from "~/editor/edit-mode/tools/select-tool";
-import { VertexTool } from "~/editor/edit-mode/tools/vertex-tool";
-import { AppleTool } from "~/editor/edit-mode/tools/apple-tools";
-import { PictureTool } from "~/editor/edit-mode/tools/picture-tool";
-import { fitToView } from "~/editor/helpers/camera-helpers";
-import {
-  VertexIcon,
-  getVertexIconProps,
-} from "~/editor/edit-mode/toolbars/vertex-tool-control";
-import { DemoPlayer, type DemoCursor, type DemoStage } from "./demo-player";
-import type { Demo, DemoTool } from "./commands";
-import { playDemoRide } from "./demo-playtest";
-
-const tools = [
-  { id: "select", label: "Select tool", Icon: CursorIcon },
-  { id: "vertex", label: "Vertex", Icon: PolygonIcon },
-  { id: "apple", label: "Apple", Icon: CircleIcon },
-  { id: "autoGrass", label: "AutoGrass level", Icon: PlantIcon },
-  { id: "picture", label: "Picture", Icon: ImageIcon },
-  { id: "playtest", label: "Playtest", Icon: PlayIcon },
-  { id: "preview", label: "Preview", Icon: EyeIcon },
-] as const;
+import { EditorStoreProvider, useEditorStore } from "~/editor/use-editor-store";
+import { DefaultLevelPresetProvider } from "~/editor/edit-mode/default-level-preset";
+import { EditorDocumentGuardProvider } from "~/editor/session/document-guard";
+import { EditorSurface } from "~/editor/app-shell";
+import type { EditorEngine } from "~/editor/edit-mode/engine/editor-engine";
+import type { InitialDocument } from "~/editor/edit-mode/editor-view";
+import { calculateBoundingBox } from "~/editor/helpers/level-helpers";
+import { DemoPlayer, type DemoCursor } from "./demo-player";
+import type { Demo } from "./commands";
 
 type DemoViewProps = { name: string; loadDemo: () => Promise<Demo> };
 
@@ -55,123 +32,149 @@ function DemoSession({
   onReplay,
 }: DemoViewProps & { onReplay: () => void }) {
   const [store] = useState(() => createEditorStore({ analytics: false }));
-  const title = useStore(store, (state) => state.levelName);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const playCanvasRef = useRef<HTMLCanvasElement>(null);
+  return (
+    <TooltipProvider>
+      <LgrAssetsProvider bundledOnly>
+        <DefaultLevelPresetProvider>
+          <EditorStoreProvider store={store}>
+            <EditorDocumentGuardProvider enabled={false}>
+              <DemoPlayback
+                name={name}
+                loadDemo={loadDemo}
+                onReplay={onReplay}
+              />
+            </EditorDocumentGuardProvider>
+          </EditorStoreProvider>
+        </DefaultLevelPresetProvider>
+      </LgrAssetsProvider>
+    </TooltipProvider>
+  );
+}
+
+function DemoPlayback({
+  name,
+  loadDemo,
+  onReplay,
+}: DemoViewProps & { onReplay: () => void }) {
+  const store = useEditorStore();
+  const { isLoaded, selectLgr, error: lgrError } = useLgrAssets();
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const [demo, setDemo] = useState<Demo>();
+  const [ready, setReady] = useState<{
+    engine: EditorEngine;
+    canvas: HTMLCanvasElement;
+  }>();
   const [cursor, setCursor] = useState<DemoCursor | null>(null);
-  const [appleSprite, setAppleSprite] = useState<string>();
-  const [isPlaytesting, setIsPlaytesting] = useState(false);
-  const [stage, setStage] = useState<DemoStage>({
-    tool: "select",
-    label: "Loading demo…",
-  });
-  const [status, setStatus] = useState<
-    "loading" | "playing" | "done" | "error"
-  >("loading");
+  const [stage, setStage] = useState("Loading demo…");
+  const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
+  const [playtestDuration, setPlaytestDuration] = useState(3500);
+  const onReady = useCallback(
+    (engine: EditorEngine, canvas: HTMLCanvasElement) => {
+      setReady({ engine, canvas });
+    },
+    [],
+  );
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    let cancelled = false;
+    void loadDemo()
+      .then((definition) => {
+        if (!cancelled) setDemo(definition);
+      })
+      .catch((error) => {
+        console.error("Could not load demo", error);
+        if (!cancelled) setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadDemo]);
+
+  useEffect(() => {
+    if (demo) void selectLgr(demo.initial.lgr || "default");
+  }, [demo, selectLgr]);
+
+  const initialDocument = useMemo<InitialDocument | undefined>(
+    () =>
+      demo
+        ? {
+            status: "done",
+            document: {
+              level: demo.initial,
+              origin: { kind: "default", label: "Demo", canOverwrite: false },
+            },
+          }
+        : undefined,
+    [demo],
+  );
+
+  useEffect(() => {
     const surface = surfaceRef.current;
-    if (!canvas || !surface) return;
+    if (!demo || !ready || !surface || !isLoaded) return;
+    const { engine, canvas } = ready;
     const controller = new AbortController();
     const { signal } = controller;
-    const assets = new LgrAssets();
-    let engine: EditorEngine | undefined;
-    let observer: ResizeObserver | undefined;
 
-    async function start() {
-      try {
-        const [demo] = await Promise.all([loadDemo(), assets.load()]);
-        if (signal.aborted) {
-          assets.destroy();
-          return;
-        }
-        if (!canvas || !surface) return;
-        setAppleSprite(assets.getSpritePreview("qfood1"));
+    // Reserve space around the level for the real header and side toolbar.
+    const fit = () => {
+      const { minX, maxX, minY, maxY } = calculateBoundingBox(demo.target);
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const left = 78;
+      const top = 64;
+      const right = 16;
+      const bottom = 74;
+      const zoom = Math.max(
+        0.1,
+        Math.min(
+          100,
+          (width - left - right) / (maxX - minX + 4),
+          (height - top - bottom) / (maxY - minY + 4),
+        ),
+      );
+      store.getState().actions.setZoom(zoom);
+      store
+        .getState()
+        .actions.setCamera(
+          (width + left - right) / 2 - ((minX + maxX) / 2) * zoom,
+          (height + top - bottom) / 2 - ((minY + maxY) / 2) * zoom,
+        );
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(canvas);
 
-        canvas.width = surface.clientWidth;
-        canvas.height = surface.clientHeight;
-        engine = new EditorEngine(canvas, {
-          store,
-          tools: [SelectTool, VertexTool, AppleTool, PictureTool],
-          lgrAssets: assets,
-          readOnly: true,
-          initialDocument: {
-            level: demo.initial,
-            origin: { kind: "default", label: "Demo", canOverwrite: false },
-          },
-        });
-        const fit = () => {
-          const { actions } = store.getState();
-          engine?.resize(surface.clientWidth, surface.clientHeight);
-          fitToView({
-            canvas,
-            ...demo.target,
-            minZoom: 0.1,
-            maxZoom: 100,
-            setCamera: actions.setCamera,
-            setZoom: actions.setZoom,
-          });
-        };
-        fit();
-        observer = new ResizeObserver(fit);
-        observer.observe(surface);
-
-        const toolbarPosition = (target: DemoTool | "title") => {
-          const rect = surface
-            .querySelector(`[data-demo-target="${target}"]`)
-            ?.getBoundingClientRect();
-          const bounds = surface.getBoundingClientRect();
-          return rect
-            ? {
-                x: rect.left + rect.width / 2 - bounds.left,
-                y: rect.top + rect.height / 2 - bounds.top,
-              }
-            : { x: 16, y: 16 };
-        };
-        const player = new DemoPlayer({
-          store,
-          signal,
-          onCursor: setCursor,
-          onStage: setStage,
-          toolbarPosition,
-          playtest: async (duration) => {
-            const playCanvas = playCanvasRef.current;
-            if (!playCanvas) return;
-            setIsPlaytesting(true);
-            try {
-              await playDemoRide(playCanvas, store, assets, duration, signal);
-            } finally {
-              if (!signal.aborted) setIsPlaytesting(false);
-            }
-          },
-        });
-        setStatus("playing");
-        await player.run(demo.commands);
+    const player = new DemoPlayer({
+      store,
+      engine,
+      canvas,
+      surface,
+      signal,
+      onCursor: setCursor,
+      onStage: ({ label }) => setStage(label),
+      setPlaytestDuration,
+    });
+    void player
+      .run(demo.commands)
+      .then(() => {
         if (!signal.aborted) setStatus("done");
-      } catch (error) {
-        if (signal.aborted) {
-          assets.destroy();
-          return;
-        }
+      })
+      .catch((error) => {
+        if (signal.aborted) return;
         console.error("Demo playback failed", error);
         setStatus("error");
         setCursor(null);
-      }
-    }
-    void start();
+      });
     return () => {
       controller.abort();
-      observer?.disconnect();
-      engine?.destroy();
-      assets.destroy();
+      observer.disconnect();
     };
-  }, [store, loadDemo]);
+  }, [demo, ready, isLoaded, store]);
 
+  const failed = status === "error" || Boolean(lgrError);
   return (
     <main className="flex h-[100dvh] flex-col bg-neutral-950 text-white">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 py-3">
         <div>
           <p className="text-xs font-medium text-neutral-400">
             Bear Editor · Demo
@@ -187,61 +190,24 @@ function DemoSession({
         </button>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden" ref={surfaceRef}>
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 h-full w-full"
-          aria-label="Animated level editor demonstration"
-        />
-        <canvas
-          ref={playCanvasRef}
-          className={`absolute inset-0 h-full w-full ${isPlaytesting ? "" : "invisible"}`}
-          aria-hidden="true"
-        />
-        <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-wrap items-start justify-between gap-2">
-          <div
-            data-demo-target="title"
-            className="max-w-full truncate rounded-lg bg-neutral-900/95 px-3 py-2 text-sm font-medium shadow-lg"
-          >
-            {title || "Untitled"}
-          </div>
-          <div className="flex items-center gap-0.5 rounded-lg bg-neutral-900/95 p-1 shadow-lg">
-            {tools.map(({ id, label, Icon }) => (
-              <div
-                key={id}
-                title={label}
-                data-demo-target={id}
-                className={`flex size-8 items-center justify-center rounded-md sm:size-9 ${stage.tool === id ? "bg-white text-neutral-950" : "text-neutral-300"}`}
-              >
-                {id === "vertex" || id === "autoGrass" ? (
-                  <VertexIcon
-                    {...getVertexIconProps(
-                      id === "vertex" ? "normal" : "autoGrass",
-                    )}
-                    className="size-5"
-                  />
-                ) : id === "apple" && appleSprite ? (
-                  <img
-                    src={appleSprite}
-                    alt=""
-                    className="size-5 object-contain"
-                  />
-                ) : (
-                  <Icon size={20} />
-                )}
-              </div>
-            ))}
-          </div>
-          {stage.picture && (
-            <div className="basis-full text-right">
-              <span className="rounded bg-neutral-900/95 px-3 py-1 text-xs">
-                {stage.picture}
-              </span>
-            </div>
+        <div
+          className="absolute inset-0 isolate flex text-primary"
+          ref={(element) => {
+            if (element) element.inert = true;
+          }}
+        >
+          {initialDocument && isLoaded && (
+            <EditorSurface
+              initialDocument={initialDocument}
+              readOnly
+              onReady={onReady}
+              scriptedPlaytestDuration={playtestDuration}
+            />
           )}
         </div>
         {cursor && (
           <div
-            className="pointer-events-none absolute z-10 text-white drop-shadow-[0_2px_2px_rgba(0,0,0,.9)]"
+            className="pointer-events-none absolute z-50 text-white drop-shadow-[0_2px_2px_rgba(0,0,0,.9)]"
             style={{ left: cursor.x, top: cursor.y }}
           >
             {cursor.pressed && (
@@ -254,19 +220,17 @@ function DemoSession({
             />
           </div>
         )}
-        {(status === "loading" || status === "error") && (
-          <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/80 p-6 text-center">
-            {status === "loading"
-              ? "Loading demo…"
-              : "Could not load demo. Try replaying."}
+        {(!ready || failed) && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-6 text-center">
+            {failed ? "Could not load demo. Try replaying." : "Loading demo…"}
           </div>
         )}
       </div>
       <div
-        className="flex min-h-12 items-center justify-center px-4 py-2 text-sm font-medium"
+        className="flex min-h-12 shrink-0 items-center justify-center px-4 py-2 text-sm font-medium"
         aria-live="polite"
       >
-        {status === "error" ? "Demo unavailable" : stage.label}
+        {failed ? "Demo unavailable" : stage}
       </div>
     </main>
   );

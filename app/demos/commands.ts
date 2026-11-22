@@ -22,12 +22,3 @@ export type DemoCommand =
   | { type: "preview" }
   | { type: "playtest"; duration: number }
   | { type: "wait"; duration: number };
-
-export type DemoTool =
-  | "select"
-  | "vertex"
-  | "apple"
-  | "autoGrass"
-  | "picture"
-  | "playtest"
-  | "preview";

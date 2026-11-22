@@ -121,7 +121,9 @@ function getActiveMobileControlState(
   };
 }
 
-export function PlayModeOverlay() {
+export function PlayModeOverlay({
+  scriptedDuration,
+}: { scriptedDuration?: number } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeMobilePointersRef = useRef<Map<number, PlayModeMobileControlId>>(
@@ -431,6 +433,7 @@ export function PlayModeOverlay() {
       const input = new InputManager(
         getPlayInputKeys(store.getState().playSettings),
         store.getState().playModeSeedKeys,
+        scriptedDuration === undefined,
       );
       inputRef.current = input;
       const keyBindings = keyBindingsRef.current;
@@ -597,7 +600,17 @@ export function PlayModeOverlay() {
         }
       };
 
+      let scriptedStart: number | undefined;
       const loop = (timestamp: number) => {
+        if (scriptedDuration !== undefined) {
+          scriptedStart ??= timestamp;
+          const elapsed = timestamp - scriptedStart;
+          if (elapsed >= scriptedDuration) {
+            stopPlayMode();
+            return;
+          }
+          if (elapsed >= 300) input.pressKey(keyBindingsRef.current.gas);
+        }
         const wallSeconds = Math.min(
           Math.max(0, (timestamp - lastFrameTimestamp) / 1000),
           0.1,
@@ -706,7 +719,14 @@ export function PlayModeOverlay() {
         input.destroy();
       };
     },
-    [lgr, releaseMobileControls, store, stopPlayMode, syncStoredZoom],
+    [
+      lgr,
+      releaseMobileControls,
+      store,
+      stopPlayMode,
+      syncStoredZoom,
+      scriptedDuration,
+    ],
   );
 
   return (

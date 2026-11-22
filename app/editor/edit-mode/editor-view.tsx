@@ -57,11 +57,13 @@ export function EditorView({ className, ...props }: EditorViewProps) {
 type UseEditorViewOptions = {
   initialDocument?: InitialDocument;
   rendererBackend?: WorldSceneRendererBackend;
+  readOnly?: boolean;
 };
 
 export function useEditorView({
   initialDocument,
   rendererBackend = "webgl",
+  readOnly = false,
 }: UseEditorViewOptions) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<EditorEngine | null>(null);
@@ -148,6 +150,7 @@ export function useEditorView({
         lgrAssets: editorLgrAssets ?? undefined,
         initialDocument: initialDocument?.document,
         rendererBackend,
+        readOnly,
       });
 
       // Add resize observer to handle parent size changes (batched to avoid flicker)
@@ -163,6 +166,7 @@ export function useEditorView({
       initialDocument?.status,
       editorLgrAssets,
       rendererBackend,
+      readOnly,
     ],
   );
 
@@ -192,7 +196,7 @@ export function useEditorView({
   return { canvasRef, engineRef };
 }
 
-type InitialDocument = {
+export type InitialDocument = {
   document: EditorDocumentInput | undefined;
   status: "loading" | "done" | "error";
 };

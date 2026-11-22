@@ -38,7 +38,13 @@ type LgrContextType = {
 
 const LgrContext = createContext<LgrContextType | null>(null);
 
-export function LgrAssetsProvider({ children }: { children: React.ReactNode }) {
+export function LgrAssetsProvider({
+  children,
+  bundledOnly = false,
+}: {
+  children: React.ReactNode;
+  bundledOnly?: boolean;
+}) {
   const [lgr, setLgr] = useState(() => new LgrAssets());
   const activeLgr = useRef(lgr);
   const activeData = useRef<ArrayBuffer | null>(null);
@@ -50,7 +56,7 @@ export function LgrAssetsProvider({ children }: { children: React.ReactNode }) {
   const [folderFiles, setFolderFiles] = useState<FileSystemFileHandle[]>([]);
   const [folderNeedsAccess, setFolderNeedsAccess] = useState(false);
   const [folderError, setFolderError] = useState<string>();
-  const [initialized, setInitialized] = useState(false);
+  const [initialized, setInitialized] = useState(bundledOnly);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<string>();
@@ -67,40 +73,44 @@ export function LgrAssetsProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  useEffect(function restoreLgrSources() {
-    let cancelled = false;
-    async function restore() {
-      // Storage failure must not prevent the bundled default from working.
-      const [stored, savedFolder] = await Promise.allSettled([
-        loadStoredLgrs(),
-        loadLgrFolder(),
-      ]);
-      if (cancelled) return;
-      if (stored.status === "fulfilled")
-        setStoredOptions(toLgrOptions(stored.value));
-      if (savedFolder.status === "fulfilled" && savedFolder.value) {
-        const handle = savedFolder.value;
-        try {
-          const granted =
-            (await handle.queryPermission({ mode: "read" })) === "granted";
-          const files = granted ? await listLgrFiles(handle) : [];
-          if (cancelled) return;
-          setFolder(handle);
-          setFolderFiles(files);
-          setFolderNeedsAccess(!granted);
-        } catch {
-          if (cancelled) return;
-          setFolder(handle);
-          setFolderNeedsAccess(true);
+  useEffect(
+    function restoreLgrSources() {
+      if (bundledOnly) return;
+      let cancelled = false;
+      async function restore() {
+        // Storage failure must not prevent the bundled default from working.
+        const [stored, savedFolder] = await Promise.allSettled([
+          loadStoredLgrs(),
+          loadLgrFolder(),
+        ]);
+        if (cancelled) return;
+        if (stored.status === "fulfilled")
+          setStoredOptions(toLgrOptions(stored.value));
+        if (savedFolder.status === "fulfilled" && savedFolder.value) {
+          const handle = savedFolder.value;
+          try {
+            const granted =
+              (await handle.queryPermission({ mode: "read" })) === "granted";
+            const files = granted ? await listLgrFiles(handle) : [];
+            if (cancelled) return;
+            setFolder(handle);
+            setFolderFiles(files);
+            setFolderNeedsAccess(!granted);
+          } catch {
+            if (cancelled) return;
+            setFolder(handle);
+            setFolderNeedsAccess(true);
+          }
         }
+        if (!cancelled) setInitialized(true);
       }
-      if (!cancelled) setInitialized(true);
-    }
-    void restore();
-    return function cancelRestore() {
-      cancelled = true;
-    };
-  }, []);
+      void restore();
+      return function cancelRestore() {
+        cancelled = true;
+      };
+    },
+    [bundledOnly],
+  );
 
   useEffect(
     function disposeLgr() {
@@ -146,7 +156,7 @@ export function LgrAssetsProvider({ children }: { children: React.ReactNode }) {
             }
           }
 
-          if (!next) {
+          if (!next && !bundledOnly) {
             const stored = await loadStoredLgr(name).catch(() => null);
             if (stored) {
               data = stored.data.slice(0);
@@ -205,7 +215,7 @@ export function LgrAssetsProvider({ children }: { children: React.ReactNode }) {
       lastRequest.current = { key, promise };
       return promise;
     },
-    [initialized, folderFiles, revision],
+    [initialized, folderFiles, revision, bundledOnly],
   );
 
   async function updateFolder(handle: FileSystemDirectoryHandle) {
