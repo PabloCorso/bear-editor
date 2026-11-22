@@ -377,7 +377,7 @@ export class EditorEngine {
     }
   }
 
-  private dispatchToolPointerEvent(
+  public dispatchToolPointerEvent(
     phase: "down" | "move" | "up",
     event: PointerEvent,
   ) {

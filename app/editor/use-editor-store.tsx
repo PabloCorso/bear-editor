@@ -28,10 +28,20 @@ export const EditorProvider = ({
   const store = storeRef.current;
   useEditorPreferencesSync(store);
 
+  return <EditorStoreProvider store={store}>{children}</EditorStoreProvider>;
+};
+
+export function EditorStoreProvider({
+  store,
+  children,
+}: {
+  store: EditorStore;
+  children: React.ReactNode;
+}) {
   return (
     <EditorContext.Provider value={store}>{children}</EditorContext.Provider>
   );
-};
+}
 
 export function useEditorStore() {
   const store = useContext(EditorContext);

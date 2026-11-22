@@ -38,11 +38,13 @@ import { OPEN_KEYBOARD_SHORTCUTS_SHORTCUT } from "./keyboard-shortcuts";
 
 type CanvasToolbarProps = ToolbarProps & {
   engineRef: React.RefObject<EditorEngine | null>;
+  readOnly?: boolean;
 };
 
 export function CanvasToolbar({
   className,
   engineRef,
+  readOnly,
   ...props
 }: CanvasToolbarProps) {
   const activeToolId = useEditor((state) => state.activeToolId);
@@ -61,25 +63,29 @@ export function CanvasToolbar({
         vertex?.previewAutoGrassAll));
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-  useEffect(function handleKeyboardShortcutsListener() {
-    const controller = new AbortController();
+  useEffect(
+    function handleKeyboardShortcutsListener() {
+      if (readOnly) return;
+      const controller = new AbortController();
 
-    window.addEventListener(
-      "keydown",
-      (event: KeyboardEvent) => {
-        if (event.key !== OPEN_KEYBOARD_SHORTCUTS_SHORTCUT) return;
-        if (isUserTyping()) return;
+      window.addEventListener(
+        "keydown",
+        (event: KeyboardEvent) => {
+          if (event.key !== OPEN_KEYBOARD_SHORTCUTS_SHORTCUT) return;
+          if (isUserTyping()) return;
 
-        event.preventDefault();
-        setShortcutsOpen(true);
-      },
-      { signal: controller.signal },
-    );
+          event.preventDefault();
+          setShortcutsOpen(true);
+        },
+        { signal: controller.signal },
+      );
 
-    return function cleanupKeyboardShortcutsListener() {
-      controller.abort();
-    };
-  }, []);
+      return function cleanupKeyboardShortcutsListener() {
+        controller.abort();
+      };
+    },
+    [readOnly],
+  );
 
   return (
     <>

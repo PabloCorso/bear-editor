@@ -35,12 +35,14 @@ const EditorDocumentGuardContext =
 
 export function EditorDocumentGuardProvider({
   children,
+  enabled = true,
 }: {
   children: React.ReactNode;
+  enabled?: boolean;
 }) {
   const store = useEditorStore();
   const documentSession = useEditorDocumentSession();
-  const isDirty = documentSession.dirty;
+  const isDirty = enabled && documentSession.dirty;
   const blocker = useBlocker(isDirty);
   const [pendingActionConfirmation, setPendingActionConfirmation] =
     useState<PendingConfirmation | null>(null);
@@ -48,6 +50,7 @@ export function EditorDocumentGuardProvider({
   useBeforeUnload(
     useCallback(
       (event) => {
+        if (!enabled) return;
         const session = store.getState().documentSession;
         const saving = session.saveState === "saving";
         if (!session.dirty && !(window.bearDesktop && saving)) return;
@@ -55,7 +58,7 @@ export function EditorDocumentGuardProvider({
         event.preventDefault();
         event.returnValue = "";
       },
-      [store],
+      [store, enabled],
     ),
   );
 

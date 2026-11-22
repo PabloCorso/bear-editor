@@ -57,6 +57,7 @@ import {
 import { PlayModeSceneRenderer } from "~/editor/play-mode/scene/play-mode-scene-renderer";
 import { WebGLInitializationError } from "~/editor/render/webgl-render-context";
 import { ToolButton } from "~/components/tool-button";
+import { ScriptedRidePlayer, type ScriptedRide } from "./scripted-ride";
 
 const PLAY_MODE_WHEEL_ZOOM_STEP = 420;
 const PLAY_MODE_TOUCHPAD_ZOOM_STEP = 100;
@@ -121,7 +122,9 @@ function getActiveMobileControlState(
   };
 }
 
-export function PlayModeOverlay() {
+export function PlayModeOverlay({
+  scriptedRide,
+}: { scriptedRide?: ScriptedRide } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const activeMobilePointersRef = useRef<Map<number, PlayModeMobileControlId>>(
@@ -431,6 +434,7 @@ export function PlayModeOverlay() {
       const input = new InputManager(
         getPlayInputKeys(store.getState().playSettings),
         store.getState().playModeSeedKeys,
+        scriptedRide === undefined,
       );
       inputRef.current = input;
       const keyBindings = keyBindingsRef.current;
@@ -442,6 +446,9 @@ export function PlayModeOverlay() {
       );
       gameStateRef.current = gameState;
       gameState.lastTimestamp = performance.now();
+      const scriptedPlayer = scriptedRide
+        ? new ScriptedRidePlayer(scriptedRide, gameState)
+        : undefined;
       gameState.camera.zoom = clamp(
         store.getState().playModeZoom || DEFAULT_PLAY_MODE_ZOOM,
         PLAY_MODE_MIN_ZOOM,
@@ -603,6 +610,18 @@ export function PlayModeOverlay() {
           0.1,
         );
         lastFrameTimestamp = timestamp;
+        if (scriptedPlayer) {
+          if (!document.hidden) {
+            if (scriptedPlayer.advance(wallSeconds * 1000)) {
+              stopPlayMode();
+              return;
+            }
+            updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
+            render(timestamp, false);
+          }
+          animationFrame = requestAnimationFrame(loop);
+          return;
+        }
         if (settingsOpenRef.current || document.hidden) {
           if (!document.hidden) render(timestamp, true);
           resetFpsSample();
@@ -706,7 +725,14 @@ export function PlayModeOverlay() {
         input.destroy();
       };
     },
-    [lgr, releaseMobileControls, store, stopPlayMode, syncStoredZoom],
+    [
+      lgr,
+      releaseMobileControls,
+      store,
+      stopPlayMode,
+      syncStoredZoom,
+      scriptedRide,
+    ],
   );
 
   return (

@@ -99,6 +99,7 @@ const HEADER_DROPDOWN_COLLISION_PADDING = 16;
 
 type HeaderToolbarProps = ToolbarProps & {
   isLoading?: boolean;
+  readOnly?: boolean;
   engineRef: React.RefObject<EditorEngine | null>;
   fileNameEntrance: ReturnType<typeof useLevelFileNameEntrance>;
 };
@@ -143,6 +144,7 @@ export function HeaderToolbar({
   isLoading,
   fileNameEntrance,
   engineRef,
+  readOnly,
   ...props
 }: HeaderToolbarProps) {
   const [downloadOpen, setDownloadOpen] = useState(false);
@@ -187,6 +189,7 @@ export function HeaderToolbar({
 
   useEffect(
     function registerMainMenuHotkeys() {
+      if (readOnly) return;
       const handleKeyDown = (event: KeyboardEvent) => {
         if (event.key === "Escape" && topologyOpen) {
           event.preventDefault();
@@ -245,6 +248,7 @@ export function HeaderToolbar({
       handleSave,
       topologyOpen,
       setTopologyInspection,
+      readOnly,
     ],
   );
 
