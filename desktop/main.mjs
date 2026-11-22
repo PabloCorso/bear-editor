@@ -121,9 +121,10 @@ async function start() {
           pathname.includes("\0")
         )
           return new Response(null, { status: 400 });
+        const routePath = path.extname(pathname) ? pathname : "/index.html";
         const asset = path.resolve(
           clientRoot,
-          "." + (pathname === "/" ? "/index.html" : pathname),
+          "." + (pathname === "/" ? "/index.html" : routePath),
         );
         const relative = path.relative(clientRoot, asset);
         if (relative.startsWith("..") || path.isAbsolute(relative))

@@ -1,4 +1,3 @@
-import type { Route } from "./+types/home";
 import { useEffect } from "react";
 import { EditorProvider, useEditor } from "../editor/use-editor-store";
 import { DefaultLevelPresetProvider } from "../editor/edit-mode/default-level-preset";
@@ -6,6 +5,7 @@ import { EditorDocumentGuardProvider } from "~/editor/session/document-guard";
 import { LgrAssetsProvider, useLgrAssets } from "~/components/use-lgr-assets";
 import { EditorShell } from "~/editor/app-shell";
 import { TooltipProvider } from "~/components/ui/tooltip";
+import type { InitialLevelSource } from "~/editor/edit-mode/editor-view";
 
 export function meta() {
   return [
@@ -14,7 +14,15 @@ export function meta() {
   ];
 }
 
-export default function Home({ params }: Route.ComponentProps) {
+export default function Home() {
+  return <EditorPage />;
+}
+
+export function EditorPage({
+  initialLevel,
+}: {
+  initialLevel?: InitialLevelSource;
+}) {
   return (
     <TooltipProvider>
       <LgrAssetsProvider>
@@ -23,7 +31,7 @@ export default function Home({ params }: Route.ComponentProps) {
             <LevelLgrSync />
             <EditorDocumentGuardProvider>
               <div className="flex h-[100dvh]">
-                <EditorShell initialLevelName={params.level} />
+                <EditorShell initialLevel={initialLevel} />
               </div>
             </EditorDocumentGuardProvider>
           </EditorProvider>

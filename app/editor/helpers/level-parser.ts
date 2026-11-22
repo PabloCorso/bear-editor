@@ -112,7 +112,7 @@ export async function getBuiltinLevel(filename: string) {
   return level;
 }
 
-async function editorLevelFromBuffer(data: ArrayBuffer) {
+export async function editorLevelFromBuffer(data: ArrayBuffer) {
   const elmaLevel = ElmaLevel.from(data);
   if (elmaLevel.polygons.some((polygon) => polygon.vertices.length < 3)) {
     throw new Error("The level contains a polygon with fewer than 3 vertices.");
