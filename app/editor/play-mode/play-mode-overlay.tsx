@@ -1,3 +1,5 @@
+import { ShareButton } from "~/editor/collaboration/controls";
+import { setRideView } from "~/editor/collaboration/ride-view";
 import { activeTestStart } from "~/editor/test-starts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalStorage } from "@mantine/hooks";
@@ -32,6 +34,7 @@ import {
 import {
   DEFAULT_PLAY_MODE_ZOOM,
   PLAY_MODE_MAX_ZOOM,
+  PLAY_MODE_PIXELS_PER_METER,
   PLAY_MODE_MIN_ZOOM,
   type PlayRunEndBehavior,
   type PlaySettings,
@@ -485,18 +488,34 @@ export function PlayModeOverlay() {
         const currentZoom = gameState.camera.zoom;
         const active = activeTestStart(store.getState());
         // The active start can change during this play session after a capture.
-        const start = correctVertexPrecision(active.position);
-        levelData = {
-          ...levelData,
-          objects: levelData.objects.map((object) =>
-            object.type === "start"
-              ? {
-                  ...object,
-                  r: new Vec2(start.x, start.y),
-                }
-              : object,
-          ),
-        };
+        const state = store.getState();
+        if (state.collaboration) {
+          try {
+            levelData = convertLevelToGameData(
+              elmaLevelFromEditorState({
+                ...state,
+                start: active.position,
+              }),
+            );
+          } catch {
+            restartRequestedRef.current = false;
+            stopPlayMode();
+            return;
+          }
+        } else {
+          const start = correctVertexPrecision(active.position);
+          levelData = {
+            ...levelData,
+            objects: levelData.objects.map((object) =>
+              object.type === "start"
+                ? {
+                    ...object,
+                    r: new Vec2(start.x, start.y),
+                  }
+                : object,
+            ),
+          };
+        }
         gameState = createGame(levelData, input, keyBindingsRef.current);
         history = new RideHistory(gameState, active.ride);
         gameStateRef.current = gameState;
@@ -677,6 +696,11 @@ export function PlayModeOverlay() {
           return currentState;
         });
         updatePlayTimeText(formatTime(getTimeCentiseconds(gameState)));
+        if (store.getState().collaboration)
+          setRideView(store, {
+            center: { x: gameState.camera.x, y: -gameState.camera.y },
+            zoom: gameState.camera.zoom * PLAY_MODE_PIXELS_PER_METER,
+          });
         render(timestamp, false);
 
         if (gameState.result === "escaped") {
@@ -691,6 +715,7 @@ export function PlayModeOverlay() {
       animationFrame = requestAnimationFrame(loop);
 
       return () => {
+        setRideView(store);
         cancelAnimationFrame(animationFrame);
         window.removeEventListener("blur", releaseRewind);
         rewindPointerRef.current = false;
@@ -791,6 +816,7 @@ export function PlayModeOverlay() {
           >
             <StopIcon weight="fill" />
           </ToolButton>
+          <ShareButton />
         </Toolbar>
         <div className="flex items-baseline gap-3 whitespace-nowrap">
           {playSettings.showFps ? (

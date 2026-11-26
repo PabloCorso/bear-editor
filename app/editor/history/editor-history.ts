@@ -1,3 +1,5 @@
+import type { CollaborationHistoryBridge } from "../collaboration/types";
+import type { HistoryTransaction } from "./transaction-history";
 import { rebindSelectedVertices } from "../edit-mode/tools/selection-identity";
 import { getSessionArtifacts, findSessionArtifact } from "../session-artifacts";
 import fastDeepEqual from "fast-deep-equal";
@@ -27,12 +29,20 @@ export function createEditorHistory(
   store: StoreApi<EditorState>,
   limit?: number,
 ) {
+  let bridge: CollaborationHistoryBridge | undefined;
+  const blocked: HistoryTransaction = {
+    active: false,
+    update: <R>() => undefined as R,
+    complete: () => {},
+    cancel: () => {},
+  };
   const bitmaps = new Set<ImageBitmap>();
   const history = createTransactionHistory<
     EditorHistorySnapshot,
     EditorHistoryActionKind
   >({
     limit,
+    onCommit: (before, after) => bridge?.commit(before.content, after.content),
     capture: () => {
       const state = store.getState();
       const selection = state.toolState.select as SelectToolState | undefined;
@@ -116,11 +126,12 @@ export function createEditorHistory(
       store.getState().actions.getActiveTool()?.cancelInteraction(),
     // Bitmaps remain alive while the canvas, an entry, or an active edit needs them.
     retain: (snapshots) => {
-      const retained = new Set(
-        snapshots.flatMap(({ content }) =>
+      const retained = new Set([
+        ...snapshots.flatMap(({ content }) =>
           content.referenceImages.map((image) => image.bitmap),
         ),
-      );
+        ...(bridge?.referenceImages ?? []).map((image) => image.bitmap),
+      ]);
       for (const bitmap of bitmaps) {
         if (!retained.has(bitmap)) {
           bitmap.close();
@@ -133,14 +144,31 @@ export function createEditorHistory(
   return {
     history: {
       ...publicHistory,
+      setCollaborationBridge: (next?: CollaborationHistoryBridge) => {
+        bridge = next;
+      },
+      undo: () => {
+        if (bridge) bridge.onUndoBlocked();
+        else history.undo();
+      },
+      redo: () => {
+        if (bridge) bridge.onUndoBlocked();
+        else history.redo();
+      },
       begin: (action: EditorHistoryAction) =>
-        history.begin(describeEditorHistoryAction(action)),
+        bridge && !bridge.allowEdit(action)
+          ? blocked
+          : history.begin(describeEditorHistoryAction(action)),
       execute: <R>(action: EditorHistoryAction, mutate: () => R) =>
-        history.execute(describeEditorHistoryAction(action), mutate),
+        bridge && !bridge.allowEdit(action)
+          ? (undefined as R)
+          : history.execute(describeEditorHistoryAction(action), mutate),
     },
     /** Store wiring only: tools must define actions through begin/execute. */
     record: <R>(action: EditorHistoryAction, mutate: () => R) =>
-      record(describeEditorHistoryAction(action), mutate),
+      bridge && !bridge.allowEdit(action)
+        ? (undefined as R)
+        : record(describeEditorHistoryAction(action), mutate),
   };
 }
 export type EditorHistory = ReturnType<typeof createEditorHistory>["history"];

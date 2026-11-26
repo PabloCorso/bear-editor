@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import {
+  useEditor,
   useEditorDocumentSession,
   useEditorStore,
 } from "~/editor/use-editor-store";
@@ -40,7 +41,8 @@ export function EditorDocumentGuardProvider({
 }) {
   const store = useEditorStore();
   const documentSession = useEditorDocumentSession();
-  const isDirty = documentSession.dirty;
+  const inSession = useEditor((state) => !!state.collaboration);
+  const isDirty = documentSession.dirty || inSession;
   const blocker = useBlocker(isDirty);
   const [pendingActionConfirmation, setPendingActionConfirmation] =
     useState<PendingConfirmation | null>(null);
