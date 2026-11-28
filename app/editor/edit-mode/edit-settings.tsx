@@ -1115,6 +1115,8 @@ function LevelPresetPreview({
           store: createEditorStore({
             initialPreferences: {
               defaultLevelTitle: DEFAULT_LEVEL_TITLE,
+              showSmartGuides: false,
+              snapToSmartGuides: false,
               checkTopologyOnSave: false,
               customShapes: [],
               animateSprites: false,

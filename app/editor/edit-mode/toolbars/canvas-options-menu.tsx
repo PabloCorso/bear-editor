@@ -14,17 +14,22 @@ import {
 } from "~/components/ui/tooltip";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { useEditorActions } from "~/editor/use-editor-store";
+import { useEditor, useEditorActions } from "~/editor/use-editor-store";
 import { GridMenuGroup } from "./grid-menu";
 import { FIT_TO_VIEW_SHORTCUT } from "./keyboard-shortcuts";
 
 export function CanvasOptionsMenu() {
-  const { triggerFitToView } = useEditorActions();
+  const { triggerFitToView, toggleSmartGuides } = useEditorActions();
+  const showSmartGuides = useEditor((state) => state.showSmartGuides);
+  const snapToSmartGuides = useEditor((state) => state.snapToSmartGuides);
   const [fullscreen, setFullscreen] = useState(false);
   const [fullscreenEnabled, setFullscreenEnabled] = useState(false);
 
@@ -78,6 +83,22 @@ export function CanvasOptionsMenu() {
         className="min-w-48"
       >
         <GridMenuGroup />
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Smart guides</DropdownMenuLabel>
+          <DropdownMenuCheckboxItem
+            checked={showSmartGuides}
+            onCheckedChange={() => toggleSmartGuides("showSmartGuides")}
+          >
+            Show smart guides
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem
+            checked={snapToSmartGuides}
+            onCheckedChange={() => toggleSmartGuides("snapToSmartGuides")}
+          >
+            Snap to smart guides
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuGroup>
         {(fullscreenEnabled || fullscreen) && (
           <>
             <DropdownMenuSeparator />

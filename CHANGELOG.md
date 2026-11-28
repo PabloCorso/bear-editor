@@ -42,6 +42,10 @@ All notable changes to this project will be documented in this file.
 - Add PNG export.
 - Add skew and improve selection mirroring.
 
+## 2026-10-27
+
+- Add optional smart alignment guides and snapping for moving vertices, objects, pictures, and selections. Both start off under Canvas options. Hold Alt while dragging to bypass guides.
+
 ## 2026-10-26
 
 - Add Cut & Connect with live terrain previews and adjustable width (C).
